@@ -3,12 +3,16 @@
 # |---------------|
 # | Root checking |
 # |---------------|
-if [[ $(whoami) != "root" ]]; then
+if [[ $EUID -ne 0 ]]; then
   echo "❌ You not root user, exit"
   exit 1
 else
   echo "✅ You root user, continued"
 fi
+# |----------------|
+# | Utilites check |
+# |----------------|
+shuf, Зделать проверку утилит для работы нужны которые
 
 # |-------------------|
 # | Helping functions |
@@ -16,55 +20,16 @@ fi
 has_cmd() {
     command -v "$1" >/dev/null 2>&1
 }
-shuf, 
+
 # |--------------------------|
 # | Check configuration file |
 # |--------------------------|
-CFG_FILE="configuration.cfg"
-
-# Username check
-SECOND_USER=$(awk -F'"' '/^Server administrator username/ {print $2}' "$CFG_FILE")
-
-if [[ -z "$SECOND_USER" ]]; then
-    echo "❌ Error: could not find 'Server administrator username' in $CFG_FILE"
+CFG_CHECK="module/conf_check.sh"
+if [ ! -r "$CFG_CHECK" ]; then
+    echo "❌ Error: check $CFG_CHECK it's missing or you not have right to read"
     exit 1
 fi
-
-if [[ "$SECOND_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] && [[ ${#SECOND_USER} -le 32 ]]; then
-    echo "✅ Name '$SECOND_USER' accepted"
-else
-    echo "❌ Error: name '$SECOND_USER' does not comply with Linux rules"
-    exit 1
-fi
-
-#Password check
-PASS=$(awk -F'"' '/^Password for root and new user/ {print $2}' "$CFG_FILE")
-
-if [[ -z "$PASS" ]]; then
-    echo "❌ Error: could not find 'Password for root and new user' in $CFG_FILE"
-    exit 1
-else
-    echo "✅ Password accepted"
-    trap 'unset -v PASS' EXIT
-fi
-
-# Check token
-READ_BOT_TOKEN=$(awk -F'"' '/^Telegram Bot Token/ {print $2}' "$CFG_FILE")
-if [[ -z "$READ_BOT_TOKEN" ]]; then
-    echo "❌ Error: could not find 'Telegram Bot Token' in $CFG_FILE"
-    exit 1
-else
-    echo "✅ Bot token accepted"
-fi
-
-# Check id
-READ_CHAT_ID=$(awk -F'"' '/^Telegram Chat id/ {print $2}' "$CFG_FILE")
-if [[ -z "$READ_CHAT_ID" ]]; then
-    echo "❌ Error: could not find 'Telegram Chat id' in $CFG_FILE"
-    exit 1
-else
-    echo "✅ Chat id accepted"
-fi
+source module/conf_check.sh
 
 # |----------------------------------|
 # | Pre install system configuration |
@@ -213,6 +178,9 @@ sed -i.bak \
       }' \
   "$MOTD"
 echo "✅ Script ssh login/logout notify installed and MOTD disabled"
+
+sudo sed -ri 's/^([[:space:]]*session[[:space:]]+optional[[:space:]]+pam_motd\.so.*)$/#\1/' "$FILE"
+
 
 # |---------------------------|
 # |Install and setup fail2ban |
