@@ -24,6 +24,7 @@
 Все устанавливаемые на систему скрипты находятся в module/, устанавливается в /usr/local/bin/
 
 Установка:
+- Скачайте скрипт в любую директорию git clone https://github.com/LonelyMelancholy/vless-vpn-server-auto-install.git
 - Заполните конфигурационный файл для автоустановки configuration.cfg, убрав default значения
 - Запустите bash pred-install.sh, скрипт проверит правильность заполнения и обновит систему
 - Запустите bash install.sh установит все необходимые программы и настройки
