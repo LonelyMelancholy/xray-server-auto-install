@@ -24,7 +24,9 @@ source "$CFG_CHECK"
 # | Update system |
 # |---------------|
 if [[ -n "$UBUNTU_PRO_TOKEN" ]]; then
-    if pro attach "$UBUNTU_PRO_TOKEN" > logs/ubuntu_pro.log 2>&1; then
+    if echo "🔄 Try activate Ubuntu pro, please wait" && \
+    pro attach "$UBUNTU_PRO_TOKEN" > logs/ubuntu_pro.log 2>&1
+    then
         echo "✅ Ubuntu Pro activated"
     else
         echo "⚠️ Warning: Ubuntu Pro activation error, check "logs/ubuntu_pro.log" for more info, continued"
@@ -36,7 +38,7 @@ i=1
 max_i=4
 LOG_UPDATE_LIST="logs/update_list.log"
 while true; do
-    echo "⚠️ Updating packages list $i attempt, please wait"
+    echo "🔄 Updating packages list $i attempt, please wait"
     if apt-get update > "$LOG_UPDATE_LIST" 2>&1; then
         echo "✅ Update packages list completed"
         break
@@ -55,7 +57,7 @@ done
 LOG_UPDATE_DIST="logs/update_dist.log"
 i=1
 while true; do
-    echo "⚠️ Updating packages $i attempt, please wait"
+    echo "🔄 Updating packages $i attempt, please wait"
     if apt-get dist-upgrade -y > "$LOG_UPDATE_DIST" 2>&1; then
         echo "✅ Package update completed"
         echo "✅ System will reboot"
