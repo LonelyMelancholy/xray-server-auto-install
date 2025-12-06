@@ -29,7 +29,7 @@ if [[ -n "$UBUNTU_PRO_TOKEN" ]]; then
     then
         echo "✅ Ubuntu Pro activated"
     else
-        echo "⚠️ Warning: Ubuntu Pro activation error, check "logs/ubuntu_pro.log" for more info, continued"
+        echo "⚠️  Warning: Ubuntu Pro activation error, check "logs/ubuntu_pro.log" for more info, continued"
     fi
 fi
 

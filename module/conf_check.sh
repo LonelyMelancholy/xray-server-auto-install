@@ -14,7 +14,7 @@ if [[ -z "$SECOND_USER" ]]; then
 fi
 
 if [[ "$SECOND_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] && [[ ${#SECOND_USER} -le 32 ]]; then
-    echo "✅ Name '$SECOND_USER' accepted"
+    echo "✅ Username accepted"
 else
     echo "❌ Error: name '$SECOND_USER' does not comply with Linux rules"
     exit 1
