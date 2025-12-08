@@ -13,6 +13,8 @@ fi
 # | Utilites check |
 # |----------------|
 shuf, Зделать проверку утилит для работы нужны которые
+trebovania
+unzip, sha256sum, curl
 
 # |-------------------|
 # | Helping functions |
@@ -119,8 +121,10 @@ rm /etc/ssh/ssh_host_ecdsa_key.pub && \
 rm /etc/ssh/ssh_host_rsa_key && \
 rm /etc/ssh/ssh_host_rsa_key.pub
 then
-    echo "✅ Old keys have been removed"
+    sleep 1
+    echo "✅ Old host keys have been removed"
 else
+    sleep 1
     echo "❌ Error: old keys are not deleted"
     exit 1
 fi
@@ -304,13 +308,13 @@ sudo systemctl enable --now xray.service
 
 
 
-автообновления геолистов
+# |------------------------------|
+# | Auto update xray and geobase |
+# |------------------------------|
 
-  local download_link_geoip="https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat"
-  local download_link_geosite="https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat"
-  local file_ip='geoip.dat'
-  local file_dlc='geosite.dat'
-  local file_site='geosite.dat'
+
+
+
 
 
 
