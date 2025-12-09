@@ -55,6 +55,14 @@ while true; do
     fi
 done
 
+# install utilites
+# unzip curl 
+shuf, Зделать проверку утилит для работы нужны которые
+trebovania
+unzip, sha256sum, curl
+curl sha256sum unzip systemctl install awk
+
+
 LOG_UPDATE_DIST="logs/update_dist.log"
 i=1
 while true; do
