@@ -1,33 +1,34 @@
 #!/bin/bash
 
-PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# root checking
+[[ $EUID -ne 0 ]] && { echo "❌ Error: you are not the root user, exit"; exit 1; }
+
+# export path just in case
+PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export PATH
 
 # enable logging
-readonly DATE=$(date +"%Y-%m-%d")
+readonly DATE="$(date +"%Y-%m-%d")"
 readonly UPDATE_LOG="/var/log/xray/update.${DATE}.log"
-exec >>"$UPDATE_LOG" 2>&1
+exec &>> "$UPDATE_LOG"
 
 # start logging message
-readonly DATE_START=$(date "+%Y-%m-%d %H:%M:%S")
+readonly DATE_START="$(date "+%Y-%m-%d %H:%M:%S")"
 echo "   ########## update started - $DATE_START ##########   "
-
-# error exit log message for end log
-trap 'exit_fail' EXIT
-RC=1
 
 # exit log message function
 exit_fail() {
-    if [ "$RC" = "0" ]; then
+    if [[ "$RC" = "0" ]]; then
         echo "   ########## update ended - $DATE_END ##########   "
     else
-        DATE_FAIL=$(date "+%Y-%m-%d %H:%M:%S")
+        DATE_FAIL="$(date "+%Y-%m-%d %H:%M:%S")"
         echo "   ########## update failed - $DATE_FAIL ##########   "
     fi
 }
 
-# root checking
-[[ $EUID -ne 0 ]] && { echo "❌ Error: you are not the root user, exit"; exit 1; }
+# error exit log message for end log
+trap 'exit_fail' EXIT
+RC=1
 
 # check another instanсe of the script is not running
 readonly LOCK_FILE="/var/run/geodat_update.lock"
@@ -70,7 +71,7 @@ cleanup_old_backups_and_logs() {
                 echo "✅ Success: stage ${STAGE}, old ${name} $f deleted"
                 STATUS_OLD_BACKUP_DEL+="🟢 old ${name} deletion success"$'\n'
             else
-                echo "⚠️ Non-critical error: stage ${STAGE}, failed to delete old ${name} $f"
+                echo "⚠️  Non-critical error: stage ${STAGE}, failed to delete old ${name} $f"
                 STATUS_OLD_BACKUP_DEL+="🟡 old ${name} deletion failed"$'\n'
                 FAIL_TD=1
             fi
@@ -88,28 +89,19 @@ cleanup_old_backups_and_logs() {
 }
 
 # check secret file
-if [ ! -r "$ENV_FILE" ]; then
-    echo "❌ Error: env file $ENV_FILE not found or not readable, exit"
-    exit 1
-fi
+[[ ! -r "$ENV_FILE" ]] && { echo "❌ Error: env file $ENV_FILE not found or not readable, exit"; exit 1; }
 source "$ENV_FILE"
 
 # check token from secret file
-if [[ -z "$BOT_TOKEN" ]]; then
-    echo "❌ Error: Telegram bot token is missing in $ENV_FILE, exit"
-    exit 1
-fi
+[[ -z "$BOT_TOKEN" ]] && { echo "❌ Error: Telegram bot token is missing in $ENV_FILE, exit"; exit 1; }
 
 # check id from secret file
-if [[ -z "$CHAT_ID" ]]; then
-    echo "❌ Error: Telegram chat ID is missing in $ENV_FILE, exit"
-    exit 1
-fi
+[[ -z "$CHAT_ID" ]] && { echo "❌ Error: Telegram chat ID is missing in $ENV_FILE, exit"; exit 1; }
 
 # pure telegram message function with checking the sending status
-tg_m() {
+_tg_m() {
     local respond
-    respond="$(curl -fsS -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+    respond="$(curl -fsS -m 10 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
         --data-urlencode "chat_id=${CHAT_ID}" \
         --data-urlencode "text=${MESSAGE}")" || return 1
     echo "$respond" | grep -q '"ok":true' || return 1
@@ -121,13 +113,13 @@ telegram_message() {
     local attempt=1
 # call telegram post function
     while true; do
-        if ! tg_m; then
+        if ! _tg_m; then
             if [ "$attempt" -ge "$MAX_ATTEMPTS" ]; then
                 echo "❌ Error: failed to send telegram message after $attempt attempts, exit"
                 RC=1
                 return 1
             fi
-            sleep 10
+            sleep 60
             attempt=$((attempt + 1))
             continue
         else
@@ -147,7 +139,7 @@ exit_cleanup() {
         echo "❌ Error: temporary directory $TMP_DIR was not deleted"
         local date_del_error=$(date "+%Y-%m-%d %H:%M:%S")
         echo "   ########## cleanup failed - $date_del_error ##########   "
-        MESSAGE="🖥️ Host: $HOSTNAME
+        MESSAGE="🖥️  Host: $HOSTNAME
 ⌚ Time error: $date_del_error
 ❌ Error: temporary directory $TMP_DIR for xray update was not deleted"
         telegram_message
@@ -513,7 +505,7 @@ if [ "$XRAY_DOWNLOAD" = "1" ] && [ "$GEOIP_DOWNLOAD" = "1" ] && [ "$GEOSITE_DOWN
         MESSAGE_TITLE="✅ Upgrade report"
         RC=0
     else
-        MESSAGE_TITLE="⚠️ Upgrade report"
+        MESSAGE_TITLE="⚠️  Upgrade report"
         RC=0
     fi
 else
@@ -524,7 +516,7 @@ fi
 # collecting report for telegram message
 MESSAGE="$MESSAGE_TITLE
 
-🖥️ Host: $HOSTNAME
+🖥️  Host: $HOSTNAME
 ⌚ Time start: $DATE_START
 ⌚ Time end: $DATE_END
 ${STATUS_OLD_BACKUP_DEL}

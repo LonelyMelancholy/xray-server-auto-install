@@ -1,5 +1,13 @@
 #!/bin/bash
 
+вывести все директории куда то в справку
+для скриптов телеги
+/usr/local/bin/telegram
+var/log/telegram
+для автообновления и добавления юзеров 
+/usr/local/bin/maintance
+/var/log/
+
 # root checking
 if [[ $EUID -ne 0 ]]; then
   echo "❌ Error: You not root user, exit"
@@ -165,6 +173,8 @@ systemctl restart ssh.service
 # | Install ssh login/logout notify and disable MOTD |
 # |--------------------------------------------------|
 
+#install log 
+mkdir /var/log/telegram
 # Install script notify login 
 SSH_ENTER_NOTIFY_SCRIPT="/usr/local/bin/ssh_enter_notify.sh"
 install -m 700 module/ssh_enter_notify.sh "$SSH_ENTER_NOTIFY_SCRIPT"

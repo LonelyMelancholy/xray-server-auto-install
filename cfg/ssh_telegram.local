@@ -1,6 +1,10 @@
+# .local for start telegram notify script
+# & - to run the script in the background so that fail2ban can move on to the next ban
+# without waiting for the message to be sent
+# done
 [Definition]
 actionstart =
 actionstop =
 actioncheck =
-actionban = /usr/local/bin/ssh_ban_notify.sh ban <ip> <bantime>
-actionunban = /usr/local/bin/ssh_ban_notify.sh unban <ip> <bantime>
+actionban = /usr/local/bin/ssh_ban_notify.sh "ban" "<ip>" "<bantime>" &
+actionunban = /usr/local/bin/ssh_ban_notify.sh "unban" "<ip>" "<bantime>" &
