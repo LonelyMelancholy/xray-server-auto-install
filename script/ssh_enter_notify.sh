@@ -2,7 +2,7 @@
 # ssh login/unlogin telegram notify via PAM
 # exit 0 to avoid bothering PAM with an incorrect error code, all errors are still logged, except the first three
 # done work
-#
+# done test
 
 # sends the script to the background without delaying pam
 # for debugging, add a redirect to the debug log
@@ -50,7 +50,7 @@ readonly HOSTNAME="$(hostname)"
 readonly IP="$PAM_RHOST"
 readonly USER="$PAM_USER"
 readonly SESSION="$PAM_TYPE"
-readonly MAX_ATTEMPTS=3
+readonly MAX_ATTEMPTS="3"
 
 # pure Telegram message function with checking the sending status
 _tg_m() {
@@ -106,6 +106,7 @@ if [[ "$SESSION" == "open_session" ]]; then
 elif [[ "$SESSION" == "close_session" ]]; then
     ACTION="📢 <b>Successful SSH logout</b>"
 else
+    echo "❌ Error: unknown PAM session type, exit"
     exit 0
 fi
 

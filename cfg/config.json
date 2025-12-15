@@ -40,9 +40,9 @@
         "network": "tcp",
         "security": "reality",
         "realitySettings": {
-          "dest": "m.vk.ru:443",
+          "dest": "github.com:443",
           "privateKey": "privatkey",
-          "serverNames": ["m.vk.ru"],
+          "serverNames": ["github.com", "www.github.com"],
           "shortIds": ["shortid"],
           "show": false,
           "xver": 0

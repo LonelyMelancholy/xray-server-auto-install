@@ -51,7 +51,7 @@ readonly ACTION="${1:-unknown}"
 readonly IP="${2:-unknown}"
 readonly BANTIME_SEC="${3:-0}"
 readonly HOSTNAME="$(hostname)"
-readonly MAX_ATTEMPTS=3
+readonly MAX_ATTEMPTS="3"
 
 # function to calculate the ban time
 duration_human() {

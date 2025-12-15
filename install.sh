@@ -176,10 +176,11 @@ systemctl restart ssh.service
 #install log 
 mkdir /var/log/telegram
 # Install script notify login 
-SSH_ENTER_NOTIFY_SCRIPT="/usr/local/bin/telegram/ssh_enter_notify.sh"
-install -m 700 script/ssh_enter_notify.sh "$SSH_ENTER_NOTIFY_SCRIPT"
+SSH_ENTER_NOTIFY_SCRIPT_SOURCE=script/ssh_enter_notify.sh
+SSH_ENTER_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/ssh_enter_notify.sh"
+install -m 700 "$SSH_ENTER_NOTIFY_SCRIPT_SOURCE" "$SSH_ENTER_NOTIFY_SCRIPT_DEST"
 echo -e "\n# Notify for success ssh login and logout via telegram bot" >> /etc/pam.d/sshd
-echo "session optional pam_exec.so seteuid $SSH_ENTER_NOTIFY_SCRIPT" >> /etc/pam.d/sshd
+echo "session optional pam_exec.so seteuid $SSH_ENTER_NOTIFY_SCRIPT_DEST" >> /etc/pam.d/sshd
 # Disable message of the day, backup and commented 2 lines
 MOTD="/etc/pam.d/sshd"
 sed -i.bak \
@@ -245,11 +246,11 @@ fi
 
 # Install script
 TRAFFIC_NOTIFY_SCRIPT_SOURCE="module/traffic_notify.sh"
-TRAFFIC_NOTIFY_SCRIPT_DEST="/usr/local/bin/traffic_notify.sh"
-install -m 755 "$TRAFFIC_NOTIFY_SCRIPT_SOURCE" "$TRAFFIC_NOTIFY_SCRIPT_DEST"
+TRAFFIC_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/traffic_notify.sh"
+install -m 700 "$TRAFFIC_NOTIFY_SCRIPT_SOURCE" "$TRAFFIC_NOTIFY_SCRIPT_DEST"
 # Turn on script in cron
 cat > "/etc/cron.d/traffic_notify" <<EOF
-0 1 * * * root "$TRAFFIC_NOTIFY_SCRIPT_DEST" >/dev/null 2>&1
+0 1 * * * root "$TRAFFIC_NOTIFY_SCRIPT_DEST" &> /dev/null
 EOF
 chmod 644 "/etc/cron.d/traffic_notify"
 echo "✅ Traffic notify script installed successful"
@@ -265,7 +266,7 @@ apt-get install unattended-upgrades -y
 
 # Установка Xray
 
-useradd -r -s /usr/sbin/nologin xray
+useradd -r -M -d /nonexistent -s /usr/sbin/nologin xray
 
 mkdir -p /usr/local/share/xray
 mkdir -p /usr/local/etc/xray
@@ -275,11 +276,10 @@ chown xray:xray /var/log/xray
 wget https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
 unzip Xray-linux-64.zip
 
-mv xray /usr/local/bin/xray
-chmod 755 /usr/local/bin/xray
+install -m 755 xray /usr/local/bin/xray
 
-mv geosite.dat geoip.dat /usr/local/share/xray
-chmod 644 /usr/local/share/xray/*
+install -m 644 geosite.dat /usr/local/share/xray/geosite.dat
+install -m 644 geoip.dat /usr/local/share/xray/geoip.dat
 
 cat > "/etc/systemd/system/xray.service" <<'EOF'
 [Unit]
@@ -303,6 +303,7 @@ LimitNOFILE=1000000
 WantedBy=multi-user.target
 EOF
 
+# зделать права 600 и пользователя и группу храй
 # Закидываем конфиг
 install -m 644 cfg/config.json "/usr/local/etc/xray/config.json"
 
@@ -310,8 +311,8 @@ install -m 644 cfg/config.json "/usr/local/etc/xray/config.json"
 
 
 # Запускаем сервер
-sudo systemctl daemon-reload
-sudo systemctl enable --now xray.service
+systemctl daemon-reload
+systemctl enable --now xray.service
 
 
 
@@ -321,7 +322,7 @@ sudo systemctl enable --now xray.service
 # Auto update xray and geobase
 GEODAT_SCRIPT_SOURCE="module/geodat_update.sh"
 GEODAT_SCRIPT_DEST="/usr/local/bin/geodat_update.sh"
-install -m 755 "$GEODAT_SCRIPT_SOURCE" "$GEODAT_SCRIPT_DEST"
+install -m 700 "$GEODAT_SCRIPT_SOURCE" "$GEODAT_SCRIPT_DEST"
 # Turn on script in cron
 cat > "/etc/cron.d/geodat_update" <<EOF
 0 2 * * * root "$GEODAT_SCRIPT_DEST" >/dev/null 2>&1
