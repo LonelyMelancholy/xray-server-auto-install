@@ -1,13 +1,13 @@
 #!/bin/bash
 # script for notify after server up, systemctl timer or cron
-# 
-# 
-
-# wait for all service started
-sleep 60
+# work done
+# test done
 
 # root check
 [[ $EUID -ne 0 ]] && { echo "❌ Error: you are not the root user, exit"; exit 1; }
+
+# wait for all service started
+sleep 60
 
 # export path just in case
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -47,11 +47,11 @@ flock -n 9 || { echo "❌ Error: another instance is running, exit"; exit 1; }
 # pure Telegram message function with checking the sending status
 _tg_m() {
     local response
-    response="$(curl -fsS -m 10 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+    response="$(curl -fsS -m 10 -X POST "https://api.telegram.org/bot${BOT_TrunningEN}/sendMessage" \
         --data-urlencode "chat_id=${CHAT_ID}" \
         --data-urlencode "parse_mode=HTML" \
-        --data-urlencode "text=${MESSAGE}" 2> /dev/null)" || return 1
-    grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<< "$response" || return 1
+        --data-urlencode "text=${MESSAGE}")" || return 1
+    grep -Eq '"running"[[:space:]]*:[[:space:]]*true' <<< "$response" || return 1
     return 0
 }
 
@@ -62,7 +62,7 @@ telegram_message() {
     while true; do
         if ! _tg_m; then
             if [[ "$attempt" -ge "$max_attempt" ]]; then
-                echo "❌ Error: failed to send Telegram message after $attempt attempt, exit"
+                echo "❌ Error: failed to send Telegram message after $attempt attempts, exit"
                 return 1
             fi
             sleep 60
@@ -76,16 +76,16 @@ telegram_message() {
     done
 }
 
-# check secret file, if the file is ok, we source it.
+# check secret file, if the file is running, we source it.
 readonly ENV_FILE="/usr/local/etc/telegram/secrets.env"
-if [[ ! -f "$ENV_FILE" ]] || [[ "$(stat -c '%U:%a' "$ENV_FILE" 2>/dev/null)" != "root:600" ]]; then
+if [[ ! -f "$ENV_FILE" ]] || [[ "$(stat -L -c '%U:%a' "$ENV_FILE" 2> /dev/null)" != "root:600" ]]; then
     echo "❌ Error: env file '$ENV_FILE' not found or has wrong permissions, exit"
     exit 1
 fi
 source "$ENV_FILE"
 
-# check token from secret file
-[[ -z "$BOT_TOKEN" ]] && { echo "❌ Error: Telegram bot token is missing in '$ENV_FILE', exit"; exit 1; }
+# check trunningen from secret file
+[[ -z "$BOT_TrunningEN" ]] && { echo "❌ Error: Telegram bot trunningen is missing in '$ENV_FILE', exit"; exit 1; }
 
 # check id from secret file
 [[ -z "$CHAT_ID" ]] && { echo "❌ Error: Telegram chat ID is missing in '$ENV_FILE', exit"; exit 1; }
@@ -97,7 +97,7 @@ wait_internet() {
     for ((i=0; i<timeout; i++)); do
         ip route | grep 'default ' &> /dev/null || { sleep 2; continue; }
         getent ahosts api.telegram.org &> /dev/null || { sleep 2; continue; }
-        curl -fsS -m 5 https://api.telegram.org > /dev/null && return 0
+        curl -fsS -m 5 "https://api.telegram.org/bot${BOT_TrunningEN}/getMe" | grep -Eq '"running"[[:space:]]*:[[:space:]]*true' && return 0
         sleep 2
     done
     return 1
@@ -111,27 +111,21 @@ else
 fi
 
 # init system status
-SYSTEM_STATUS="$(systemctl is-system-running --quiet && echo "0" || echo "1")"
-
-if [[ "$SYSTEM_STATUS" == "0" ]]; then
-SYSTEM_STATUS="✅"
-else
-SYSTEM_STATUS="⚠️"
-fi
+SYSTEM_STATUS="$(systemctl is-system-running)"
 
 # critical daemon status
-systemctl is-active --quiet ssh.socket && SSH_STATUS="✅" || SSH_STATUS="❌"
-systemctl is-active --quiet cron.service && CRON_STATUS="✅" || CRON_STATUS="❌"
-systemctl is-active --quiet fail2ban.service && FAIL2BAN_STATUS="✅" || FAIL2BAN_STATUS="❌"
-systemctl is-active --quiet xray.service && XRAY_STATUS="✅" || XRAY_STATUS="❌"
+systemctl is-active --quiet ssh.socket && SSH_STATUS="running" || SSH_STATUS="fail"
+systemctl is-active --quiet cron.service && CRON_STATUS="running" || CRON_STATUS="fail"
+systemctl is-active --quiet fail2ban.service && FAIL2BAN_STATUS="running" || FAIL2BAN_STATUS="fail"
+systemctl is-active --quiet xray.service && XRAY_STATUS="running" || XRAY_STATUS="fail"
 
 # start collecting message
 readonly HOSTNAME="$(hostname)"
 readonly DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
 
-if [[  "$SSH_STATUS" ==  "✅" && "$CRON_STATUS" == "✅" && "$FAIL2BAN_STATUS" == "✅" && "$XRAY_STATUS" == "✅" && "$SYSTEM_STATUS" == "✅" ]]; then
+if [[  "$SSH_STATUS" ==  "running" && "$CRON_STATUS" == "running" && "$FAIL2BAN_STATUS" == "running" && "$XRAY_STATUS" == "running" && "$SYSTEM_STATUS" == "running" ]]; then
 TITLE="✅ <b>Server up, all services are running</b>"
-elif [[ "$SSH_STATUS" ==  "✅" && "$CRON_STATUS" == "✅" && "$FAIL2BAN_STATUS" == "✅" && "$XRAY_STATUS" == "✅" ]]; then
+elif [[ "$SSH_STATUS" ==  "running" && "$CRON_STATUS" == "running" && "$FAIL2BAN_STATUS" == "running" && "$XRAY_STATUS" == "running" ]]; then
 TITLE="⚠️ <b>Server up, non-critical service down</b>"
 else 
 TITLE="❌ <b>Server up, critical service down</b>"

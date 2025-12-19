@@ -52,7 +52,7 @@ if ! mkdir -p $ENV_PATH; then
 fi
 cat > "$ENV_FILE" <<EOF
 BOT_TOKEN="$READ_BOT_TOKEN"
-CHAT_ID="$READ_CHAT_ID"  
+CHAT_ID="$READ_CHAT_ID"
 EOF
 chmod 600 "$ENV_FILE"
 
@@ -255,6 +255,7 @@ SHELL=/bin/bash
 EOF
 chmod 644 "/etc/cron.d/traffic_notify"
 echo "✅ Traffic notify script installed successful"
+
 
 
 
