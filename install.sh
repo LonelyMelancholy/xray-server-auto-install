@@ -250,6 +250,7 @@ TRAFFIC_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/traffic_notify.sh"
 install -m 700 "$TRAFFIC_NOTIFY_SCRIPT_SOURCE" "$TRAFFIC_NOTIFY_SCRIPT_DEST"
 # Turn on script in cron
 cat > "/etc/cron.d/traffic_notify" <<EOF
+SHELL=/bin/bash
 0 1 * * * root "$TRAFFIC_NOTIFY_SCRIPT_DEST" &> /dev/null
 EOF
 chmod 644 "/etc/cron.d/traffic_notify"
@@ -260,7 +261,53 @@ echo "✅ Traffic notify script installed successful"
 
 # Включаем security обновления и перезагрузку по необходимости
 apt-get install unattended-upgrades -y
-# так и не доделал
+
+tee /etc/apt/apt.conf.d/20auto-upgrades >/dev/null <<'EOF'
+APT::Periodic::Update-Package-Lists "0";
+APT::Periodic::Unattended-Upgrade "0";
+EOF
+
+systemctl disable --now apt-daily.timer apt-daily-upgrade.timer
+
+
+UNATTENDED_UPGRADE_SCRIPT_SOURCE="script/unattended_upgrade.sh"
+UNATTENDED_UPGRADE_SCRIPT_DEST="/usr/local/bin/telegram/unattended_upgrade.sh"
+REBOOT_SCRIPT_SOURCE="script/reboot_notify.sh"
+REBOOT_SCRIPT_DEST="/usr/local/bin/telegram/reboot_notify.sh"
+
+install -m 700 "$UNATTENDED_UPGRADE_SCRIPT_SOURCE" "$UNATTENDED_UPGRADE_SCRIPT_DEST"
+cat > "/etc/cron.d/unattended-upgrade" <<EOF
+SHELL=/bin/bash
+0 2 * * * root "$UNATTENDED_UPGRADE_SCRIPT_DEST" &> /dev/null
+EOF
+chmod 644 "/etc/cron.d/unattended-upgrade"
+
+
+переделать на систем таймер
+install -m 700 "$REBOOT_SCRIPT_SOURCE" "$REBOOT_SCRIPT_DEST"
+cat > "/etc/cron.d/reboot_notify" <<EOF
+SHELL=/bin/bash
+@reboot root "$REBOOT_SCRIPT_DEST" &> /dev/null
+EOF
+chmod 644 "/etc/cron.d/reboot_notify"
+
+/etc/systemd/system/boot-notify.service
+
+[Unit]
+Description=Telegram notify after boot
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+Restart=no
+ExecStart=/usr/local/bin/boot_notify.sh
+
+[Install]
+WantedBy=multi-user.target
+
+systemctl daemon-reload
+systemctl enable boot-notify.service
 
 
 
@@ -325,6 +372,7 @@ GEODAT_SCRIPT_DEST="/usr/local/bin/geodat_update.sh"
 install -m 700 "$GEODAT_SCRIPT_SOURCE" "$GEODAT_SCRIPT_DEST"
 # Turn on script in cron
 cat > "/etc/cron.d/geodat_update" <<EOF
+SHELL=/bin/bash
 0 2 * * * root "$GEODAT_SCRIPT_DEST" >/dev/null 2>&1
 EOF
 chmod 644 "/etc/cron.d/geodat_update"

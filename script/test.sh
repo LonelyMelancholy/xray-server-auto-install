@@ -1,4 +1,6 @@
 #!/bin/bash
+#
+#
 
 # test for all script with telegramm notify
 echo "Test script for test all messages, 1 sec pause"
@@ -27,4 +29,4 @@ echo "Traffic notify, one time, server must be running"
 sleep 1
 
 #
-
+sudo systemctl start boot-notify.service

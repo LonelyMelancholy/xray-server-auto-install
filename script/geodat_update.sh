@@ -9,20 +9,20 @@ export PATH
 
 # enable logging
 readonly DATE="$(date +"%Y-%m-%d")"
-readonly UPDATE_LOG="/var/log/xray/update.${DATE}.log"
+readonly UPDATE_LOG="/var/log/xray/xray_update.${DATE}.log"
 exec &>> "$UPDATE_LOG"
 
 # start logging message
 readonly DATE_START="$(date "+%Y-%m-%d %H:%M:%S")"
-echo "   ########## update started - $DATE_START ##########   "
+echo "   ########## xray update started - $DATE_START ##########   "
 
 # exit log message function
 exit_fail() {
     if [[ "$RC" = "0" ]]; then
-        echo "   ########## update ended - $DATE_END ##########   "
+        echo "   ########## xray update ended - $DATE_END ##########   "
     else
         DATE_FAIL="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "   ########## update failed - $DATE_FAIL ##########   "
+        echo "   ########## xray update failed - $DATE_FAIL ##########   "
     fi
 }
 
@@ -85,7 +85,7 @@ cleanup_old_backups_and_logs() {
     cleanup_old "$XRAY_DIR"      "xray.*.bak"         "$XRAY_DIR/xray.${DATE}.bak"          "xray backup"
     cleanup_old "$ASSET_DIR"     "geoip.dat.*.bak"    "$ASSET_DIR/geoip.dat.${DATE}.bak"    "geoip.dat backup"
     cleanup_old "$ASSET_DIR"     "geosite.dat.*.bak"  "$ASSET_DIR/geosite.dat.${DATE}.bak"  "geosite.dat backup"
-    cleanup_old "/var/log/xray"  "update.*.log"       "$UPDATE_LOG"                         "update log backup"
+    cleanup_old "/var/log/xray"  "xray_update.*.log"  "$UPDATE_LOG"                         "xray update log backup"
 }
 
 # check secret file
@@ -131,15 +131,18 @@ telegram_message() {
 
 # exit cleanup and log message function
 exit_cleanup() {
+    local date_del_start=$(date "+%Y-%m-%d %H:%M:%S")
+    echo "########## cleanup started - $date_del_start ##########"
     if rm -rf "$TMP_DIR"; then
         echo "✅ Success: temporary directory $TMP_DIR was deleted"
         local date_del_success=$(date "+%Y-%m-%d %H:%M:%S")
-        echo "   ########## cleanup ended - $date_del_success ##########   "
+        echo "########## cleanup ended - $date_del_success ##########"
     else
         echo "❌ Error: temporary directory $TMP_DIR was not deleted"
         local date_del_error=$(date "+%Y-%m-%d %H:%M:%S")
-        echo "   ########## cleanup failed - $date_del_error ##########   "
-        MESSAGE="🖥️  Host: $HOSTNAME
+        echo "########## cleanup failed - $date_del_error ##########"
+        MESSAGE="❌ Cleanup after Xray update
+🖥️  Host: $HOSTNAME
 ⌚ Time error: $date_del_error
 ❌ Error: temporary directory $TMP_DIR for xray update was not deleted"
         telegram_message
@@ -502,14 +505,14 @@ readonly DATE_END=$(date "+%Y-%m-%d %H:%M:%S")
 # select a title for the telegram message
 if [ "$XRAY_DOWNLOAD" = "1" ] && [ "$GEOIP_DOWNLOAD" = "1" ] && [ "$GEOSITE_DOWNLOAD" = "1" ] && [ "$XRAY_INSTALL" = "1" ]; then
     if [ "$FAIL_TD" = "0" ]; then
-        MESSAGE_TITLE="✅ Upgrade report"
+        MESSAGE_TITLE="✅ Xray Upgrade report"
         RC=0
     else
-        MESSAGE_TITLE="⚠️  Upgrade report"
+        MESSAGE_TITLE="⚠️ Xray Upgrade report"
         RC=0
     fi
 else
-    MESSAGE_TITLE="❌ Upgrade error"
+    MESSAGE_TITLE="❌ Xray Upgrade error"
     RC=1
 fi
 
