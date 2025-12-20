@@ -8,36 +8,74 @@ var/log/telegram
 /usr/local/bin/maintance
 /var/log/
 
+#
+# main variables
+MAX_ATTEMPTS=3
+
+# done
 # root checking
 if [[ $EUID -ne 0 ]]; then
-  echo "❌ Error: You not root user, exit"
-  exit 1
+    echo "❌ Error: You not root user, exit"
+    exit 1
 else
-  echo "✅ Success: You root user, continued"
+    echo "✅ Success: You root user, continued"
 fi
 
+# done
 # check another instanse of the script is not running
+umask 022
 readonly LOCK_FILE="/var/run/vpn_install.lock"
-exec 9>"$LOCK_FILE"
-flock -n 9 || { echo "❌ Error: another instance is running, exit"; exit 1; }
+exec 9> "$LOCK_FILE" || { sleep 1; echo "❌ Error: cannot open lock file '$LOCK_FILE', exit"; exit 1; }
+flock -n 9 || { sleep 1; echo "❌ Error: another instance is running, exit"; exit 1; }
 
 
-
-# |-------------------|
-# | Helping functions |
-# |-------------------|
+# 
+# Helping functions
 has_cmd() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# |--------------------------|
-# | Check configuration file |
-# |--------------------------|
+install_with_retry() {
+    local action="$1"
+    shift 1
+    local attempt=1
+
+    while true; do
+        echo "📢 Info: ${action}, attempt $attempt, please wait"
+        # $@ passes all remaining arguments (after the first one)
+        if "$@"; then
+            echo "✅ Success: $action"
+            return 0
+            
+        fi
+        if [[ "$attempt" -lt "$MAX_ATTEMPTS" ]]; then
+            sleep 60
+            echo "⚠️  Non-critical error: $action failed, trying again"
+            ((attempt++))
+            continue
+        else
+            echo "❌ Error: $action, attempts ended, exit"
+            exit 1
+        fi
+    done
+}
+
+run_and_check() {
+    action="$1"
+    shift 1
+    if $@; then
+        echo "✅ Success: $action"
+        return 0
+    else
+        echo "❌ Error: $action, exit"
+        exit 1
+    fi
+}
+
+# done
+# check configuration file
 CFG_CHECK="module/cfg_check.sh"
-if [ ! -r "$CFG_CHECK" ]; then
-    echo "❌ Error: check $CFG_CHECK it's missing or you not have right to read"
-    exit 1
-fi
+[[ -r "$CFG_CHECK" ]] || { sleep 1; echo "❌ Error: check '$CFG_CHECK' it's missing or you do not have read permissions, exit"; exit 1; }
 source "$CFG_CHECK"
 
 # |----------------------------------|
@@ -115,7 +153,7 @@ fi
 # меняем порт в конфиге
 sed -i "s/{PORT}/$PORT/g" "$SSH_CONF_DEST"
 # Создаём файл конфигурации
-if install -m 644 "$SSH_CONF_SOURCE" "$SSH_CONF_DEST"; then
+if install -m 644 -o root -g root "$SSH_CONF_SOURCE" "$SSH_CONF_DEST"; then
     echo "✅ Creating a new sshd configuration completed"
 else
     echo "❌ Error: sshd configuration not installed"
@@ -169,131 +207,88 @@ systemctl restart ssh.socket
 systemctl restart ssh.service
 
 
-# |--------------------------------------------------|
-# | Install ssh login/logout notify and disable MOTD |
-# |--------------------------------------------------|
-
-#install log 
-mkdir /var/log/telegram
-# Install script notify login 
+# done
+# Install ssh login/logout notify and disable MOTD
+# install log directory
+run_and_check "creating directory for all telegram script log" mkdir /var/log/telegram
+# install script
 SSH_ENTER_NOTIFY_SCRIPT_SOURCE=script/ssh_enter_notify.sh
 SSH_ENTER_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/ssh_enter_notify.sh"
-install -m 700 "$SSH_ENTER_NOTIFY_SCRIPT_SOURCE" "$SSH_ENTER_NOTIFY_SCRIPT_DEST"
-echo -e "\n# Notify for success ssh login and logout via telegram bot" >> /etc/pam.d/sshd
-echo "session optional pam_exec.so seteuid $SSH_ENTER_NOTIFY_SCRIPT_DEST" >> /etc/pam.d/sshd
-# Disable message of the day, backup and commented 2 lines
+run_and_check "ssh enter notification script installation" install -m 700 -o root -g root "$SSH_ENTER_NOTIFY_SCRIPT_SOURCE" "$SSH_ENTER_NOTIFY_SCRIPT_DEST"
+# enable script in PAM
+run_and_check "enable enter notification script in PAM setting" tee /etc/pam.d/sshd >/dev/null <<EOF
+# Notify for success ssh login and logout via telegram bot
+session optional pam_exec.so seteuid $SSH_ENTER_NOTIFY_SCRIPT_DEST
+EOF
+# Disable message of the day
 MOTD="/etc/pam.d/sshd"
-sed -i.bak \
-  -e '/^[[:space:]]*session[[:space:]]\{1,\}optional[[:space:]]\{1,\}pam_motd\.so[[:space:]]\{1,\}motd=\/run\/motd\.dynamic[[:space:]]*$/{
-        /^[[:space:]]*#/! s/^[[:space:]]*/&# /
-      }' \
-  -e '/^[[:space:]]*session[[:space:]]\{1,\}optional[[:space:]]\{1,\}pam_motd\.so[[:space:]]\{1,\}noupdate[[:space:]]*$/{
-        /^[[:space:]]*#/! s/^[[:space:]]*/&# /
-      }' \
-  "$MOTD"
-echo "✅ Script ssh login/logout notify installed and MOTD disabled"
-
-sudo sed -ri 's/^([[:space:]]*session[[:space:]]+optional[[:space:]]+pam_motd\.so.*)$/#\1/' "$FILE"
+run_and_check "disable MOTD in PAM setting" sed -ri 's/^([[:space:]]*session[[:space:]]+optional[[:space:]]+pam_motd\.so.*)$/# \1/' "$MOTD"
 
 
-# |---------------------------|
-# |Install and setup fail2ban |
-# |---------------------------|
+# done
+# Install and setup fail2ban
+install_with_retry "install fail2ban package" apt-get install -y fail2ban
+# Install ssh jail
+F2B_CONF_SOURCE="cfg/jail.local"
+F2B_CONF_DEST="/etc/fail2ban/jail.local"
+run_and_check "fail2ban jail iptables + telegram configuration installation" install -m 644 -o root -g root "$F2B_CONF_SOURCE" "$F2B_CONF_DEST" && sed -i "s/{PORT}/$PORT/g" "$F2B_CONF_DEST"
+# Install ssh action
+TG_LOCAL_SOURCE="cfg/ssh_telegram.local"
+TG_LOCAL_DEST="/etc/fail2ban/action.d/ssh_telegram.local"
+run_and_check "fail2ban telegram action installation" install -m 644 "$TG_LOCAL_SOURCE" "$TG_LOCAL_DEST"
+# Install ssh ban notify script
+SSH_BAN_NOTIFY_SCRIPT_SOURCE="script/ssh_ban_notify.sh"
+SSH_BAN_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/ssh_ban_notify.sh"
+run_and_check "telegram notification ban/unban script installation" install -m 700 -o root -g root "$SSH_BAN_NOTIFY_SCRIPT_SOURCE" "$SSH_BAN_NOTIFY_SCRIPT_DEST"
+# Start fail2ban
+run_and_check "enable and start fail2ban service" systemctl enable --now fail2ban
 
-# Install (tryig 3 times)
-i=1
-while [ "$i" -lt 4 ]; do
-    echo "⚠️ Install fail2ban, attempt $i, please wait"
-    if apt-get install fail2ban -y >/dev/null 2>&1; then
-        echo "✅ Install fail2ban completed"
-        break
-    else
-        echo "❌ Install fail2ban failed, try again"
-        i=$((i+1))
-        sleep 10
-    fi
-done
 
-# Check installation and choice between setup or skip
-if has_cmd fail2ban-client; then
-    # Install ssh jail
-    F2B_CONF_SOURCE="cfg/jail.local"
-    F2B_CONF_DEST="/etc/fail2ban/jail.local"
-    install -m 644 "$F2B_CONF_SOURCE" "$F2B_CONF_DEST"
-    sed -i "s/{PORT}/$PORT/g" "$F2B_CONF_DEST"
-    # Install ssh action
-    TG_LOCAL_SOURCE="cfg/ssh_telegram.local"
-    TG_LOCAL_DEST="/etc/fail2ban/action.d/ssh_telegram.local"
-    install -m 644 "$TG_LOCAL_SOURCE" "$TG_LOCAL_DEST"
-    # Install ssh ban notify script
-    SSH_BAN_NOTIFY_SCRIPT_SOURCE="script/ssh_ban_notify.sh"
-    SSH_BAN_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/ssh_ban_notify.sh"
-    install -m 700 "$SSH_BAN_NOTIFY_SCRIPT_SOURCE" "$SSH_BAN_NOTIFY_SCRIPT_DEST"
-    echo "✅ Setup fail2ban completed"
-    # Start fail2ban
-    if systemctl enable --now fail2ban; then
-        echo "✅ Fail2ban start successful"
-    else
-        echo "❌ Startup error, check logs"
-    fi
-else
-    echo "❌ Warning! Skipping fail2ban setup!"
-fi
-
-# |------------------------------------------|
-# |Server + User traffic telegram bot notify |
-# |------------------------------------------|
-
-# Install script
-TRAFFIC_NOTIFY_SCRIPT_SOURCE="module/traffic_notify.sh"
+# done
+# server + user traffic telegram bot notify
+TRAFFIC_NOTIFY_SCRIPT_SOURCE="script/traffic_notify.sh"
 TRAFFIC_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/traffic_notify.sh"
-install -m 700 "$TRAFFIC_NOTIFY_SCRIPT_SOURCE" "$TRAFFIC_NOTIFY_SCRIPT_DEST"
-# Turn on script in cron
-cat > "/etc/cron.d/traffic_notify" <<EOF
+run_and_check "traffic notification script installation" install -m 700 -o root -g root "$TRAFFIC_NOTIFY_SCRIPT_SOURCE" "$TRAFFIC_NOTIFY_SCRIPT_DEST"
+
+run_and_check "enabling traffic notification script execution scheduler" tee /etc/cron.d/traffic_notify >/dev/null <<EOF
 SHELL=/bin/bash
 0 1 * * * root "$TRAFFIC_NOTIFY_SCRIPT_DEST" &> /dev/null
 EOF
-chmod 644 "/etc/cron.d/traffic_notify"
-echo "✅ Traffic notify script installed successful"
+
+chmod 644 "/etc/cron.d/traffic_notify" || { echo "❌ Error: set permissions on task scheduler file, exit"; exit 1; }
 
 
+# done
+# unattended upgrade and reboot script
+install_with_retry "install unattended upgrades package" apt-get install -y unattended-upgrades
 
-
-
-# Включаем security обновления и перезагрузку по необходимости
-apt-get install unattended-upgrades -y
-
-tee /etc/apt/apt.conf.d/20auto-upgrades >/dev/null <<'EOF'
+run_and_check "changing package settings" tee /etc/apt/apt.conf.d/20auto-upgrades >/dev/null <<'EOF'
 APT::Periodic::Update-Package-Lists "0";
 APT::Periodic::Unattended-Upgrade "0";
 EOF
 
-systemctl disable --now apt-daily.timer apt-daily-upgrade.timer
-
+run_and_check "disable default update timer" systemctl disable --now apt-daily.timer apt-daily-upgrade.timer
 
 UNATTENDED_UPGRADE_SCRIPT_SOURCE="script/unattended_upgrade.sh"
 UNATTENDED_UPGRADE_SCRIPT_DEST="/usr/local/bin/telegram/unattended_upgrade.sh"
-REBOOT_SCRIPT_SOURCE="script/reboot_notify.sh"
-REBOOT_SCRIPT_DEST="/usr/local/bin/telegram/reboot_notify.sh"
+run_and_check "security update script installation" install -m 700 -o root -g root "$UNATTENDED_UPGRADE_SCRIPT_SOURCE" "$UNATTENDED_UPGRADE_SCRIPT_DEST"
 
-install -m 700 "$UNATTENDED_UPGRADE_SCRIPT_SOURCE" "$UNATTENDED_UPGRADE_SCRIPT_DEST"
-cat > "/etc/cron.d/unattended-upgrade" <<EOF
+run_and_check "enabling security update script execution scheduler" tee /etc/cron.d/unattended-upgrade >/dev/null <<EOF
 SHELL=/bin/bash
-0 2 * * * root "$UNATTENDED_UPGRADE_SCRIPT_DEST" &> /dev/null
+0 3 1 * * root "$UNATTENDED_UPGRADE_SCRIPT_DEST" &> /dev/null
 EOF
-chmod 644 "/etc/cron.d/unattended-upgrade"
+
+chmod 644 "/etc/cron.d/unattended-upgrade" || { echo "❌ Error: set permissions on task scheduler file, exit"; exit 1; }
 
 
-переделать на систем таймер
-install -m 700 "$REBOOT_SCRIPT_SOURCE" "$REBOOT_SCRIPT_DEST"
-cat > "/etc/cron.d/reboot_notify" <<EOF
-SHELL=/bin/bash
-@reboot root "$REBOOT_SCRIPT_DEST" &> /dev/null
-EOF
-chmod 644 "/etc/cron.d/reboot_notify"
+# done
+# boot notify script via Telegram
+BOOT_SCRIPT_SOURCE="script/boot_notify.sh"
+BOOT_SCRIPT_DEST="/usr/local/bin/telegram/boot_notify.sh"
 
-/etc/systemd/system/boot-notify.service
+run_and_check "server boot notification script installation" install -m 700 -o root -g root "$BOOT_SCRIPT_SOURCE" "$BOOT_SCRIPT_DEST"
 
+run_and_check "create systemd service for server boot notification script" tee /etc/systemd/system/boot_notify.service > /dev/null <<'EOF'
 [Unit]
 Description=Telegram notify after boot
 Wants=network-online.target
@@ -306,22 +301,25 @@ ExecStart=/usr/local/bin/boot_notify.sh
 
 [Install]
 WantedBy=multi-user.target
+EOF
 
-systemctl daemon-reload
-systemctl enable boot-notify.service
+run_and_check "reload systemd" systemctl daemon-reload
+run_and_check "enable server boot notification service" systemctl enable boot_notify.service
+
+#
+# xray install
+
+run_and_check "create user for the xray service" useradd -r -M -d /nonexistent -s /usr/sbin/nologin xray
+
+run_and_check "create directory for the xray service" mkdir -p /usr/local/share/xray && mkdir -p /usr/local/etc/xray \
+    && mkdir -p /var/log/xray && chown xray:xray /var/log/xray
 
 
 
-# Установка Xray
+отсюда делать
 
-useradd -r -M -d /nonexistent -s /usr/sbin/nologin xray
+dl_with_retry https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip Xray-linux-64.zip
 
-mkdir -p /usr/local/share/xray
-mkdir -p /usr/local/etc/xray
-mkdir -p /var/log/xray
-chown xray:xray /var/log/xray
-
-wget https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
 unzip Xray-linux-64.zip
 
 install -m 755 xray /usr/local/bin/xray
@@ -329,7 +327,8 @@ install -m 755 xray /usr/local/bin/xray
 install -m 644 geosite.dat /usr/local/share/xray/geosite.dat
 install -m 644 geoip.dat /usr/local/share/xray/geoip.dat
 
-cat > "/etc/systemd/system/xray.service" <<'EOF'
+
+tee /etc/systemd/system/xray.service > /dev/null <<'EOF'
 [Unit]
 Description=Xray-core VLESS server
 After=network-online.target
@@ -374,7 +373,7 @@ install -m 700 "$GEODAT_SCRIPT_SOURCE" "$GEODAT_SCRIPT_DEST"
 # Turn on script in cron
 cat > "/etc/cron.d/geodat_update" <<EOF
 SHELL=/bin/bash
-0 2 * * * root "$GEODAT_SCRIPT_DEST" >/dev/null 2>&1
+0 2 1 * * root "$GEODAT_SCRIPT_DEST" >/dev/null 2>&1
 EOF
 chmod 644 "/etc/cron.d/geodat_update"
 echo "✅ Xray and geo*.dat update script installed successful"
@@ -404,9 +403,3 @@ echo "Ssh port: ${PORT}"
 echo "======================================================================"
 echo "Подсказка: после копирования очистите историю/скролл терминала (напр., 'clear')."
 echo
-
-
-
-# Очистка переменной и завершение
-unset -v PASS
-trap - EXIT

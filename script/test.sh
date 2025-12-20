@@ -6,7 +6,7 @@
 echo "Test script for test all messages, 1 sec pause"
 
 # fail2ban
-echo "Check fail2ban script, 3 message ban, unban and no arguments"
+echo "Check ssh ban script, 3 message ban, unban and no arguments"
 /usr/local/bin/telegram/ssh_ban_notify.sh ban   "111.111.111.111" "12345698765"
 sleep 1
 /usr/local/bin/telegram/ssh_ban_notify.sh unban "255.255.255.255" "98765432198"
@@ -28,5 +28,13 @@ echo "Traffic notify, one time, server must be running"
 /usr/local/bin/telegram/traffic_notify.sh
 sleep 1
 
-#
-sudo systemctl start boot-notify.service
+# boot notify
+echo "Test boot notify, one time, all service must be running"
+systemctl start boot_notify.service
+sleep 1
+
+# unatended upgrade
+echo "Test unattended upgrade"
+/usr/local/bin/telegram/unattended_upgrade.sh
+sleep 1
+

@@ -1,14 +1,6 @@
 # this file is intended to be connected via source, not run standalone
-# done
-
-# set trap for unset secret variables
-cleanup_secrets() {
-    unset -v PASS
-    unset -v READ_BOT_TOKEN
-    unset -v READ_CHAT_ID
-    unset -v UBUNTU_PRO_TOKEN
-}
-trap 'cleanup_secrets' EXIT
+# done work
+# done test
 
 # config file read check
 CFG_FILE="configuration.cfg"
@@ -20,7 +12,6 @@ fi
 
 # username check
 SECOND_USER=$(awk -F'"' '/^[[:space:]]*Server administrator username/ {print $2}' "$CFG_FILE")
-
 if [[ -z "$SECOND_USER" ]]; then
     sleep 1
     echo "❌ Error: 'Server administrator username' is empty in '$CFG_FILE', exit"
@@ -38,7 +29,6 @@ fi
 
 # password check
 PASS=$(awk -F'"' '/^[[:space:]]*Password for root and new user/ {print $2}' "$CFG_FILE")
-
 if [[ -z "$PASS" ]]; then
     sleep 1
     echo "❌ Error: 'Password for root and new user' is empty in '$CFG_FILE', exit"

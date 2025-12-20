@@ -1,8 +1,6 @@
 # .local for start telegram notify script
-# & - to run the script in the background so that fail2ban can move on to the next ban
-# without waiting for the message to be sent
 # done work
-# 
+# done test
 [Definition]
 actionstart =
 actionstop =

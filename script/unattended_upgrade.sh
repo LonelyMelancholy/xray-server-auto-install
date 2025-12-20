@@ -114,7 +114,7 @@ update_and_upgrade() {
 
     while true; do
         echo "📢 Info: ${action}, attempt $attempt, please wait"
-        # $@ passes all remaining arguments (after the first two)
+        # $@ passes all remaining arguments (after the first one)
         if "$@"; then
             echo "✅ Success: $action completed"
             RC="0"
@@ -154,12 +154,8 @@ check_fail() {
 }
 
 # call update and fail check
-cmd_update=(apt-get update)
-cmd_upgrade=(unattended-upgrade)
-update_and_upgrade "update packages list" "${cmd_update[@]}" || FAIL_STEP="apt-get update"
-check_fail
-update_and_upgrade "upgrade" "${cmd_upgrade[@]}" || FAIL_STEP="unattended-upgrade"
-check_fail
+update_and_upgrade "update packages list" apt-get update || { FAIL_STEP="apt-get update"; check_fail; }
+update_and_upgrade "upgrade" unattended-upgrade || { FAIL_STEP="unattended-upgrade"; check_fail; }
 
 # parse package changes from dpkg.log for name+version, not use unattended log because he dont have version
 CHANGES="$(awk -v d="$TODAY" '
