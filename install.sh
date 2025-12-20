@@ -1,12 +1,5 @@
 #!/bin/bash
-
-вывести все директории куда то в справку
-для скриптов телеги
-/usr/local/bin/telegram
-var/log/telegram
-для автообновления и добавления юзеров 
-/usr/local/bin/maintance
-/var/log/
+# installation script
 
 #
 # main variables
@@ -72,139 +65,93 @@ run_and_check() {
     fi
 }
 
+
 # done
 # check configuration file
 CFG_CHECK="module/cfg_check.sh"
 [[ -r "$CFG_CHECK" ]] || { sleep 1; echo "❌ Error: check '$CFG_CHECK' it's missing or you do not have read permissions, exit"; exit 1; }
 source "$CFG_CHECK"
 
-# |----------------------------------|
-# | Pre install system configuration |
-# |----------------------------------|
 
+# done
+# Pred install system configuration
 # Write token and id in secrets file
 ENV_PATH="/usr/local/etc/telegram/"
 ENV_FILE="/usr/local/etc/telegram/secrets.env"
-if ! mkdir -p $ENV_PATH; then
-    echo "❌ Failed to create directory $ENV_PATH"
-fi
-cat > "$ENV_FILE" <<EOF
+run_and_check "create directory for telegram scripts settings" mkdir -p $ENV_PATH
+run_and_check "create secret file for telegram scripts" tee $ENV_FILE > /dev/null << EOF
 BOT_TOKEN="$READ_BOT_TOKEN"
 CHAT_ID="$READ_CHAT_ID"
 EOF
-chmod 600 "$ENV_FILE"
+run_and_check "set permissions on a secret file" chmod 600 "$ENV_FILE"
 
-echo "✅ Token and Chat id writed in secret file"
-
-# Настройка sshd группы
+# create ssh group for login
 SSH_GROUP="ssh-users"
 if ! getent group "$SSH_GROUP" >/dev/null 2>&1; then
-    if addgroup "$SSH_GROUP" >/dev/null 2>&1; then
-        echo "✅ Group $SSH_GROUP has been successfully added"
-    else
-        echo "❌ Ошибка: не удалось создать группу $SSH_GROUP"
-    exit 1
-    fi
+    run_and_check "adding SSH group" addgroup "$SSH_GROUP"; then
 else 
-    echo "✅ Group $SSH_GROUP already exists"
+    echo "✅ Success: group $SSH_GROUP already exists"
 fi
 
-# Создание пользователя и добавление его в sshd группу
-if useradd -m -s /bin/bash -G sudo,"$SSH_GROUP" "$SECOND_USER"; then
-echo "✅ User has been created and added to $SSH_GROUP and sudo groups"
-else
-echo "❌ Error: user not created"
-exit 1
-fi
+# create user and add in ssh and sudo group
+run_and_check "creating user and added to $SSH_GROUP and sudo groups" useradd -m -s /bin/bash -G sudo,"$SSH_GROUP" "$SECOND_USER"
 
-# Смена пароля root и нового пользователя
-if printf 'root:%s\n%s:%s\n' "$PASS" "$SECOND_USER" "$PASS" | chpasswd; then
-echo "✅ Root and $SECOND_USER passwords have been changed successfully"
-else
-echo "❌ Error: root and $SECOND_USER passwords not changed"
-fi
+# changing password for root and user
+run_and_check "root and $SECOND_USER passwords change" printf 'root:%s\n%s:%s\n' "$PASS" "$SECOND_USER" "$PASS" | chpasswd
 
 
-
-
-
-
-# |-------------------|
-# | SSH Configuration |
-# |-------------------|
-
-# Variables
+# done
+# SSH Configuration
+# variables
 SSH_CONF_SOURCE="/cfg/ssh.cfg"
 SSH_CONF_DEST="/etc/ssh/sshd_config.d/99-custom_security.conf"
 LOW="40000"
 HIGH="50000"
 
-# Port generation [40000,50000]
+# port generation [40000,50000]
 PORT="$(shuf -i "${LOW}-${HIGH}" -n 1)"
 
-# Очистка файлов конфигураций с высоким приоритетом во избежание конфликтов
-if compgen -G "/etc/ssh/sshd_config.d/99*.conf" > /dev/null; then
-    rm -f /etc/ssh/sshd_config.d/99*.conf
-    echo "✅ Deletion of previous conflicting sshd configuration files completed"
+# deleting previous sshd configuration with high priority
+if compgen -G "/etc/ssh/sshd_config.d/99*.conf" > /dev/null
+run_and_check "deleting previous conflicting sshd configuration files" rm -f /etc/ssh/sshd_config.d/99*.conf
 else
-    echo "✅ No conflicting sshd configurations files found"
+    echo "✅ Success: conflicting sshd configurations files not found"
 fi
 
-# меняем порт в конфиге
-sed -i "s/{PORT}/$PORT/g" "$SSH_CONF_DEST"
-# Создаём файл конфигурации
-if install -m 644 -o root -g root "$SSH_CONF_SOURCE" "$SSH_CONF_DEST"; then
-    echo "✅ Creating a new sshd configuration completed"
-else
-    echo "❌ Error: sshd configuration not installed"
-    exit 1
-fi
+# creating a new sshd configuration
+run_and_check "creating a new sshd configuration" install -m 644 -o root -g root "$SSH_CONF_SOURCE" "$SSH_CONF_DEST"
+
+# insert port in ssh config
+sed -i "s/{PORT}/$PORT/g" "$SSH_CONF_DEST" || { echo "❌ Error: set port in ssh configuration, exit"; exit 1; }
 
 # Delete disabled key
-if rm /etc/ssh/ssh_host_ecdsa_key && \
-rm /etc/ssh/ssh_host_ecdsa_key.pub && \
-rm /etc/ssh/ssh_host_rsa_key && \
-rm /etc/ssh/ssh_host_rsa_key.pub
-then
-    sleep 1
-    echo "✅ Old host keys have been removed"
-else
-    sleep 1
-    echo "❌ Error: old keys are not deleted"
-    exit 1
-fi
+run_and_check "remove old not secure host ssh keys" rm -f /etc/ssh/ssh_host_ecdsa_key && \
+rm -f /etc/ssh/ssh_host_ecdsa_key.pub && \
+rm -f /etc/ssh/ssh_host_rsa_key && \
+rm -f /etc/ssh/ssh_host_rsa_key.pub
 
-# Находим домашний каталог пользователя
+# found second user home directory
 USER_HOME="$(getent passwd "$SECOND_USER" | cut -d: -f6)"
 SSH_DIR="$USER_HOME/.ssh"
 KEY_NAME="authorized_keys"
 PRIV_KEY_PATH="${SSH_DIR}/${KEY_NAME}"
 PUB_KEY_PATH="${PRIV_KEY_PATH}.pub"
 
-# Создаём .ssh folder
-if ! mkdir "$SSH_DIR"; then
-    echo "❌ Error: unable to create folder for ssh keys"
-    exit 1
-fi
+# create .ssh folder
+run_and_check "creating directory for ssh keys" mkdir "$SSH_DIR"
 
-# Key generation for ssh
-if ssh-keygen -t ed25519 -N "" -f "$PRIV_KEY_PATH" -q; then
-    echo "✅ The ssh key was successfully generated"
-else
-    echo "❌ Error: the ssh key cannot be generated"
-    exit 1
-fi
+# key generation for ssh
+run_and_check "generating ssh key" ssh-keygen -t ed25519 -N "" -f "$PRIV_KEY_PATH" -q
 
 # Права и владелец
-chmod 700 "$SSH_DIR"
-chmod 600 "$PRIV_KEY_PATH" "$PUB_KEY_PATH"
-USER_GROUP="$(id -gn "$SECOND_USER")"
+run_and_check "set permission to ssh directory and file" chmod 700 "$SSH_DIR" && \
+chmod 600 "$PRIV_KEY_PATH" "$PUB_KEY_PATH" && \
+USER_GROUP="$(id -gn "$SECOND_USER")" && \
 chown -R "$SECOND_USER:$USER_GROUP" "$SSH_DIR"
 
-# Reboot SSH
-systemctl daemon-reload
-systemctl restart ssh.socket
-systemctl restart ssh.service
+# reboot SSH
+run_and_check "reload systemd" systemctl daemon-reload
+run_and_check "restart sshd" systemctl restart ssh.socket
 
 
 # done
@@ -270,7 +217,7 @@ EOF
 run_and_check "disable default update timer" systemctl disable --now apt-daily.timer apt-daily-upgrade.timer
 
 UNATTENDED_UPGRADE_SCRIPT_SOURCE="script/unattended_upgrade.sh"
-UNATTENDED_UPGRADE_SCRIPT_DEST="/usr/local/bin/telegram/unattended_upgrade.sh"
+UNATTENDED_UPGRADE_SCRIPT_DEST="/usr/local/bin/service/unattended_upgrade.sh"
 run_and_check "security update script installation" install -m 700 -o root -g root "$UNATTENDED_UPGRADE_SCRIPT_SOURCE" "$UNATTENDED_UPGRADE_SCRIPT_DEST"
 
 run_and_check "enabling security update script execution scheduler" tee /etc/cron.d/unattended-upgrade >/dev/null <<EOF
@@ -305,6 +252,7 @@ EOF
 
 run_and_check "reload systemd" systemctl daemon-reload
 run_and_check "enable server boot notification service" systemctl enable boot_notify.service
+
 
 #
 # xray install
@@ -366,40 +314,33 @@ systemctl enable --now xray.service
 
 
 
-# Auto update xray and geobase
-GEODAT_SCRIPT_SOURCE="module/geodat_update.sh"
-GEODAT_SCRIPT_DEST="/usr/local/bin/geodat_update.sh"
-install -m 700 "$GEODAT_SCRIPT_SOURCE" "$GEODAT_SCRIPT_DEST"
-# Turn on script in cron
-cat > "/etc/cron.d/geodat_update" <<EOF
+
+# done
+# auto update xray and geobase
+GEODAT_SCRIPT_SOURCE="script/geodat_update.sh"
+GEODAT_SCRIPT_DEST="/usr/local/bin/service/geodat_update.sh"
+run_and_check "xray and geo*.dat update script installation" install -m 700 -o root -g root "$GEODAT_SCRIPT_SOURCE" "$GEODAT_SCRIPT_DEST"
+# turn on script in cron
+run_and_check "enabling xray and geo*.dat update script execution scheduler" tee /etc/cron.d/geodat_update > /dev/null << EOF
 SHELL=/bin/bash
-0 2 1 * * root "$GEODAT_SCRIPT_DEST" >/dev/null 2>&1
+0 2 1 * * root "$GEODAT_SCRIPT_DEST" &> /dev/null
 EOF
-chmod 644 "/etc/cron.d/geodat_update"
-echo "✅ Xray and geo*.dat update script installed successful"
+chmod 644 "/etc/cron.d/geodat_update" || { echo "❌ Error: set permissions on task scheduler file, exit"; exit 1; }
 
 
-
-
-
-
-
-
-
-
-
-# Выводим оба ключа для копирования
+# done
 echo
-echo "=== PRIVATE KEY ($PRIV_KEY_PATH) ==="
+echo "########## PRIVATE KEY - $PRIV_KEY_PATH ##########"
+echo
 cat "$PRIV_KEY_PATH"
 echo
-echo "=== PUBLIC KEY ($PUB_KEY_PATH) ==="
-cat "$PUB_KEY_PATH"
-
-# --- Показать пароль для копирования (НЕБЕЗОПАСНО) ---
+echo "########## PUBLIC KEY - $PUB_KEY_PATH ##########"
 echo
-echo "======================================================================"
-echo "Ssh port: ${PORT}"
-echo "======================================================================"
-echo "Подсказка: после копирования очистите историю/скролл терминала (напр., 'clear')."
+cat "$PUB_KEY_PATH"
+echo
+echo "################################################"
+echo
+echo "########## SSH server port - ${PORT} ##########"
+echo
+echo "################################################"
 echo
