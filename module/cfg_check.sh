@@ -71,8 +71,8 @@ else
 fi
 
 # check dest
-VLESS_HOST=$(awk -F'"' '/^[[:space:]]*Dest/ {print $2}' "$CFG_FILE")
-if [[ -z "$VLESS_HOST" ]]; then
+XRAY_HOST=$(awk -F'"' '/^[[:space:]]*Dest/ {print $2}' "$CFG_FILE")
+if [[ -z "$XRAY_HOST" ]]; then
     sleep 1
     echo "❌ Error: 'Dest' is empty in '$CFG_FILE', exit"
     exit 1
@@ -82,8 +82,8 @@ else
 fi
 
 # check name
-VLESS_NAME=$(awk -F'"' '/^[[:space:]]*Name/ {print $2}' "$CFG_FILE")
-if [[ -z "$VLESS_NAME" ]]; then
+XRAY_NAME=$(awk -F'"' '/^[[:space:]]*Name/ {print $2}' "$CFG_FILE")
+if [[ -z "$XRAY_NAME" ]]; then
     sleep 1
     echo "❌ Error: 'Name' is empty in '$CFG_FILE', exit"
     exit 1
@@ -93,8 +93,8 @@ else
 fi
 
 # check days
-VLESS_DAYS=$(awk -F'"' '/^[[:space:]]*Days/ {print $2}' "$CFG_FILE")
-if [[ -z "$VLESS_HOST" ]]; then
+XRAY_DAYS=$(awk -F'"' '/^[[:space:]]*Days/ {print $2}' "$CFG_FILE")
+if [[ -z "$XRAY_DAYS" ]]; then
     sleep 1
     echo "❌ Error: 'Days' is empty in '$CFG_FILE', exit"
     exit 1

@@ -54,7 +54,7 @@ install_with_retry() {
 run_and_check() {
     action="$1"
     shift 1
-    if $@; then
+    if "$@"; then
         echo "✅ Success: $action"
         return 0
     else
@@ -86,7 +86,7 @@ run_and_check "set permissions on a secret file" chmod 600 "$ENV_FILE"
 # create ssh group for login
 SSH_GROUP="ssh-users"
 if ! getent group "$SSH_GROUP" >/dev/null 2>&1; then
-    run_and_check "adding SSH group" addgroup "$SSH_GROUP"; then
+    run_and_check "adding SSH group" addgroup "$SSH_GROUP"
 else 
     echo "✅ Success: group $SSH_GROUP already exists"
 fi
@@ -110,7 +110,7 @@ HIGH="50000"
 PORT="$(shuf -i "${LOW}-${HIGH}" -n 1)"
 
 # deleting previous sshd configuration with high priority
-if compgen -G "/etc/ssh/sshd_config.d/99*.conf" > /dev/null
+if compgen -G "/etc/ssh/sshd_config.d/99*.conf" > /dev/null; then
 run_and_check "deleting previous conflicting sshd configuration files" rm -f /etc/ssh/sshd_config.d/99*.conf
 else
     echo "✅ Success: conflicting sshd configurations files not found"
@@ -180,7 +180,7 @@ run_and_check "fail2ban jail iptables + telegram configuration installation" ins
 # Install ssh action
 TG_LOCAL_SOURCE="cfg/ssh_telegram.local"
 TG_LOCAL_DEST="/etc/fail2ban/action.d/ssh_telegram.local"
-run_and_check "fail2ban telegram action installation" install -m 644 "$TG_LOCAL_SOURCE" "$TG_LOCAL_DEST"
+run_and_check "fail2ban telegram action installation" install -m 644 -o root -g root "$TG_LOCAL_SOURCE" "$TG_LOCAL_DEST"
 # Install ssh ban notify script
 SSH_BAN_NOTIFY_SCRIPT_SOURCE="script/ssh_ban_notify.sh"
 SSH_BAN_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/ssh_ban_notify.sh"
@@ -465,12 +465,12 @@ jq --arg dest "$DEST" \
 ' "$XRAY_CONFIG_SRC" > "$TMP_XRAY_CONFIG"
 
 
-trap rm -rf "$TMP_XRAY_CONFIG" "$TMP_DIR" EXIT
+trap 'rm -rf "$TMP_XRAY_CONFIG" "$TMP_DIR"' EXIT
 run_and_check "xray config checking" xray run -test -config "$TMP_XRAY_CONFIG" >/dev/null
 run_and_check "install xray config" install -m 600 -o xray -g xray "$TMP_XRAY_CONFIG" "$XRAY_CONFIG_DEST"
 run_and_check "delete temporary xray files " rm -rf "$TMP_XRAY_CONFIG" "$TMP_DIR"
 
-script/useradd.sh "$VLESS_NAME" "$VLESS_DAYS" 0
+script/useradd.sh "$XRAY_NAME" "$XRAY_DAYS" 0
 
 # Запускаем сервер
 run_and_check "reload systemd" systemctl daemon-reload
@@ -500,11 +500,6 @@ echo
 echo "########## PUBLIC KEY - $PUB_KEY_PATH ##########"
 echo
 cat "$PUB_KEY_PATH"
-echo
-echo "########## User added - $USERNAME ##########"
-echo
-echo "created: $CREATED, days: $DAYS expiration: $EXP"
-echo "VLESS link: $VLESS_URI"
 echo
 echo "########## SSH server port - ${PORT} ##########"
 echo

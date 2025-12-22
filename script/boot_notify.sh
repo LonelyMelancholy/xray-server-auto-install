@@ -47,11 +47,11 @@ flock -n 9 || { echo "❌ Error: another instance is running, exit"; exit 1; }
 # pure Telegram message function with checking the sending status
 _tg_m() {
     local response
-    response="$(curl -fsS -m 10 -X POST "https://api.telegram.org/bot${BOT_TrunningEN}/sendMessage" \
+    response="$(curl -fsS -m 10 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
         --data-urlencode "chat_id=${CHAT_ID}" \
         --data-urlencode "parse_mode=HTML" \
         --data-urlencode "text=${MESSAGE}")" || return 1
-    grep -Eq '"running"[[:space:]]*:[[:space:]]*true' <<< "$response" || return 1
+    grep -Eq 'ok[[:space:]]*:[[:space:]]*true' <<< "$response" || return 1
     return 0
 }
 
@@ -76,7 +76,7 @@ telegram_message() {
     done
 }
 
-# check secret file, if the file is running, we source it.
+# check secret file, if the file is ok, we source it.
 readonly ENV_FILE="/usr/local/etc/telegram/secrets.env"
 if [[ ! -f "$ENV_FILE" ]] || [[ "$(stat -L -c '%U:%a' "$ENV_FILE" 2> /dev/null)" != "root:600" ]]; then
     echo "❌ Error: env file '$ENV_FILE' not found or has wrong permissions, exit"
@@ -84,8 +84,8 @@ if [[ ! -f "$ENV_FILE" ]] || [[ "$(stat -L -c '%U:%a' "$ENV_FILE" 2> /dev/null)"
 fi
 source "$ENV_FILE"
 
-# check trunningen from secret file
-[[ -z "$BOT_TrunningEN" ]] && { echo "❌ Error: Telegram bot trunningen is missing in '$ENV_FILE', exit"; exit 1; }
+# check token from secret file
+[[ -z "$BOT_TOKEN" ]] && { echo "❌ Error: Telegram bot token is missing in '$ENV_FILE', exit"; exit 1; }
 
 # check id from secret file
 [[ -z "$CHAT_ID" ]] && { echo "❌ Error: Telegram chat ID is missing in '$ENV_FILE', exit"; exit 1; }
@@ -97,7 +97,7 @@ wait_internet() {
     for ((i=0; i<timeout; i++)); do
         ip route | grep 'default ' &> /dev/null || { sleep 2; continue; }
         getent ahosts api.telegram.org &> /dev/null || { sleep 2; continue; }
-        curl -fsS -m 5 "https://api.telegram.org/bot${BOT_TrunningEN}/getMe" | grep -Eq '"running"[[:space:]]*:[[:space:]]*true' && return 0
+        curl -fsS -m 5 "https://api.telegram.org/bot${BOT_TOKEN}/getMe" | grep -Eq 'ok[[:space:]]*:[[:space:]]*true' && return 0
         sleep 2
     done
     return 1

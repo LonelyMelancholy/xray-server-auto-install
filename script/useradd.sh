@@ -12,8 +12,8 @@ DAYS="$2"
 RESTART_REQ="${3:-1}"
 
 # argument check
-if [[ "$#" -ne 2 ]]; then
-    echo "Use for add user in xray config, run: $0 <username> <days>"
+if [[ "$#" -ne 3 ]]; then
+    echo "Use for add user in xray config, run: $0 <username> <days> 1"
     echo "0 - infinity days"
     exit 1
 fi
@@ -180,4 +180,7 @@ fi
 if [[ "$RESTART_REQ" == "1" ]]; then
 echo "User added, name: $USERNAME, created: $CREATED, days: $DAYS expiration: $EXP"
 echo "VLESS link: $VLESS_URI"
+else
+echo "User added, name: $USERNAME, created: $CREATED, days: $DAYS expiration: $EXP" > URI
+echo "VLESS link: $VLESS_URI" >> URI
 fi
