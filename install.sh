@@ -470,7 +470,7 @@ run_and_check "xray config checking" xray run -test -config "$TMP_XRAY_CONFIG" >
 run_and_check "install xray config" install -m 600 -o xray -g xray "$TMP_XRAY_CONFIG" "$XRAY_CONFIG_DEST"
 run_and_check "delete temporary xray files " rm -rf "$TMP_XRAY_CONFIG" "$TMP_DIR"
 
-script/useradd.sh "$XRAY_NAME" "$XRAY_DAYS" 0
+bash script/useradd.sh "$XRAY_NAME" "$XRAY_DAYS" 0
 
 # Запускаем сервер
 run_and_check "reload systemd" systemctl daemon-reload
@@ -505,3 +505,4 @@ echo "########## SSH server port - ${PORT} ##########"
 echo
 echo "#################################################"
 echo
+cat URI
