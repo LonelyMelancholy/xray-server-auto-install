@@ -333,7 +333,7 @@ _install() {
     local install_dest="$3"
     local name="$4"
 
-        if install -m "$install_mode" -o xray -g xray "$install_src" "$install_dest"; then
+        if install -m "$install_mode" "$install_src" "$install_dest"; then
             echo "✅ Success: stage ${STAGE}, $name installed"
         else
             echo "❌ Error: stage ${STAGE}, $name not installed, trying rollback"

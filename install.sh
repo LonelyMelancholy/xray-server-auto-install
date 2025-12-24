@@ -36,7 +36,7 @@ install_with_retry() {
     while true; do
         echo "📢 Info: ${action}, attempt $attempt, please wait"
         # $@ passes all remaining arguments (after the first one)
-        if "$@"; then
+        if "$@" &> /dev/null; then
             echo "✅ Success: $action, after ${attempt} attempts"
             return 0
         fi
@@ -54,7 +54,7 @@ install_with_retry() {
 run_and_check() {
     action="$1"
     shift 1
-    if "$@"; then
+    if "$@" 1> /dev/null; then
         echo "✅ Success: $action"
         return 0
     else
@@ -85,14 +85,14 @@ run_and_check "set permissions on a secret file" chmod 600 "$ENV_FILE"
 
 # create ssh group for login
 SSH_GROUP="ssh-users"
-if ! getent group "$SSH_GROUP" >/dev/null 2>&1; then
-    run_and_check "adding SSH group" addgroup "$SSH_GROUP" &> /dev/null
+if ! getent group "$SSH_GROUP" &> /dev/null; then
+    run_and_check "adding SSH group" addgroup "$SSH_GROUP"
 else 
     echo "✅ Success: group $SSH_GROUP already exists"
 fi
 
 # create user and add in ssh and sudo group
-if ! getent shadow "$SECOND_USER" >/dev/null 2>&1; then
+if ! getent shadow "$SECOND_USER" &> /dev/null; then
     run_and_check "creating user and added to $SSH_GROUP and sudo groups" useradd -m -s /bin/bash -G sudo,"$SSH_GROUP" "$SECOND_USER"
 else 
     echo "✅ Success: user $SECOND_USER already exists"
@@ -116,7 +116,7 @@ HIGH="50000"
 PORT="$(shuf -i "${LOW}-${HIGH}" -n 1)"
 
 # deleting previous sshd configuration with high priority
-if compgen -G "/etc/ssh/sshd_config.d/99*.conf" > /dev/null; then
+if compgen -G "/etc/ssh/sshd_config.d/99*.conf" &> /dev/null; then
 run_and_check "deleting previous conflicting sshd configuration files" rm -f /etc/ssh/sshd_config.d/99*.conf
 else
     echo "✅ Success: conflicting sshd configurations files not found"
@@ -181,7 +181,7 @@ run_and_check "disable MOTD in PAM setting" sed -ri 's/^([[:space:]]*session[[:s
 
 # done
 # Install and setup fail2ban
-install_with_retry "install fail2ban package" apt-get install -y fail2ban &> /dev/null
+install_with_retry "install fail2ban package" apt-get install -y fail2ban
 # Install ssh jail
 F2B_CONF_SOURCE="cfg/jail.local"
 F2B_CONF_DEST="/etc/fail2ban/jail.local"
@@ -195,7 +195,7 @@ SSH_BAN_NOTIFY_SCRIPT_SOURCE="script/ssh_ban_notify.sh"
 SSH_BAN_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/ssh_ban_notify.sh"
 run_and_check "telegram notification ban/unban script installation" install -m 700 -o root -g root "$SSH_BAN_NOTIFY_SCRIPT_SOURCE" "$SSH_BAN_NOTIFY_SCRIPT_DEST"
 # Start fail2ban
-run_and_check "enable and start fail2ban service" systemctl enable --now fail2ban &> /dev/null
+run_and_check "enable and start fail2ban service" systemctl enable --now fail2ban
 
 
 # done
@@ -214,7 +214,7 @@ chmod 644 "/etc/cron.d/traffic_notify" || { echo "❌ Error: set permissions on 
 
 # done
 # unattended upgrade and reboot script
-install_with_retry "install unattended upgrades package" apt-get install -y unattended-upgrades &> /dev/null
+install_with_retry "install unattended upgrades package" apt-get install -y unattended-upgrades
 
 run_and_check "changing package settings" tee /etc/apt/apt.conf.d/20auto-upgrades >/dev/null <<'EOF'
 APT::Periodic::Update-Package-Lists "0";
@@ -242,7 +242,7 @@ BOOT_SCRIPT_DEST="/usr/local/bin/telegram/boot_notify.sh"
 
 run_and_check "server boot notification script installation" install -m 700 -o root -g root "$BOOT_SCRIPT_SOURCE" "$BOOT_SCRIPT_DEST"
 
-run_and_check "create systemd service for server boot notification script" tee /etc/systemd/system/boot_notify.service > /dev/null <<'EOF'
+run_and_check "create systemd service for server boot notification script" tee /etc/systemd/system/boot_notify.service > /dev/null << EOF
 [Unit]
 Description=Telegram notify after boot
 Wants=network-online.target
@@ -251,14 +251,14 @@ After=network-online.target
 [Service]
 Type=oneshot
 Restart=no
-ExecStart=/usr/local/bin/boot_notify.sh
+ExecStart=$BOOT_SCRIPT_DEST
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
 run_and_check "reload systemd" systemctl daemon-reload
-run_and_check "enable server boot notification service" systemctl enable boot_notify.service &> /dev/null
+run_and_check "enable server boot notification service" systemctl enable boot_notify.service
 
 
 # done
@@ -392,7 +392,7 @@ download_and_verify() {
         else
             echo "✅ Success: directory for unpacking ${outfile} has been created"
         fi
-        if ! unzip -o "$outfile" -d "$UNPACK_DIR" >/dev/null 2>&1; then
+        if ! unzip -o "$outfile" -d "$UNPACK_DIR" &> /dev/null; then
             echo "❌ Error: extract ${outfile}, exit"
             exit 1
         else
@@ -483,7 +483,7 @@ jq --arg dest "$DEST" \
 ' "$XRAY_CONFIG_SRC" > "$TMP_XRAY_CONFIG"
 
 trap 'rm -rf "$TMP_XRAY_CONFIG" "$TMP_DIR"' EXIT
-run_and_check "xray config checking" sudo -u xray xray run -test -config "$TMP_XRAY_CONFIG" &> /dev/null
+run_and_check "xray config checking" sudo -u xray xray run -test -config "$TMP_XRAY_CONFIG"
 run_and_check "install xray config" install -m 600 -o xray -g xray "$TMP_XRAY_CONFIG" "$XRAY_CONFIG_DEST"
 run_and_check "delete temporary xray files " rm -rf "$TMP_XRAY_CONFIG" "$TMP_DIR"
 
@@ -524,3 +524,4 @@ echo
 echo "#################################################"
 echo
 cat URI
+rm -rf $PRIV_KEY_PATH
