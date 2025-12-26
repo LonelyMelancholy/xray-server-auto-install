@@ -69,7 +69,7 @@ source "$CFG_CHECK"
 
 
 # tg bot settings
-# write Token and ID in secrets file
+# write token and ID in secrets file
 ENV_PATH="/usr/local/etc/telegram/"
 ENV_FILE="/usr/local/etc/telegram/secrets.env"
 
@@ -83,11 +83,12 @@ EOF
     chmod 600 "$ENV_FILE"
 }
 
-run_and_check "create secret file with Token and ID for telegram scripts" setup_tg_secret
+run_and_check "create secret file with token and ID for telegram scripts" setup_tg_secret
 
 
 # user settings
 # create ssh group for login
+SSH_GROUP="ssh-users"
 if ! getent group "$SSH_GROUP" &> /dev/null; then
     run_and_check "adding SSH group" addgroup "$SSH_GROUP"
 else 
@@ -113,7 +114,7 @@ run_and_check "root and $SECOND_USER passwords change" pswd_conf
 
 # SSH Configuration
 # variables and port generation
-SSH_GROUP="ssh-users"
+
 SSH_CONF_SOURCE="cfg/ssh.cfg"
 SSH_CONF_DEST="/etc/ssh/sshd_config.d/99-custom_security.conf"
 LOW="40000"
@@ -216,7 +217,7 @@ SSH_BAN_NOTIFY_SCRIPT_SOURCE="script/ssh_ban_notify.sh"
 SSH_BAN_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/ssh_ban_notify.sh"
 run_and_check "telegram notification ban/unban script install" install -m 700 -o root -g root "$SSH_BAN_NOTIFY_SCRIPT_SOURCE" "$SSH_BAN_NOTIFY_SCRIPT_DEST"
 # Start fail2ban
-run_and_check "enable and start fail2ban service" systemctl enable --now fail2ban
+run_and_check "enable and start fail2ban service" systemctl -q enable --now fail2ban
 
 
 # server + user traffic telegram bot notify
@@ -236,7 +237,6 @@ run_and_check "traffic notification script installation" tr_scr
 # unattended upgrade and reboot script
 install_with_retry "install unattended upgrades package" apt-get install -y unattended-upgrades
 
-run_and_check "changing unattended upgrades settings" un_up_setup
 un_up_setup() {
     set -e
     cat > /etc/apt/apt.conf.d/20auto-upgrades << 'EOF'
@@ -245,6 +245,7 @@ APT::Periodic::Unattended-Upgrade "0";
 EOF
     systemctl disable --now apt-daily.timer apt-daily-upgrade.timer
 }
+run_and_check "changing unattended upgrades settings" un_up_setup
 
 UNATTENDED_UPGRADE_SCRIPT_SOURCE="script/unattended_upgrade.sh"
 UNATTENDED_UPGRADE_SCRIPT_DEST="/usr/local/bin/service/unattended_upgrade.sh"
@@ -283,7 +284,7 @@ ExecStart=$BOOT_SCRIPT_DEST
 WantedBy=multi-user.target
 EOF
     systemctl daemon-reload
-    systemctl enable boot_notify.service
+    systemctl -q enable boot_notify.service
 }
     
 
@@ -524,7 +525,7 @@ bash script/useradd.sh "$XRAY_NAME" "$XRAY_DAYS" 0
 
 # Запускаем сервер
 run_and_check "reload systemd" systemctl daemon-reload
-run_and_check "enable autostart xray service" systemctl enable xray.service
+run_and_check "enable autostart xray service" systemctl -q enable xray.service
 run_and_check "start xray service" systemctl start xray.service
 
 
