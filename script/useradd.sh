@@ -10,6 +10,7 @@ exec 9> "$LOCK_FILE" || { echo "❌ Error: cannot open lock file '$LOCK_FILE', e
 flock -n 9 || { echo "❌ Error: another instance is running, exit"; exit 1; }
 
 # main variables
+readonly URI_PATH="/usr/local/etc/xray/uri"
 readonly XRAY_CONFIG="/usr/local/etc/xray/config.json"
 readonly XRAY_BIN="/usr/local/bin/xray"
 readonly INBOUND_TAG="Vless"
@@ -196,7 +197,6 @@ QUERY="${QUERY}&pbk=$(uri_encode "$PUBLIC_KEY")"
 QUERY="${QUERY}&sid=$(uri_encode "$SHORT_ID")"
 readonly NAME_ENC="$(uri_encode "$USERNAME")"
 readonly VLESS_URI="vless://${UUID}@${SERVER_HOST}:${PORT}/?${QUERY}#${NAME_ENC}"
-readonly URI_PATH="/usr/local/etc/xray/uri"
 
 # print result
 if [[ "$FRESH_INSTALL" == "1" ]]; then
