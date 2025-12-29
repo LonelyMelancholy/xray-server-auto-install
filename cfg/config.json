@@ -35,10 +35,10 @@
         "network": "tcp",
         "security": "reality",
         "realitySettings": {
-          "dest": "jkh",
-          "privateKey": "LOLFAGGLOL",
-          "serverNames": ["df"],
-          "shortIds": ["4fffggg"],
+          "dest": "",
+          "privateKey": "",
+          "serverNames": [""],
+          "shortIds": [""],
           "show": false,
           "xver": 0
         },

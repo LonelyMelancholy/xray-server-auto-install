@@ -1,31 +1,29 @@
 #!/bin/bash
-# done work
-# done test
-# fail2ban Telegram ssh notify
+# script for notify ban/unban via fail2ban action
 # arguments: <action> <ip> <bantime_sec>
-# exit 0 to avoid bothering fail2ban with an incorrect error code, all errors are still logged, except the first three
+# exit 0 to avoid bothering fail2ban with an incorrect error code
+# all errors are still logged, except the first three for debugging, add a redirect to the debug log
 
-# sends the script to the background without delaying fail2ban
-# for debugging, add a redirect to the debug log
+# sends the script to the background without delaying fail2ban jail and send exit 0 to fail2ban
 if [[ -z "${TG_BG:-}" ]]; then
     export TG_BG=1
     "$0" "$@" &> /dev/null &
     exit 0
 fi
 
-# root check
-[[ $EUID -ne 0 ]] && { echo "❌ Error: you are not the root user, exit"; exit 0; }
-
 # export path just in case
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export PATH
+
+# root check
+[[ $EUID -ne 0 ]] && { echo "❌ Error: you are not the root user, exit"; exit 1; }
 
 # enable logging, the directory should already be created, but let's check just in case
 readonly DATE_LOG="$(date +"%Y-%m-%d")"
 readonly LOG_DIR="/var/log/telegram"
 readonly NOTIFY_LOG="${LOG_DIR}/f2b.${DATE_LOG}.log"
-mkdir -p "$LOG_DIR" || { echo "❌ Error: cannot create log dir '$LOG_DIR', exit"; exit 0; }
-exec &>> "$NOTIFY_LOG" || { echo "❌ Error: cannot write to log '$NOTIFY_LOG', exit"; exit 0; }
+mkdir -p "$LOG_DIR" || { echo "❌ Error: cannot create log dir '$LOG_DIR', exit"; exit 1; }
+exec &>> "$NOTIFY_LOG" || { echo "❌ Error: cannot write to log '$NOTIFY_LOG', exit"; exit 1; }
 
 # start logging message
 readonly DATE_START="$(date "+%Y-%m-%d %H:%M:%S")"
@@ -113,22 +111,22 @@ telegram_message() {
 readonly ENV_FILE="/usr/local/etc/telegram/secrets.env"
 if [[ ! -f "$ENV_FILE" ]] || [[ "$(stat -c '%U:%a' "$ENV_FILE" 2>/dev/null)" != "root:600" ]]; then
     echo "❌ Error: env file '$ENV_FILE' not found or has wrong permissions, exit"
-    exit 0
+    exit 1
 fi
 source "$ENV_FILE"
 
 # check token from secret file
-[[ -z "$BOT_TOKEN" ]] && { echo "❌ Error: Telegram bot token is missing in '$ENV_FILE', exit"; exit 0; }
+[[ -z "$BOT_TOKEN" ]] && { echo "❌ Error: Telegram bot token is missing in '$ENV_FILE', exit"; exit 1; }
 
 # check id from secret file
-[[ -z "$CHAT_ID" ]] && { echo "❌ Error: Telegram chat ID is missing in '$ENV_FILE', exit"; exit 0; }
+[[ -z "$CHAT_ID" ]] && { echo "❌ Error: Telegram chat ID is missing in '$ENV_FILE', exit"; exit 1; }
 
 # start collecting message
 readonly DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
 
 case "$ACTION" in
     ban)
-MESSAGE="⚠️ <b>SSH jail notify (ban)</b>
+MESSAGE="📢 <b>SSH jail notify (ban)</b>
 
 🖥️ <b>Host:</b> $HOSTNAME
 ⌚ <b>Time:</b> $DATE_MESSAGE
@@ -138,7 +136,7 @@ MESSAGE="⚠️ <b>SSH jail notify (ban)</b>
 💾 <b>Notify log:</b> $NOTIFY_LOG"
     ;;
     unban)
-MESSAGE="⚠️ <b>SSH jail notify (unban)</b>
+MESSAGE="📢 <b>SSH jail notify (unban)</b>
 
 🖥️ <b>Host:</b> $HOSTNAME
 ⌚ <b>Time:</b> $DATE_MESSAGE
@@ -165,4 +163,4 @@ echo "$MESSAGE"
 # send message
 telegram_message
 
-exit 0
+exit $RC

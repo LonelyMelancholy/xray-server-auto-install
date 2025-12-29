@@ -1,17 +1,17 @@
 #!/bin/bash
-# script for notify after server up, systemctl timer or cron
-# work done
-# test done
+# script for notify after server up, via systemctl timer
+# all errors are logged, except the first three, for debugging, add a redirect to the debug log
+# exit codes work to tell systemd about success
+
+# export path just in case
+PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export PATH
 
 # root check
 [[ $EUID -ne 0 ]] && { echo "❌ Error: you are not the root user, exit"; exit 1; }
 
 # wait for all service started
 sleep 60
-
-# export path just in case
-PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-export PATH
 
 # enable logging, the directory should already be created, but let's check just in case
 readonly DATE_LOG="$(date +"%Y-%m-%d")"
@@ -51,7 +51,7 @@ _tg_m() {
         --data-urlencode "chat_id=${CHAT_ID}" \
         --data-urlencode "parse_mode=HTML" \
         --data-urlencode "text=${MESSAGE}")" || return 1
-    grep -Eq 'ok[[:space:]]*:[[:space:]]*true' <<< "$response" || return 1
+    grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<< "$response" || return 1
     return 0
 }
 
@@ -97,7 +97,7 @@ wait_internet() {
     for ((i=0; i<timeout; i++)); do
         ip route | grep 'default ' &> /dev/null || { sleep 2; continue; }
         getent ahosts api.telegram.org &> /dev/null || { sleep 2; continue; }
-        curl -fsS -m 5 "https://api.telegram.org/bot${BOT_TOKEN}/getMe" | grep -Eq 'ok[[:space:]]*:[[:space:]]*true' && return 0
+        curl -fsS -m 5 "https://api.telegram.org/bot${BOT_TOKEN}/getMe" | grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' && return 0
         sleep 2
     done
     return 1
@@ -123,6 +123,7 @@ systemctl is-active --quiet xray.service && XRAY_STATUS="running" || XRAY_STATUS
 readonly HOSTNAME="$(hostname)"
 readonly DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
 
+# collecting title
 if [[  "$SSH_STATUS" ==  "running" && "$CRON_STATUS" == "running" && "$FAIL2BAN_STATUS" == "running" && "$XRAY_STATUS" == "running" && "$SYSTEM_STATUS" == "running" ]]; then
 TITLE="✅ <b>Server up, all services are running</b>"
 elif [[ "$SSH_STATUS" ==  "running" && "$CRON_STATUS" == "running" && "$FAIL2BAN_STATUS" == "running" && "$XRAY_STATUS" == "running" ]]; then
@@ -131,6 +132,7 @@ else
 TITLE="❌ <b>Server up, critical service down</b>"
 fi
 
+# collecting message body
 MESSAGE="$TITLE
 
 🖥️ <b>Host:</b> $HOSTNAME

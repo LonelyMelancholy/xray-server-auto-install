@@ -1,6 +1,4 @@
 # this file is intended to be connected via source, not run standalone
-# done work
-# done test
 
 # config file read check
 CFG_FILE="configuration.cfg"
@@ -64,7 +62,7 @@ if [[ -z "$XRAY_HOST" ]]; then
     echo "❌ Error: 'Dest' is empty in '$CFG_FILE', exit"
     exit 1
 else
-    echo "✅ Success: dest accepted"
+    echo "✅ Success: dest for xray accepted"
 fi
 
 # check name
@@ -73,7 +71,7 @@ if [[ -z "$XRAY_NAME" ]]; then
     echo "❌ Error: 'Name' is empty in '$CFG_FILE', exit"
     exit 1
 else
-    echo "✅ Success: name accepted"
+    echo "✅ Success: name for xray accepted"
 fi
 
 # check days
@@ -82,5 +80,5 @@ if [[ -z "$XRAY_DAYS" ]]; then
     echo "❌ Error: 'Days' is empty in '$CFG_FILE', exit"
     exit 1
 else
-    echo "✅ Success: days accepted"
+    echo "✅ Success: days for xray accepted"
 fi

@@ -1,6 +1,5 @@
 #!/bin/bash
-# done work
-# done test
+# pred install script
 
 echo "📢 Info: starting the procedure for preparing the system for installation"
 
@@ -12,6 +11,7 @@ else
     echo "✅ Success: you are root user, continue"
 fi
 
+# check os version
 [[ -r /etc/os-release ]] || { echo "❌ Error: '/etc/os-release' missing or you do not have read permissions, exit"; exit 1; }
 source /etc/os-release
 if [[ "$ID" != "ubuntu" ]] || [[ "${VERSION_ID%%.*}" -lt 20 ]]; then

@@ -1,6 +1,4 @@
 # .local for start telegram notify script
-# done work
-# done test
 [Definition]
 actionstart =
 actionstop =

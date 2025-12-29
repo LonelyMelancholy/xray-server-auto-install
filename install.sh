@@ -20,7 +20,7 @@ flock -n 9 || { echo "❌ Error: another instance is running, exit"; exit 1; }
 # main variables
 umask 022
 MAX_ATTEMPTS=3
-
+export NEEDRESTART_SUSPEND=1
 
 # helping functions
 has_cmd() {
@@ -185,10 +185,13 @@ run_and_check "ssh login notification script installation" install -m 700 -o roo
 # enable script in PAM
 enable_scr_pam() {
     set -e
-    cat >> /etc/pam.d/sshd << EOF
+    if ! grep -q "ssh-telegram-notify" "/etc/pam.d/sshd"; then
+        cat >> /etc/pam.d/sshd << EOF
+# ssh-telegram-notify
 # Notify for success ssh login and logout via telegram bot
 session optional pam_exec.so seteuid $SSH_ENTER_NOTIFY_SCRIPT_DEST
 EOF
+    fi
 }
 
 run_and_check "enable login notification script in PAM setting" enable_scr_pam
@@ -224,32 +227,18 @@ start_f2b() {
 run_and_check "enable and start fail2ban service" start_f2b
 
 
-# server + user traffic telegram bot notify
-TRAFFIC_NOTIFY_SCRIPT_SOURCE="script/traffic_notify.sh"
-TRAFFIC_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/traffic_notify.sh"
+# user, server traffic + user exp date telegram bot notify
+USER_NOTIFY_SCRIPT_SOURCE="script/user_notify.sh"
+USER_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/user_notify.sh"
 tr_scr() {
     set -e
-    install -m 700 -o root -g root "$TRAFFIC_NOTIFY_SCRIPT_SOURCE" "$TRAFFIC_NOTIFY_SCRIPT_DEST"
-    cat > /etc/cron.d/traffic_notify << EOF
-0 1 * * * root "$TRAFFIC_NOTIFY_SCRIPT_DEST" &> /dev/null
+    install -m 700 -o root -g root "$USER_NOTIFY_SCRIPT_SOURCE" "$USER_NOTIFY_SCRIPT_DEST"
+    cat > /etc/cron.d/user_notify << EOF
+0 1 * * * root "$USER_NOTIFY_SCRIPT_DEST" &> /dev/null
 EOF
-    chmod 644 "/etc/cron.d/traffic_notify"
+    chmod 644 "/etc/cron.d/user_notify"
 }
-run_and_check "traffic notification script installation" tr_scr
-
-
-# user expiration notify
-EXP_NOTIFY_SCRIPT_SOURCE="script/exp_notify.sh"
-EXP_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/exp_notify.sh"
-exp_scr() {
-    set -e
-    install -m 700 -o root -g root "$EXP_NOTIFY_SCRIPT_SOURCE" "$EXP_NOTIFY_SCRIPT_DEST"
-    cat > /etc/cron.d/exp_notify << EOF
-10 1 * * * root "$EXP_NOTIFY_SCRIPT_DEST" &> /dev/null
-EOF
-    chmod 644 "/etc/cron.d/exp_notify"
-}
-run_and_check "expiration notification script installation" exp_scr
+run_and_check "user daily report script installation" tr_scr
 
 
 # unattended upgrade and reboot script
@@ -540,8 +529,6 @@ run_and_check "xray config checking" sudo -u xray xray run -test -config "$TMP_X
 run_and_check "install xray config" install -m 600 -o xray -g xray "$TMP_XRAY_CONFIG" "$XRAY_CONFIG_DEST"
 run_and_check "delete temporary xray files " rm -rf "$TMP_XRAY_CONFIG" "$TMP_DIR"
 
-bash script/useradd.sh "$XRAY_NAME" "$XRAY_DAYS" 0
-
 # Запускаем сервер
 run_and_check "reload systemd" systemctl daemon-reload
 run_and_check "enable autostart xray service" systemctl -q enable xray.service
@@ -569,31 +556,47 @@ run_and_check "xray and geo*.dat update script installation" xr_up_scr
 # maintance script
 USERADD_SCRIPT_SRC="script/useradd.sh"
 USERADD_SCRIPT_DEST="/usr/local/bin/service/useradd.sh"
+USERDEL_SCRIPT_SRC="script/userdel.sh"
+USERDEL_SCRIPT_DEST="/usr/local/bin/service/userdel.sh"
 TEST_SCRIPT_SRC="script/test.sh"
 TEST_SCRIPT_DEST="/usr/local/bin/service/test.sh"
+URI_PATH=/usr/local/etc/xray/uri
 
 # add link for maintance
 scr_service() {
     set -e
-    ln -s "$USERADD_SCRIPT_DEST" "$USER_HOME/test_notify"
-    ln -s "$TEST_SCRIPT_DEST" "$USER_HOME/xray_user_add"
-    chown "$SECOND_USER:$USER_GROUP" "$USER_HOME/xray_user_add" "$USER_HOME/test_notify"
+    install -m 700 -o root -g root "$USERADD_SCRIPT_SRC" "$USERADD_SCRIPT_DEST"
+    install -m 700 -o root -g root "$USERDEL_SCRIPT_SRC" "$USERDEL_SCRIPT_DEST"
+    install -m 700 -o root -g root "$TEST_SCRIPT_SRC" "$TEST_SCRIPT_DEST"
+    touch $URI_PATH
+    chmod 600 $URI_PATH
+    ln -s "$USERADD_SCRIPT_DEST" "$USER_HOME/xray_user_add"
+    ln -s "$USERDEL_SCRIPT_DEST" "$USER_HOME/xray_user_del"
+    ln -s "$TEST_SCRIPT_DEST" "$USER_HOME/test_notify"
+    ln -s "$URI_PATH" "$USER_HOME/URI"
+    chown "$SECOND_USER:$USER_GROUP" "$USER_HOME/xray_user_add" "$USER_HOME/xray_user_del" "$USER_HOME/test_notify"
 }
 run_and_check "create link for service script" scr_service
 
 
+# add user for xray
+bash script/useradd.sh "$XRAY_NAME" "$XRAY_DAYS" 1
+
+
+# final output
 echo "#################################################"
-echo
+echo ""
 echo "################## PRIVATE KEY ##################"
-echo
+echo ""
 echo "$PRIV_KEY"
-echo
+echo ""
 echo "########## PUBLIC KEY - $PUB_KEY_PATH ##########"
-echo
+echo ""
 cat "$PUB_KEY_PATH"
-echo
+echo ""
 echo "########## SSH server port - ${PORT} ##########"
-echo
+echo ""
 echo "#################################################"
-echo
-cat URI
+echo ""
+cat "$URI_PATH"
+echo "#################################################"

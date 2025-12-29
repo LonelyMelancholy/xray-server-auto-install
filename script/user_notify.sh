@@ -1,38 +1,36 @@
 #!/bin/bash
-# xray auto traffic notify via cron every day 1:00 night time
-# all errors are logged, except the first three, for debug add debug log in cron
-# 0 1 * * * /usr/local/bin/telegram/traffic_notify.sh &> /dev/null
+# script for notify xray traffic and user exp date via cron every day 1:00 night time
+# all errors are logged, except the first three, for debugging, add a redirect to the debug log
+# 0 1 * * * /usr/local/bin/telegram/user_notify.sh &> /dev/null
 # exit codes work to tell Cron about success
-# done work
-# done test
-
-# root check
-[[ $EUID -ne 0 ]] && { echo "❌ Error: you are not the root user, exit"; exit 1; }
 
 # export path just in case
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export PATH
 
+# root check
+[[ $EUID -ne 0 ]] && { echo "❌ Error: you are not the root user, exit"; exit 1; }
+
 # enable logging, the directory should already be created, but let's check just in case
 readonly DATE_LOG="$(date +"%Y-%m-%d")"
 readonly LOG_DIR="/var/log/telegram"
-readonly NOTIFY_LOG="${LOG_DIR}/traffic.${DATE_LOG}.log"
+readonly NOTIFY_LOG="${LOG_DIR}/user.${DATE_LOG}.log"
 mkdir -p "$LOG_DIR" || { echo "❌ Error: cannot create log dir '$LOG_DIR', exit"; exit 1; }
 exec &>> "$NOTIFY_LOG" || { echo "❌ Error: cannot write to log '$NOTIFY_LOG', exit"; exit 1; }
 
 # start logging message
 readonly DATE_START="$(date "+%Y-%m-%d %H:%M:%S")"
-echo "########## traffic notify started - $DATE_START ##########"
+echo "########## user notify started - $DATE_START ##########"
 
 # exit logging message function
 RC="1"
 on_exit() {
     if [[ "$RC" -eq "0" ]]; then
         local DATE_END="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## traffic notify ended - $DATE_END ##########"
+        echo "########## user notify ended - $DATE_END ##########"
     else
         local DATE_FAIL="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## traffic notify failed - $DATE_FAIL ##########"
+        echo "########## user notify failed - $DATE_FAIL ##########"
     fi
 }
 
@@ -40,6 +38,8 @@ on_exit() {
 trap 'on_exit' EXIT
 
 # main variables
+readonly XRAY_CONFIG="/usr/local/etc/xray/config.json"
+readonly INBOUND_TAG="Vless"
 readonly XRAY="/usr/local/bin/xray"
 readonly APISERVER="127.0.0.1:8080"
 readonly HOSTNAME="$(hostname)"
@@ -77,6 +77,12 @@ telegram_message() {
     return 0
 }
 
+# check xray conf
+if [[ ! -r "$XRAY_CONFIG" ]]; then
+    echo "❌ Error: check $XRAY_CONFIG it's missing or you do not have read permissions, exit"
+    exit 1
+fi
+
 # check secret file, if the file is ok, we source it.
 readonly ENV_FILE="/usr/local/etc/telegram/secrets.env"
 if [[ ! -f "$ENV_FILE" ]] || [[ "$(stat -c '%U:%a' "$ENV_FILE" 2>/dev/null)" != "root:600" ]]; then
@@ -90,8 +96,6 @@ source "$ENV_FILE"
 
 # check id from secret file
 [[ -z "$CHAT_ID" ]] && { echo "❌ Error: Telegram chat ID is missing in '$ENV_FILE', exit"; exit 1; }
-
-# main logic start here
 
 # reset traffic 1 day of month
 RESET_ARG=""
@@ -132,28 +136,62 @@ sum_users() {
     END { for (k in u) printf "%s %d\n", k, u[k] }
   ' <<<"$lines" | LC_ALL=C sort
 }
-USER_TOTAL="$(sum_users "$DATA")"
+USERS_TOTAL="$(sum_users "$DATA")"
 
 # formatting bytes
 fmt(){ numfmt --to=iec --suffix=B "$1"; }
 
+# calculate sec since 1970 and parse email
+readonly TODAY_EPOCH="$(date -d "today 00:00" +%s)"
+readonly EMAILS="$(jq -r --arg tag "$INBOUND_TAG" '.inbounds[]? | select(.tag? == $tag) | .settings? | .clients?[]? | .email? // empty' "$XRAY_CONFIG")"
+
+# parse and print email - exp days
+USERS_LEFT=""
+while IFS= read -r email; do
+    [[ -z "$email" ]] && continue
+
+    username="${email%%|*}"
+
+    exp_date="$(printf '%s' "$email" | sed -nE 's/.*\|exp=([0-9]{4}-[0-9]{2}-[0-9]{2}).*/\1/p')"
+    [[ -z "$exp_date" ]] && continue
+
+    exp_epoch="$(date -d "$exp_date" +%s)"
+    days_left=$(( (exp_epoch - TODAY_EPOCH) / 86400 ))
+
+
+    USERS_LEFT+="$(printf '%s %s' "$username" "$days_left")"$'\n'
+done <<< "$EMAILS"
+
 # start collecting message
 readonly DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
 
-MESSAGE="📢<b> Daily traffic report</b> 
+MESSAGE="📢<b> Daily user report</b> 
 
 🖥️ <b>Host:</b> $HOSTNAME
 ⌚ <b>Time:</b> $DATE_MESSAGE
-🖥 <b>Host total:</b> $(fmt "$SERVER_TOTAL")"
+🔛 <b>Traffic:</b>
+🔛 <b>Host traffic:</b> $(fmt "$SERVER_TOTAL")"
 
 while IFS=$' ' read -r EMAIL TRAFF; do
-  TRAFFx2=$(( TRAFF * 2 ))
-  MESSAGE="$MESSAGE
-🧑🏿‍💻 <b>User total:</b> $EMAIL - $(fmt "$TRAFFx2")"
-done <<< "$USER_TOTAL"
+    [[ -z "$EMAIL" ]] && continue
+    TRAFFx2=$(( TRAFF * 2 ))
+    MESSAGE+=$'\n'"🔛 <b>User traffic:</b> $EMAIL - $(fmt "$TRAFFx2")"
+done <<< "$USERS_TOTAL"
 
-MESSAGE="$MESSAGE
-💾 <b>Xray error log:</b> /var/log/xray/error.log
+MESSAGE+=$'\n'"🔚 <b>Time:</b>"
+
+while IFS=$' ' read -r EMAIL DAYS; do
+    [[ -z "$EMAIL" ]] && continue
+    if [[ $DAYS -lt 0 ]]; then
+        MESSAGE+=$'\n'"❌ <b>User time:</b> $EMAIL - $DAYS days left"
+    elif [[ $DAYS -lt 10 ]]; then
+        MESSAGE+=$'\n'"⚠️ <b>User time:</b> $EMAIL - $DAYS days left"
+    else
+        MESSAGE+=$'\n'"🔚 <b>User time:</b> $EMAIL - $DAYS days left"
+    fi
+done <<< "$USERS_LEFT"
+
+MESSAGE+=$'\n'"💾 <b>Xray error log:</b> /var/log/xray/error.log
 💾 <b>Xray access log:</b> /var/log/xray/access.log
 💾 <b>Notify log:</b> $NOTIFY_LOG"
 
