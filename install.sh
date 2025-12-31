@@ -502,46 +502,51 @@ EOF
 run_and_check "create xray systemd service" conf_xray
 
 # configure json 
-XRAY_PORT="443"
-DEST="${XRAY_HOST}:${XRAY_PORT}"
+conf_json_xray() {
 
-# key generation
-keys="$(xray x25519)"
-privateKey="$(awk -F': ' '/PrivateKey/ {print $2}' <<<"$keys")"
-publicKey="$(awk -F': ' '/Password/ {print $2}' <<<"$keys")"
+    XRAY_PORT="443"
+    DEST="${XRAY_HOST}:${XRAY_PORT}"
 
-# shortId generation
-shortId="$(openssl rand -hex 8)"
+    # key generation
+    keys="$(xray x25519)"
+    privateKey="$(awk -F': ' '/PrivateKey/ {print $2}' <<<"$keys")"
+    publicKey="$(awk -F': ' '/Password/ {print $2}' <<<"$keys")"
 
+    # shortId generation
+    shortId="$(openssl rand -hex 8)"
+
+
+    # make tmp file
+    TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
+    chmod 644 "$TMP_XRAY_CONFIG"
+    trap 'rm -rf "$TMP_XRAY_CONFIG" "$TMP_DIR"' EXIT
+    
 # update json
-TMP_XRAY_CONFIG="$(mktemp)"
-touch "${TMP_XRAY_CONFIG}.json"
-TMP_XRAY_CONFIG="${TMP_XRAY_CONFIG}.json"
+    jq --arg dest "$DEST" \
+        --arg sni  "$XRAY_HOST" \
+        --arg pk   "$privateKey" \
+        --arg sid  "$shortId" '
+        .inbounds |= (map(
+            if (.protocol=="vless" and (.streamSettings.security?=="reality") and (.streamSettings.realitySettings?!=null))
+            then .streamSettings.realitySettings |= (
+            .dest=$dest
+            | .serverNames=[$sni]
+            | .privateKey=$pk
+            | .shortIds=[$sid]
+            )
+            else .
+            end
+        ))
+        ' "$XRAY_CONFIG_SRC" > "$TMP_XRAY_CONFIG"
+}
 
-jq --arg dest "$DEST" \
-   --arg sni  "$XRAY_HOST" \
-   --arg pk   "$privateKey" \
-   --arg sid  "$shortId" '
-  .inbounds |= (map(
-    if (.protocol=="vless" and (.streamSettings.security?=="reality") and (.streamSettings.realitySettings?!=null))
-    then .streamSettings.realitySettings |= (
-      .dest=$dest
-      | .serverNames=[$sni]
-      | .privateKey=$pk
-      | .shortIds=[$sid]
-    )
-    else .
-    end
-  ))
-' "$XRAY_CONFIG_SRC" > "$TMP_XRAY_CONFIG"
-
-trap 'rm -rf "$TMP_XRAY_CONFIG" "$TMP_DIR"' EXIT
-run_and_check "xray config checking" sudo -u xray xray run -test -config "$TMP_XRAY_CONFIG"
-run_and_check "install xray config" install -m 600 -o xray -g xray "$TMP_XRAY_CONFIG" "$XRAY_CONFIG_DEST"
+run_and_check "generate new config" conf_json_xray
+run_and_check "new xray config checking" sudo -u xray xray run -test -config "$TMP_XRAY_CONFIG"
+run_and_check "install new xray config" install -m 600 -o xray -g xray "$TMP_XRAY_CONFIG" "$XRAY_CONFIG_DEST"
 run_and_check "delete temporary xray files " rm -rf "$TMP_XRAY_CONFIG" "$TMP_DIR"
 trap - EXIT
 
-# Запускаем сервер
+# start xray
 run_and_check "reload systemd" systemctl daemon-reload
 run_and_check "enable autostart xray service" systemctl -q enable xray.service
 run_and_check "start xray service" systemctl start xray.service

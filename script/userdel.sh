@@ -78,7 +78,8 @@ xray_userdel() {
     
     # make tmp file
     readonly TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
-
+    chmod 644 "$TMP_XRAY_CONFIG"
+    
     # set trap for tmp file
     trap 'rm -f "$TMP_XRAY_CONFIG" "$TMP_URI"' EXIT
 

@@ -119,6 +119,7 @@ xray_useradd() {
 
     # make tmp file
     TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
+    chmod 644 "$TMP_XRAY_CONFIG"
 
     # set trap for deleting tmp files
     trap 'rm -f "$TMP_XRAY_CONFIG"' EXIT
@@ -143,8 +144,8 @@ xray_useradd() {
 }
 
 # add user, check config, install if config valid and delete tmp files
-run_and_check "add xray user" xray_useradd
-run_and_check "check new xray config" sudo -u xray xray run -test -config "$TMP_XRAY_CONFIG"
+run_and_check "add xray user in config" xray_useradd
+run_and_check "new xray config checking" sudo -u xray xray run -test -config "$TMP_XRAY_CONFIG"
 run_and_check "install new xray config" install -m 600 -o xray -g xray "$TMP_XRAY_CONFIG" "$XRAY_CONFIG"
 run_and_check "delete temporary xray files " rm -f "$TMP_XRAY_CONFIG"
 

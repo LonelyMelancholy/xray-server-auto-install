@@ -157,11 +157,10 @@ run_and_check "parse config for exp email" parse_conf
 # make new config
 new_conf() {
     set -e
-    # make tmp config
-    TMP_XRAY_CONFIG="$(mktemp)"
-    rm -f "$TMP_XRAY_CONFIG"
-    touch "${TMP_XRAY_CONFIG}.json"
-    TMP_XRAY_CONFIG="${TMP_XRAY_CONFIG}.json"
+
+    # make tmp file
+    TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
+    chmod 644 "$TMP_XRAY_CONFIG"
 
     # set trap for tmp removing
     trap 'on_exit; rm -f "$TMP_XRAY_CONFIG";' EXIT
