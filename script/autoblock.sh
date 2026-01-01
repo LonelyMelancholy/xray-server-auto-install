@@ -1,7 +1,7 @@
 #!/bin/bash
-# script for autoban xray expired user via cron every day 0:01 night time
+# script for autoblock xray expired user via cron every day 0:01 night time
 # all errors are logged, except the first three, for debugging, add a redirect to the debug log
-# 1 0 * * * root /usr/local/bin/service/autoban.sh &> /dev/null
+# 1 0 * * * root /usr/local/bin/service/autoblock.sh &> /dev/null
 # exit codes work to tell Cron about success
 
 # export path just in case
@@ -14,23 +14,23 @@ export PATH
 # enable logging, the directory should already be created, but let's check just in case
 readonly DATE_LOG="$(date +"%Y-%m-%d")"
 readonly LOG_DIR="/var/log/service"
-readonly AUTOBAN_LOG="${LOG_DIR}/autoban.${DATE_LOG}.log"
+readonly AUTOBLOCK_LOG="${LOG_DIR}/autoblock.${DATE_LOG}.log"
 mkdir -p "$LOG_DIR" || { echo "❌ Error: cannot create log dir '$LOG_DIR', exit"; exit 1; }
-exec &>> "$AUTOBAN_LOG" || { echo "❌ Error: cannot write to log '$AUTOBAN_LOG', exit"; exit 1; }
+exec &>> "$AUTOBLOCK_LOG" || { echo "❌ Error: cannot write to log '$AUTOBLOCK_LOG', exit"; exit 1; }
 
 # start logging message
 readonly DATE_START="$(date "+%Y-%m-%d %H:%M:%S")"
-echo "########## autoban started - $DATE_START ##########"
+echo "########## autoblock started - $DATE_START ##########"
 
 # exit logging message function
 RC="1"
 on_exit() {
     if [[ "$RC" -eq "0" ]]; then
         local DATE_END="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## autoban ended - $DATE_END ##########"
+        echo "########## autoblock ended - $DATE_END ##########"
     else
         local DATE_FAIL="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## autoban failed - $DATE_FAIL ##########"
+        echo "########## autoblock failed - $DATE_FAIL ##########"
     fi
 }
 
@@ -50,7 +50,7 @@ readonly XRAY_CONFIG_BACKUP="${XRAY_CONFIG}.bak.$(date +%Y%m%d_%H%M%S)"
 umask 022
 
 # check another instanсe of the script is not running
-readonly LOCK_FILE="/var/run/autoban.lock"
+readonly LOCK_FILE="/var/run/user.lock"
 exec 9> "$LOCK_FILE" || { echo "❌ Error: cannot open lock file '$LOCK_FILE', exit"; exit 1; }
 flock -n 9 || { echo "❌ Error: another instance is running, exit"; exit 1; }
 
@@ -218,7 +218,7 @@ run_and_check "install new xray config" install -m 600 -o xray -g xray "$TMP_XRA
 if (( ${#expired_emails[@]} == 0 )); then
     echo "✅ Success: expired users not found, cleanup old ruleTag '$RULE_TAG' (today=$TODAY)"
 else
-    echo "⚠️ Success: expired users found and banned, today=$TODAY, expired=${#expired_emails[@]}"
+    echo "⚠️ Success: expired users found and blocked, today=$TODAY, expired=${#expired_emails[@]}"
 fi
 echo "✅ Success: Backup saved $XRAY_CONFIG_BACKUP"
 
@@ -239,9 +239,9 @@ fi
 readonly DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
 
 if [[ $XR_ST == 0 ]]; then
-    TITLE="⚠️<b> Scheduled autoban</b>"
+    TITLE="⚠️<b> Scheduled autoblock</b>"
 else
-    TITLE="❌<b> Scheduled autoban</b>"
+    TITLE="❌<b> Scheduled autoblock</b>"
 fi
 
 MESSAGE="$TITLE
@@ -254,7 +254,7 @@ if (( ${#expired_emails[@]} == 0 )); then
     MESSAGE+=$'\n'"⚠️ <b>Expired users:</b> not found"
     MESSAGE+=$'\n'"⚠️ <b>Action:</b> cleanup old autoblock rule"
 else
-    MESSAGE+=$'\n'"⚠️ <b>Expired users banned:</b>"
+    MESSAGE+=$'\n'"⚠️ <b>Expired users blocked:</b>"
     while IFS= read -r EMAIL; do
         [[ -z "$EMAIL" ]] && continue
         NAME="${EMAIL%%|*}"
@@ -262,7 +262,7 @@ else
     done < <(printf '%s\n' "${expired_emails[@]}")
 fi
 
-MESSAGE+=$'\n'"💾 <b>Autoban log:</b> $AUTOBAN_LOG"
+MESSAGE+=$'\n'"💾 <b>Autoblock log:</b> $AUTOBLOCK_LOG"
 
 # logging message
 echo "########## collected message - $DATE_MESSAGE ##########"

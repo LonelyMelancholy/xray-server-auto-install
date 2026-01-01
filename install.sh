@@ -224,35 +224,6 @@ start_f2b() {
 run_and_check "enable and start fail2ban service" start_f2b
 
 
-# user, server traffic + user exp date Telegram bot notify
-USER_NOTIFY_SCRIPT_SOURCE="script/user_notify.sh"
-USER_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/user_notify.sh"
-install_scr_user() {
-    set -e
-    install -m 700 -o root -g root "$USER_NOTIFY_SCRIPT_SOURCE" "$USER_NOTIFY_SCRIPT_DEST"
-    cat > /etc/cron.d/user_notify << EOF
-SHELL=/bin/bash
-1 1 * * * root "$USER_NOTIFY_SCRIPT_DEST" &> /dev/null
-EOF
-    chmod 644 "/etc/cron.d/user_notify"
-}
-run_and_check "user daily report script installation" install_scr_user
-
-
-# autoban exp users + Telegram bot notify
-AUTOBAN_SCRIPT_SOURCE="script/autoban.sh"
-AUTOBAN_SCRIPT_DEST="/usr/local/bin/service/autoban.sh"
-install_scr_autoban() {
-    set -e
-    install -m 700 -o root -g root "$AUTOBAN_SCRIPT_SOURCE" "$AUTOBAN_SCRIPT_DEST"
-    cat > /etc/cron.d/autoban << EOF
-SHELL=/bin/bash
-1 0 * * * root "$AUTOBAN_SCRIPT_DEST" &> /dev/null
-EOF
-    chmod 644 "/etc/cron.d/autoban"
-}
-run_and_check "autoban exp user script installation" install_scr_autoban
-
 # unattended upgrade and reboot script
 install_with_retry "install unattended upgrades package" apt-get install -y unattended-upgrades
 
@@ -584,6 +555,36 @@ EOF
 run_and_check "userstat script installation" install_scr_user_stat
 
 
+# user, server traffic + user exp date Telegram bot notify
+USER_NOTIFY_SCRIPT_SOURCE="script/user_notify.sh"
+USER_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/user_notify.sh"
+install_scr_user() {
+    set -e
+    install -m 700 -o root -g root "$USER_NOTIFY_SCRIPT_SOURCE" "$USER_NOTIFY_SCRIPT_DEST"
+    cat > /etc/cron.d/user_notify << EOF
+SHELL=/bin/bash
+1 1 * * * root "$USER_NOTIFY_SCRIPT_DEST" &> /dev/null
+EOF
+    chmod 644 "/etc/cron.d/user_notify"
+}
+run_and_check "user daily report script installation" install_scr_user
+
+
+# autoblock exp users + Telegram bot notify
+AUTOBLOCK_SCRIPT_SOURCE="script/autoblock.sh"
+AUTOBLOCK_SCRIPT_DEST="/usr/local/bin/service/autoblock.sh"
+install_scr_autoblock() {
+    set -e
+    install -m 700 -o root -g root "$AUTOBLOCK_SCRIPT_SOURCE" "$AUTOBLOCK_SCRIPT_DEST"
+    cat > /etc/cron.d/autoblock << EOF
+SHELL=/bin/bash
+1 0 * * * root "$AUTOBLOCK_SCRIPT_DEST" &> /dev/null
+EOF
+    chmod 644 "/etc/cron.d/autoblock"
+}
+run_and_check "autoblock exp user script installation" install_scr_autoblock
+
+
 # maintance script
 USERADD_SCRIPT_SRC="script/useradd.sh"
 USERADD_SCRIPT_DEST="/usr/local/bin/service/useradd.sh"
@@ -591,11 +592,13 @@ USERDEL_SCRIPT_SRC="script/userdel.sh"
 USERDEL_SCRIPT_DEST="/usr/local/bin/service/userdel.sh"
 USEREXP_SCRIPT_SRC="script/userexp.sh"
 USEREXP_SCRIPT_DEST="/usr/local/bin/service/userexp.sh"
+USERBLOCK_SCRIPT_SRC="script/userblock.sh"
+USERBLOCK_SCRIPT_DEST="/usr/local/bin/service/userblock.sh"
 
  #скрипты .юзеров
 # USERSHOW_SCRIPT_SRC=
 
-# и еще бан надо доделать
+
 
 TEST_SCRIPT_SRC="script/test.sh"
 TEST_SCRIPT_DEST="/usr/local/bin/service/test.sh"
@@ -606,13 +609,18 @@ install_scr_service() {
     set -e
     install -m 700 -o root -g root "$USERADD_SCRIPT_SRC" "$USERADD_SCRIPT_DEST"
     install -m 700 -o root -g root "$USERDEL_SCRIPT_SRC" "$USERDEL_SCRIPT_DEST"
-    install -m 700 -o root -g root "$TEST_SCRIPT_SRC" "$TEST_SCRIPT_DEST"
     install -m 700 -o root -g root "$USEREXP_SCRIPT_SRC" "$USEREXP_SCRIPT_DEST"
+    install -m 700 -o root -g root "$USERBLOCK_SCRIPT_SRC" "$USERBLOCK_SCRIPT_DEST"
+
+# user script
+
+    install -m 700 -o root -g root "$TEST_SCRIPT_SRC" "$TEST_SCRIPT_DEST"
     touch $URI_PATH
     chmod 600 $URI_PATH
     ln -s "$USERADD_SCRIPT_DEST" "$USER_HOME/xray_user_add"
-    ln -s "$USEREXP_SCRIPT_DEST" "$USER_HOME/xray_user_exp"
     ln -s "$USERDEL_SCRIPT_DEST" "$USER_HOME/xray_user_del"
+    ln -s "$USEREXP_SCRIPT_DEST" "$USER_HOME/xray_user_exp"
+    ln -s "$USERBLOCK_SCRIPT_DEST" "$USER_HOME/xray_user_block"
 
  # скрипты .юзеров
 

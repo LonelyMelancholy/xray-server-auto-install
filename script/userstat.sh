@@ -104,9 +104,10 @@ jq -s '
 | .[1] as $new
 | ($old | stat_map) as $o
 | ($new | stat_map) as $n
-| reduce ((($o|keys_unsorted)+($n|keys_unsorted))|unique[]) as $k
+| ( reduce ((($o|keys_unsorted)+($n|keys_unsorted))|unique[]) as $k
     ({};
      .[$k] = ($o[$k]//0) + ($n[$k]//0)
+     )
     ) as $m
 | {
     stat: (

@@ -47,7 +47,9 @@ fi
 run_and_check() {
     local action="$1"
     shift 1
-    if "$@" > /dev/null; then
+    "$@" > /dev/null
+    rc=$?
+    if [[ $rc == 0 ]]; then
         echo "✅ Success: $action"
         return 0
     else
@@ -113,8 +115,8 @@ if [[ $client_count -gt 1 ]]; then
   exit 1
 fi
 
-# main func for renew email and deleting from ban rule
-unban_and_add_time() {
+# main func for renew email and deleting from block rule
+unblock_and_add_time() {
     set -e
 
     # make tmp file
@@ -140,7 +142,7 @@ jq \
       )
     ) |
 
-  # if ban rule exist delete user from them
+  # if block rule exist delete user from them
   (if $ruleExists then
       .routing = (.routing // {}) |
       .routing.rules = (.routing.rules // []) |
@@ -165,7 +167,7 @@ jq \
 }
 
 # add time user, check config, install if config valid and delete tmp files
-run_and_check "add time xray user" unban_and_add_time
+run_and_check "add time xray user" unblock_and_add_time
 run_and_check "check new xray config" sudo -u xray xray run -test -config "$TMP_XRAY_CONFIG"
 
 # Если нет изменений — выходим
@@ -210,9 +212,9 @@ update_uri_db() {
     fi
 
   # renew only one sring created/days/expiration, not change other
-    awk -v n="$USERNAME" -v today="$TODAY" -v days="$DAYS" -v exp="$EXP" '
+    awk -v n="$USERNAME" -v today="$TODAY" -v days="$DAYS" -v expiration="$EXP" '
         $0 ~ ("^name: " n ", created: ") {
-        print "name: " n ", created: " today ", days: " days ", expiration: " exp
+        print "name: " n ", created: " today ", days: " days ", expiration: " expiration
         next
         }
         {print}

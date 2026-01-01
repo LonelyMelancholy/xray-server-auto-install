@@ -7,8 +7,8 @@
 if [[ "$#" -eq 1 ]]; then
     echo "Use for show user from xray config and URI_DB, run: $0 <option>"
     echo "all - all user link and expiration info"
-    echo "ban - banned manualy user"
-    echo "exp - expiered, auto banned user"
+    echo "ban - blocked manualy user"
+    echo "exp - expiered, auto blocked user"
     exit 1
 fi
 
