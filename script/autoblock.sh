@@ -52,7 +52,7 @@ umask 022
 # check another instanсe of the script is not running
 readonly LOCK_FILE="/var/run/user.lock"
 exec 9> "$LOCK_FILE" || { echo "❌ Error: cannot open lock file '$LOCK_FILE', exit"; exit 1; }
-flock -n 9 || { echo "❌ Error: another instance is running, exit"; exit 1; }
+flock -n 9 || { echo "❌ Error: another instance working on xray configuration or URI DB, exit"; exit 1; }
 
 # helper func
 run_and_check() {

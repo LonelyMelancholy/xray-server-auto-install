@@ -75,8 +75,8 @@ ENV_FILE="/usr/local/etc/telegram/secrets.env"
 
 install_tg_secret() {
     set -e
-    mkdir -p $ENV_PATH
-    cat > $ENV_FILE << EOF
+    mkdir -p "$ENV_PATH"
+    cat > "$ENV_FILE" << EOF
 BOT_TOKEN="$READ_BOT_TOKEN"
 CHAT_ID="$READ_CHAT_ID"
 EOF
@@ -617,14 +617,14 @@ install_scr_service() {
     install -m 700 -o root -g root "$TEST_SCRIPT_SRC" "$TEST_SCRIPT_DEST"
     touch $URI_PATH
     chmod 600 $URI_PATH
-    ln -s "$USERADD_SCRIPT_DEST" "$USER_HOME/xray_user_add"
-    ln -s "$USERDEL_SCRIPT_DEST" "$USER_HOME/xray_user_del"
-    ln -s "$USEREXP_SCRIPT_DEST" "$USER_HOME/xray_user_exp"
-    ln -s "$USERBLOCK_SCRIPT_DEST" "$USER_HOME/xray_user_block"
+    ln -sfn "$USERADD_SCRIPT_DEST" "$USER_HOME/xray_user_add"
+    ln -sfn "$USERDEL_SCRIPT_DEST" "$USER_HOME/xray_user_del"
+    ln -sfn "$USEREXP_SCRIPT_DEST" "$USER_HOME/xray_user_exp"
+    ln -sfn "$USERBLOCK_SCRIPT_DEST" "$USER_HOME/xray_user_block"
 
  # скрипты .юзеров
 
-    ln -s "$TEST_SCRIPT_DEST" "$USER_HOME/test_notify"
+    ln -sfn "$TEST_SCRIPT_DEST" "$USER_HOME/test_notify"
 
     chown "$SECOND_USER:$USER_GROUP" "$USER_HOME/xray_user_add" "$USER_HOME/xray_user_del" "$USER_HOME/xray_user_exp" "$USER_HOME/test_notify"
 }
