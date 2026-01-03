@@ -185,6 +185,7 @@ install_scr_ssh_pam() {
     install -m 700 -o root -g root "$SSH_PAM_NOTIFY_SCRIPT_SOURCE" "$SSH_PAM_NOTIFY_SCRIPT_DEST"
     if ! grep -q "ssh-pam-telegram-notify" "/etc/pam.d/sshd"; then
     tee -a /etc/pam.d/sshd > /dev/null <<EOF
+
 # ssh-pam-telegram-notify
 # Notify for success ssh login and logout via telegram bot
 session optional pam_exec.so seteuid $SSH_PAM_NOTIFY_SCRIPT_DEST
@@ -561,7 +562,7 @@ USER_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/user_notify.sh"
 install_scr_user() {
     set -e
     install -m 700 -o root -g root "$USER_NOTIFY_SCRIPT_SOURCE" "$USER_NOTIFY_SCRIPT_DEST"
-    tee /etc/cron.d/user_notify > /dev/null << EOF
+    tee /etc/cron.d/user_notify > /dev/null <<EOF
 SHELL=/bin/bash
 1 1 * * * root "$USER_NOTIFY_SCRIPT_DEST" &> /dev/null
 EOF
@@ -613,6 +614,7 @@ install_scr_service() {
     ln -sfn "$USEREXP_SCRIPT_DEST" "$USER_HOME/xray_user_exp"
     ln -sfn "$USERBLOCK_SCRIPT_DEST" "$USER_HOME/xray_user_block"
     ln -sfn "$USERSHOW_SCRIPT_DEST" "$USER_HOME/xray_user_show"
+    find "$USER_HOME" -type l -exec chown -h $SECOND_USER:$SECOND_USER {} +
 }
 run_and_check "install service script and create link in home directory" install_scr_service
 

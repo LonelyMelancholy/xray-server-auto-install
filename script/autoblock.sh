@@ -258,11 +258,11 @@ if (( ${#expired_emails[@]} == 0 )); then
     MESSAGE+=$'\n'"⚠️ <b>Expired users:</b> not found"
     MESSAGE+=$'\n'"⚠️ <b>Action:</b> cleanup old autoblock rule"
 else
-    MESSAGE+=$'\n'"⚠️ <b>Expired users blocked:</b>"
+    MESSAGE+=$'\n'"❌ <b>Expired users blocked:</b>"
     while IFS= read -r EMAIL; do
         [[ -z "$EMAIL" ]] && continue
         NAME="${EMAIL%%|*}"
-        MESSAGE+=$'\n'"⚠️ $NAME"
+        MESSAGE+=$'\n'"❌ $NAME"
     done < <(printf '%s\n' "${expired_emails[@]}")
 fi
 

@@ -225,20 +225,20 @@ readonly NAME_ENC="$(uri_encode "$USERNAME")"
 readonly VLESS_URI="vless://${UUID}@${SERVER_HOST}:${PORT}/?${QUERY}#${NAME_ENC}"
 
 # print result
-if [[ "$FRESH_INSTALL" == "1" ]]; then
-    tee -a "$URI_PATH" > /dev/null << EOF
-name: $USERNAME, created: $CREATED, days: $DAYS, expiration: $EXP
-name: $USERNAME, vless link: $VLESS_URI
-
-EOF 
-else
-    echo "✅ Success: name $USERNAME, added"
-    echo "#################################################"
-    echo ""
-    tee -a "$URI_PATH" << EOF
+if [[ $FRESH_INSTALL -eq 1 ]]; then
+    tee -a "$URI_PATH" > /dev/null <<EOF
 name: $USERNAME, created: $CREATED, days: $DAYS, expiration: $EXP
 name: $USERNAME, vless link: $VLESS_URI
 
 EOF
-echo "#################################################"
+else
+    echo "✅ Success: name $USERNAME, added"
+    echo "#################################################"
+    echo ""
+    tee -a "$URI_PATH" <<EOF
+name: $USERNAME, created: $CREATED, days: $DAYS, expiration: $EXP
+name: $USERNAME, vless link: $VLESS_URI
+
+EOF
+    echo "#################################################"
 fi

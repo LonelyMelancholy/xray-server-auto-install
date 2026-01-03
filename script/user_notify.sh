@@ -192,8 +192,10 @@ MESSAGE+=$'\n'"🔚 <b>Time:</b>"
 
 while IFS=$' ' read -r EMAIL DAYS; do
     [[ -z "$EMAIL" ]] && continue
-    if [[ $DAYS -lt 10 ]]; then
+    if [[ $DAYS -le 10 ]]; then
         MESSAGE+=$'\n'"⚠️ <b>User time:</b> $EMAIL - $DAYS days left"
+    elif [[ $DAYS -le 0 ]]; then
+        MESSAGE+=$'\n'"❌ <b>User time:</b> $EMAIL - $DAYS days left"
     else
         MESSAGE+=$'\n'"🔚 <b>User time:</b> $EMAIL - $DAYS days left"
     fi
