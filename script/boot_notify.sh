@@ -126,7 +126,7 @@ readonly DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
 # collecting title
 if [[  "$SSH_STATUS" ==  "running" && "$CRON_STATUS" == "running" && "$FAIL2BAN_STATUS" == "running" && "$XRAY_STATUS" == "running" && "$SYSTEM_STATUS" == "running" ]]; then
 TITLE="✅ <b>Server up, all services are running</b>"
-SYSTEM_STATUS="⚫️ <b>Init system:</b> $SYSTEM_STATUS"
+SYSTEM_STATUS="☑️ <b>Init system:</b> $SYSTEM_STATUS"
 elif [[ "$SSH_STATUS" ==  "running" && "$CRON_STATUS" == "running" && "$FAIL2BAN_STATUS" == "running" && "$XRAY_STATUS" == "running" ]]; then
 TITLE="⚠️ <b>Server up, non-critical service down</b>"
 SYSTEM_STATUS="⚠️ <b>Init system:</b> $SYSTEM_STATUS"
@@ -138,7 +138,7 @@ fi
 # helper func for make status
 make_status() {
     if [[  "$1" ==  "running" ]]; then
-        echo "⚫️ <b>${2}:</b> $1"
+        echo "☑️ <b>${2}:</b> $1"
     else
         echo "❌ <b>${2}:</b> $1"
     fi

@@ -229,7 +229,7 @@ echo "✅ Success: Backup saved $XRAY_CONFIG_BACKUP"
 
 # restart xray
 if systemctl restart xray.service; then
-    XRAY_STATUS="⚫ <b>Xray status:</b> running"
+    XRAY_STATUS="☑️ <b>Xray status:</b> running"
     XR_ST=0
     RC=0
     echo "✅ Success: restart xray"

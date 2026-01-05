@@ -99,7 +99,7 @@ MESSAGE="⚠️ <b>Scheduled security upgrade</b>
 
 🖥️ <b>Host:</b> $HOSTNAME
 ⌚ <b>Time:</b> $DATE_MESSAGE
-⚫️ <b>Action:</b> upgrade started"
+☑️ <b>Action:</b> upgrade started"
 
 echo "########## collected message - $DATE_MESSAGE ##########"
 echo "$MESSAGE"
@@ -190,7 +190,7 @@ MESSAGE="<b>✅ Scheduled security updates</b>
 
 🖥️ <b>Host:</b> $HOSTNAME
 ⌚ <b>Time:</b> $DATE_MESSAGE
-⚫️ <b>Action:</b> upgrade success
+☑️ <b>Action:</b> upgrade success
 $CHANGE_SUMMARY
 💾 <b>UN-UP log:</b> /var/log/unattended-upgrades/unattended-upgrades.log
 💾 <b>Upgrade log:</b> ${UPGRADE_LOG}
@@ -209,7 +209,7 @@ if [[ -f /var/run/reboot-required ]]; then
 
 🖥️ <b>Host:</b> $HOSTNAME
 ⌚ <b>Time:</b> $DATE_MESSAGE
-⚫️ <b>Action:</b> reboot after 1 min
+☑️ <b>Action:</b> reboot after 1 min
 🔎 <b>Reboot request from packages:</b>
 ${PKGS_REBOOT}"
 

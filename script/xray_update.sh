@@ -64,7 +64,7 @@ cleanup_old_backups_and_logs() {
         local glob="${dir}/${pattern}"
 
         if ! compgen -G "$glob" > /dev/null; then
-            STATUS_OLD_BACKUP_DEL+="⚫ old ${name} missing, skipping deletion"$'\n'
+            STATUS_OLD_BACKUP_DEL+="☑️ old ${name} missing, skipping deletion"$'\n'
             return
         fi
 
@@ -75,7 +75,7 @@ cleanup_old_backups_and_logs() {
             echo "📢 Info: stage ${STAGE}, deleting old ${name} $f"
             if rm -f -- "$f"; then
                 echo "✅ Success: stage ${STAGE}, old ${name} $f deleted"
-                STATUS_OLD_BACKUP_DEL+="⚫ old ${name} deletion success"$'\n'
+                STATUS_OLD_BACKUP_DEL+="☑️ old ${name} deletion success"$'\n'
             else
                 echo "⚠️  Non-critical error: stage ${STAGE}, failed to delete old ${name} $f"
                 STATUS_OLD_BACKUP_DEL+="⚠️ old ${name} deletion failed"$'\n'
@@ -84,7 +84,7 @@ cleanup_old_backups_and_logs() {
         done
 
         if (( has_old == 0 )); then
-            STATUS_OLD_BACKUP_DEL+="⚫ old ${name} missing, skipping deletion"$'\n'
+            STATUS_OLD_BACKUP_DEL+="☑️ old ${name} missing, skipping deletion"$'\n'
         fi
     }
 
@@ -450,7 +450,7 @@ if ! download_and_verify "$XRAY_URL" "$TMP_DIR/xray-linux-64.zip" "xray"; then
     XRAY_DOWNLOAD=0
     STATUS_XRAY_MESSAGE="❌ xray download failed"
 else
-    STATUS_XRAY_MESSAGE="⚫ xray binary download success"
+    STATUS_XRAY_MESSAGE="☑️ xray binary download success"
     XRAY_DOWNLOAD=1
 fi
 
@@ -460,7 +460,7 @@ if [ "$XRAY_DOWNLOAD" = "1" ]; then
         GEOIP_DOWNLOAD=0
         STATUS_GEOIP_MESSAGE="❌ geoip.dat download failed"
     else
-        STATUS_GEOIP_MESSAGE="⚫ xray geoip.dat download success"
+        STATUS_GEOIP_MESSAGE="☑️ xray geoip.dat download success"
         GEOIP_DOWNLOAD=1
     fi
 else
@@ -474,7 +474,7 @@ if [ "$XRAY_DOWNLOAD" = "1" ] && [ "$GEOIP_DOWNLOAD" = "1" ]; then
         GEOSITE_DOWNLOAD=0
         STATUS_GEOSITE_MESSAGE="❌ geosite.dat download failed"
     else
-        STATUS_GEOSITE_MESSAGE="⚫ xray geosite.dat download success"
+        STATUS_GEOSITE_MESSAGE="☑️ xray geosite.dat download success"
         GEOSITE_DOWNLOAD=1
     fi
 else
@@ -488,12 +488,12 @@ if [ "$XRAY_DOWNLOAD" = "1" ] && [ "$GEOIP_DOWNLOAD" = "1" ] && [ "$GEOSITE_DOWN
         XRAY_INSTALL=0
     else
         if [ "$XRAY_UP_TO_DATE" = "1" ]; then
-            STATUS_INSTALL_MESSAGE="⚫ geo*.dat install success"$'\n'
-            STATUS_INSTALL_MESSAGE+="⚫ xray already up to date $XRAY_OLD_VER"
+            STATUS_INSTALL_MESSAGE="☑️ geo*.dat install success"$'\n'
+            STATUS_INSTALL_MESSAGE+="☑️ xray already up to date $XRAY_OLD_VER"
             XRAY_INSTALL=1
         else
-            STATUS_INSTALL_MESSAGE="⚫ xray and geo*.dat install success"$'\n'
-            STATUS_INSTALL_MESSAGE+="⚫ xray updated from $XRAY_OLD_VER to $XRAY_NEW_VER"
+            STATUS_INSTALL_MESSAGE="☑️ xray and geo*.dat install success"$'\n'
+            STATUS_INSTALL_MESSAGE+="☑️ xray updated from $XRAY_OLD_VER to $XRAY_NEW_VER"
             XRAY_INSTALL=1
         fi
     fi
@@ -504,7 +504,7 @@ fi
 
 # check final xray status
 if systemctl is-active --quiet xray.service; then
-    STATUS_XRAY="⚫ Success: xray.service is running"
+    STATUS_XRAY="☑️ Success: xray.service is running"
 else
     STATUS_XRAY="❌ Critical Error: xray.service does not start"
 fi
