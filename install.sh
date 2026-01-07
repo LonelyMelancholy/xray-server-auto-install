@@ -708,6 +708,7 @@ EOF
 }
 
 # start Telegram gateway
+run_and_check "create Telegram gateway service" conf_tg_gateway
 run_and_check "reload systemd" systemctl daemon-reload
 run_and_check "enable autostart Telegram gateway service" systemctl -q enable tg-gateway.service
 run_and_check "start Telegram gateway service" systemctl start tg-gateway.service
