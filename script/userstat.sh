@@ -1,7 +1,7 @@
 #!/bin/bash
 # script for collecting xray traffic stat via cron every 1m
 # all errors are logged, except the first three, for debugging, add a redirect to the debug log
-# */1m * * * * root /usr/local/bin/service/userstat.sh &> /dev/null
+# 0 * * * * root /usr/local/bin/service/userstat.sh &> /dev/null
 # exit codes work to tell Cron about success
 
 # export path just in case

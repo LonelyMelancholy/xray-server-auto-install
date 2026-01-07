@@ -150,6 +150,7 @@ USER_GROUP="$(id -gn "$SECOND_USER")"
 install_sshd_key() {
     set -e
     mkdir -p "$SSH_DIR"
+    rm -f "$PRIV_KEY_PATH"
     ssh-keygen -t ed25519 -N "" -f "$PRIV_KEY_PATH" -q
     PRIV_KEY="$(cat "$PRIV_KEY_PATH")"
     rm -f "$PRIV_KEY_PATH"
@@ -225,23 +226,27 @@ start_f2b() {
 run_and_check "enable and start fail2ban service" start_f2b
 
 
-# turn on bbr
-aviable_bbr() {
-    sysctl net.ipv4.tcp_available_congestion_control | grep bbr &> /dev/null
-}
+# make BBR appear in "available" list (if it's a module)
+modprobe tcp_bbr &>/dev/null || true
+
 bbr_on() {
+    set -e
     tee /etc/sysctl.d/99-bbr.conf > /dev/null <<'EOF'
 net.core.default_qdisc = fq
 net.ipv4.tcp_congestion_control = bbr
 EOF
+    echo "tcp_bbr" > /etc/modules-load.d/bbr.conf
     sysctl --system &> /dev/null
 }
-if aviable_bbr; then
-    run_and_check "enable bbr" bbr_on
-else
-    echo "❌ Error: bbr not activated"
-fi
 
+# check availability
+BBR_AVAILABLE="$(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null || true)"
+if ! grep -qw bbr <<<"$BBR_AVAILABLE"; then
+    echo "⚠️  Non-critical error: BBR not available (net.ipv4.tcp_available_congestion_control = '${BBR_AVAILABLE}')"
+else
+    run_and_check "enable bbr" bbr_on
+    
+fi
 
 # unattended upgrade and reboot script
 install_with_retry "install unattended upgrades package" apt-get install -y unattended-upgrades
@@ -606,6 +611,21 @@ EOF
 run_and_check "autoblock exp user script installation" install_scr_autoblock
 
 
+# xray backup Telegram bot notify
+XRAY_BACKUP_SCRIPT_SOURCE="script/xray_backup.sh"
+XRAY_BACKUP_SCRIPT_DEST="/usr/local/bin/service/xray_backup.sh"
+install_scr_xray_backup() {
+    set -e
+    install -m 700 -o root -g root "$XRAY_BACKUP_SCRIPT_SOURCE" "$XRAY_BACKUP_SCRIPT_DEST"
+    tee /etc/cron.d/xray_backup > /dev/null <<EOF
+SHELL=/bin/bash
+0 23 28-31 * * root [ "$(date -v+1d +\%d)" = "01" ] && "$XRAY_BACKUP_SCRIPT_DEST" &> /dev/null
+EOF
+    chmod 644 "/etc/cron.d/xray_backup"
+}
+run_and_check "xray backup script installation" install_scr_xray_backup
+
+
 # maintance script
 USERADD_SCRIPT_SRC="script/useradd.sh"
 USERADD_SCRIPT_DEST="/usr/local/bin/service/useradd.sh"
@@ -657,6 +677,7 @@ fi
 # /etc/systemd/system/tg-gateway.service
 conf_tg_gateway() {
     set -e
+    install -m 755 -o root -g root "$TG_GATEWAY_SCRIPT_SRC" "$TG_GATEWAY_SCRIPT_DEST"
     tee /etc/systemd/system/tg-gateway.service > /dev/null <<EOF
 [Unit]
 Description=Telegram gateway bot
@@ -698,6 +719,7 @@ tg_gw ALL=(root) NOPASSWD: \
     $USERBLOCK_SCRIPT_DEST, \
     $USERSHOW_SCRIPT_DEST, \
     $SYS_INFO_SCRIPT_DEST \
+    $XRAY_BACKUP_SCRIPT_DEST \
     reboot \
     systemctl restart xray.service
 EOF

@@ -34,7 +34,8 @@ STATE=""   # "", "WAIT_BLOCK", "WAIT_UNBLOCK", "WAIT_DELETE", "WAIT_ADD", "WAIT_
 MAIN_KB_JSON='{
     "inline_keyboard":[
         [
-            {"text":"Server information","callback_data":"SHOW_STAT"}
+            {"text":"Server information","callback_data":"SHOW_STAT"},
+            {"text":"Server backup","callback_data":"SEND_BACKUP"}  
         ],
         [
             {"text":"Server reboot","callback_data":"ASK_SERVER_REBOOT"},
@@ -227,6 +228,10 @@ handle_callback() {
             STATE=""
             run_and_send_output "$chat_id" echo "Wait 10 sec, network statistic accumulate process"
             run_and_send_output "$chat_id" /usr/local/bin/service/system_info.sh
+            show_menu "$chat_id"
+            ;;
+        SEND_BACKUP)
+            run_and_send_output "$chat_id" /usr/local/bin/service/xray_backup.sh
             show_menu "$chat_id"
             ;;
         SHOW_LINK)

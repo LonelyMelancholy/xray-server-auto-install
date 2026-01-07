@@ -42,8 +42,6 @@ readonly XRAY_CONFIG="/usr/local/etc/xray/config.json"
 readonly TR_DB_M="/var/log/xray/TR_DB_M"
 readonly TR_DB_Y="/var/log/xray/TR_DB_Y"
 readonly INBOUND_TAG="Vless"
-readonly XRAY="/usr/local/bin/xray"
-readonly APISERVER="127.0.0.1:8080"
 readonly HOSTNAME="$(hostname)"
 readonly MAX_ATTEMPTS="3"
 
