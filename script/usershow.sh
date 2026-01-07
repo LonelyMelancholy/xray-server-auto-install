@@ -17,7 +17,7 @@ flock -n 9 || { echo "❌ Error: another instance working on xray configuration 
 # argument check
 if ! [[ "$#" -eq 1 ]]; then
   echo "Use for show user from xray config and URI_DB, run: $0 <option>"
-  echo "links - all user link and expiration info (unchanged)"
+  echo "links - all user link and expiration info"
   echo "all   - table: username (online/offline), devices, (blocked/expired/enable), traffic, days left"
   exit 1
 fi
@@ -249,8 +249,8 @@ case "$OPTION" in
       echo "❌ Error: check $URI_PATH it's missing or you do not have read permissions, exit"
       exit 1
     fi
-    # just print database (unchanged)
-    cat "$URI_PATH"
+    # just print database (without last empty string)
+    sed -e :a -e '/^[[:space:]]*$/{$d;N;ba' -e '}' "$URI_PATH"
     exit 0
   ;;
 
