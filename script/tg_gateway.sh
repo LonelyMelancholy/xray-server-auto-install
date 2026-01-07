@@ -329,21 +329,21 @@ handle_message() {
   norm="${norm#"${norm%%[! ]*}"}"
   norm="${norm%"${norm##*[! ]}"}"
 
-  case "$STATE" in
-    WAIT_BLOCK|WAIT_UNBLOCK|WAIT_DELETE)
-      local username action
-      username="$norm"
+    case "$STATE" in
+        WAIT_BLOCK|WAIT_UNBLOCK|WAIT_DELETE)
+            local username action
+            username="$norm"
 
-      case "$STATE" in
-        WAIT_BLOCK)   action="Blocking user." ;;
-        WAIT_UNBLOCK) action="Unblocking user." ;;
-        WAIT_DELETE)  action="Deleting user." ;;
-      esac
+        case "$STATE" in
+            WAIT_BLOCK)   action="Blocking user." ;;
+            WAIT_UNBLOCK) action="Unblocking user." ;;
+            WAIT_DELETE)  action="Deleting user." ;;
+        esac
 
-      if ! valid_arg "$username"; then
-        send_message "$chat_id" "❌ Error: username must be 1..30 characters long and contain only '-', letters, and numbers.\n${action}\nEnter username (or /cancel):"
-        return
-      fi
+        if ! valid_arg "$username"; then
+            send_message "$chat_id" "❌ Error: username must be 1..30 characters long and contain only '-', letters, and numbers.\n${action}\nEnter username (or /cancel):"
+            return
+        fi
 
         case "$STATE" in
             WAIT_BLOCK)
@@ -362,7 +362,7 @@ handle_message() {
                 show_menu "$chat_id"
                 ;;
         esac
-      ;;
+        ;;
 
     WAIT_REBOOT|WAIT_RESTART)
         local answer="$norm"
@@ -383,59 +383,59 @@ handle_message() {
             run_and_send_output "$chat_id" echo "Server reboot started"
             show_menu "$chat_id"
             run_and_send_output "$chat_id" reboot
-          ;;
+            ;;
         WAIT_RESTART)
             STATE=""
             run_and_send_output "$chat_id" systemctl restart xray.service && \
             run_and_send_output "$chat_id" echo "Xray restarted" || \
             run_and_send_output "$chat_id" echo "Xray fail to restart"
             show_menu "$chat_id"
-        ;;
+            ;;
         esac
+        ;;
 
+        WAIT_ADD|WAIT_EXP)
+            local a b action
+            read -r a b _ <<<"$norm"
 
-    WAIT_ADD|WAIT_EXP)
-      local a b action
-      read -r a b _ <<<"$norm"
+            case "$STATE" in
+                WAIT_ADD) action="Adding new user." ;;
+                WAIT_EXP) action="Adding time to user." ;;
+            esac
 
-      case "$STATE" in
-        WAIT_ADD) action="Adding new user." ;;
-        WAIT_EXP) action="Adding time to user." ;;
-      esac
+            if [[ -z "${a:-}" || -z "${b:-}" ]]; then
+                send_message "$chat_id" "❌ Error: need 2 argument. Format: username number.\n${action}\nEnter username and number of days, separated by a space or line break (or /cancel):"
+                return
+            fi
 
-      if [[ -z "${a:-}" || -z "${b:-}" ]]; then
-        send_message "$chat_id" "❌ Error: need 2 argument. Format: username number.\n${action}\nEnter username and number of days, separated by a space or line break (or /cancel):"
-        return
-      fi
+            if ! valid_arg "$a"; then
+                send_message "$chat_id" "❌ Error: username must be 1..30 characters long and contain only '-', letters, and numbers.\n${action}\nEnter username and number of days, separated by a space or line break (or /cancel):"
+                return
+            fi
 
-      if ! valid_arg "$a"; then
-        send_message "$chat_id" "❌ Error: username must be 1..30 characters long and contain only '-', letters, and numbers.\n${action}\nEnter username and number of days, separated by a space or line break (or /cancel):"
-        return
-      fi
+            if ! valid_arg_num "$b"; then
+                send_message "$chat_id" "❌ Error: number must be 1..10 characters long and contain only numbers.\n${action}\nEnter username and number of days, separated by a space or line break (or /cancel):"
+                return
+            fi
 
-      if ! valid_arg_num "$b"; then
-        send_message "$chat_id" "❌ Error: number must be 1..10 characters long and contain only numbers.\n${action}\nEnter username and number of days, separated by a space or line break (or /cancel):"
-        return
-      fi
-
-      case "$STATE" in
-        WAIT_ADD)
-          STATE=""
-          run_and_send_output "$chat_id" /usr/local/bin/service/useradd.sh "$a" "$b"
-          show_menu "$chat_id"
-          ;;
-        WAIT_EXP)
-          STATE=""
-          run_and_send_output "$chat_id" /usr/local/bin/service/userexp.sh "$a" "$b"
-          show_menu "$chat_id"
-          ;;
-      esac
-      ;;
-    *)
-      STATE=""
-      show_menu "$chat_id"
-      ;;
-  esac
+        case "$STATE" in
+            WAIT_ADD)
+                STATE=""
+                run_and_send_output "$chat_id" /usr/local/bin/service/useradd.sh "$a" "$b"
+                show_menu "$chat_id"
+                ;;
+            WAIT_EXP)
+                STATE=""
+                run_and_send_output "$chat_id" /usr/local/bin/service/userexp.sh "$a" "$b"
+                show_menu "$chat_id"
+                ;;
+            esac
+            ;;
+        *)
+            STATE=""
+            show_menu "$chat_id"
+            ;;
+    esac
 }
 
 main_loop() {

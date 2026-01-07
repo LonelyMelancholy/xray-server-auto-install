@@ -114,14 +114,14 @@ run_and_check "changing root and $SECOND_USER passwords" conf_pswd
 # SSH Configuration
 # variables and port generation
 SSH_CONF_SOURCE="cfg/ssh.cfg"
-SSH_CONF_DEST="/etc/ssh/sshd_config.d/99-custom_security.conf"
+SSH_CONF_DEST="/etc/ssh/sshd_config.d/00-custom_security.conf"
 LOW="40000"
 HIGH="50000"
 PORT="$(shuf -i "${LOW}-${HIGH}" -n 1)"
 
 # deleting previous sshd configuration with high priority
-if compgen -G "/etc/ssh/sshd_config.d/99*.conf" &> /dev/null; then
-    run_and_check "deleting previous sshd configuration files" rm -f /etc/ssh/sshd_config.d/99*.conf
+if compgen -G "/etc/ssh/sshd_config.d/00*.conf" &> /dev/null; then
+    run_and_check "deleting previous sshd configuration files" rm -f /etc/ssh/sshd_config.d/00*.conf
 else
     echo "✅ Success: previous sshd configurations files not found"
 fi
@@ -704,7 +704,6 @@ EOF
 
     chmod 440 /etc/sudoers.d/tg_gw
     chown root:root /etc/sudoers.d/tg_gw
-
 }
 
 # start Telegram gateway

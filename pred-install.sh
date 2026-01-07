@@ -85,7 +85,7 @@ install_and_update() {
 
 # utilities check
 missing_pkgs=()
-for utility in curl unzip jq openssl ca-certificates ifstat; do
+for utility in curl unzip jq openssl update-ca-certificates ifstat; do
     if ! command -v "$utility" &> /dev/null; then
         missing_pkgs+=("$utility")
     fi

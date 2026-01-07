@@ -87,3 +87,10 @@ if [[ -z "$XRAY_DAYS" ]]; then
 else
     echo "✅ Success: days for xray accepted"
 fi
+
+if [[ ! $XRAY_DAYS =~ ^[0-9]+$ ]]; then
+    echo "❌ Error: 'Days' for xray can have only numbers, exit"
+    exit 1
+else
+    echo "✅ Success: days for xray accepted"
+fi
