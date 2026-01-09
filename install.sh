@@ -327,6 +327,12 @@ install_xray_dir() {
     try touch "/var/log/xray/TR_DB_Y"
     try chmod 600 "/var/log/xray/TR_DB_Y"
     try chown telegram-gateway:telegram-gateway "/var/log/xray/TR_DB_Y"
+    try touch /var/log/xray/error.log
+    try chmod 660 /var/log/xray/error.log
+    try chown xray:telegram-gateway /var/log/xray/error.log
+    try touch /var/log/xray/access.log
+    try chmod 660 /var/log/xray/access.log
+    try chown xray:telegram-gateway /var/log/xray/access.log
 }
 run_and_check "create directory for the xray service" install_xray_dir
 

@@ -12,6 +12,13 @@ umask 077
 # user check
 [[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the telegram-gateway user, exit"; exit 1; }
 
+
+ONLY_ARCHIVE="${1:-0}"
+if [[ "$ONLY_ARCHIVE" != 1 || "$ONLY_ARCHIVE" != 0]]; then
+    echo "❌ Error: only 0 or 1 for argument"
+    exit 1
+fi
+
 # enable logging, the directory should already be created, but let's check just in case
 readonly DATE_LOG="$(date +"%Y-%m-%d")"
 readonly LOG_DIR="/var/log/service"
@@ -209,23 +216,25 @@ fi
 # Пакуем
 tar -C "$TMPDIR" -czf "$ARCHIVE_PATH" .
 
-# start collecting message
-readonly DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
+# send message and file
+if [[ "$ONLY_ARCHIVE" == 1 ]]; then
+    telegram_file
+else
+    # start collecting message
+    readonly DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
 
-MESSAGE="📢<b> Scheduled backup</b> 
+    MESSAGE="📢<b> Scheduled backup</b> 
 
 🖥️ <b>Host:</b> $HOSTNAME
 ⌚ <b>Time:</b> $DATE_MESSAGE
 💾 <b>Backup log:</b> $BACKUP_LOG"
 
-# logging message
-echo "########## collected message - $DATE_MESSAGE ##########"
-echo "$MESSAGE"
+    # logging message
+    echo "########## collected message - $DATE_MESSAGE ##########"
+    echo "$MESSAGE"
 
-# send message
-telegram_message
-
-# send file
-telegram_file
+    telegram_file
+    telegram_message
+fi
 
 exit $RC
