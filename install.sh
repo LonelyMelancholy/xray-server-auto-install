@@ -611,23 +611,23 @@ run_and_check "start xray service" systemctl start xray.service
 # start make link, get inbound paremetres
 readonly PORT="$(jq -r --arg tag "$INBOUND_TAG" '
   .inbounds[] | select(.tag==$tag) | .port
-' "$XRAY_CONFIG")"
+' "$XRAY_CONFIG_DEST")"
 
 readonly REALITY_SNI="$(jq -r --arg tag "$INBOUND_TAG" '
   .inbounds[] | select(.tag==$tag) | .streamSettings.realitySettings.serverNames[0] // ""
-' "$XRAY_CONFIG")"
+' "$XRAY_CONFIG_DEST")"
 
 readonly PRIVATE_KEY="$(jq -r --arg tag "$INBOUND_TAG" '
   .inbounds[] | select(.tag==$tag) | .streamSettings.realitySettings.privateKey // ""
-' "$XRAY_CONFIG")"
+' "$XRAY_CONFIG_DEST")"
 
 readonly SHORT_ID="$(jq -r --arg tag "$INBOUND_TAG" '
   .inbounds[] | select(.tag==$tag) | .streamSettings.realitySettings.shortIds[0] // ""
-' "$XRAY_CONFIG")"
+' "$XRAY_CONFIG_DEST")"
 
 readonly FLOW="$(jq -r --arg tag "$INBOUND_TAG" '
   .inbounds[] | select(.tag==$tag) | .settings.clients[0].flow // ""
-' "$XRAY_CONFIG")"
+' "$XRAY_CONFIG_DEST")"
 
 check_var() {
     local name="$1"
