@@ -187,7 +187,10 @@ if cmp -s "$XRAY_CONFIG" "$TMP_XRAY_CONFIG"; then
     exit 1
 fi
 
-run_and_check "install new xray config" cat "$TMP_XRAY_CONFIG" > "$XRAY_CONFIG"
+install_new_conf() {
+    cat "$TMP_XRAY_CONFIG" > "$XRAY_CONFIG"
+}
+run_and_check "install new xray config" install_new_conf
 run_and_check "delete temporary xray files " rm -f "$TMP_XRAY_CONFIG"
 
 # unset trap, tmp already deleted

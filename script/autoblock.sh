@@ -235,7 +235,11 @@ run_and_check "xray new config checking" xray run -test -config "$TMP_XRAY_CONFI
 
 # backup and install new config
 run_and_check "backup old xray config" cp -a "$XRAY_CONFIG" "$XRAY_CONFIG_BACKUP"
-run_and_check "install new xray config" cat "$TMP_XRAY_CONFIG" > "$XRAY_CONFIG"
+
+install_new_conf() {
+    cat "$TMP_XRAY_CONFIG" > "$XRAY_CONFIG"
+}
+run_and_check "install new xray config" install_new_conf
 
 if (( ${#expired_emails[@]} == 0 )); then
     echo "✅ Success: expired users not found, cleanup old ruleTag '$RULE_TAG' (today=$TODAY)"

@@ -158,7 +158,10 @@ xray_userdel() {
 # del user, check config, install if config valid and delete tmp files, restart xray
 run_and_check "delete xray user" xray_userdel
 run_and_check "xray config checking" xray run -test -config "$TMP_XRAY_CONFIG"
-run_and_check "install new xray config" cat "$TMP_XRAY_CONFIG" > "$XRAY_CONFIG"
+install_new_conf() {
+    cat "$TMP_XRAY_CONFIG" > "$XRAY_CONFIG"
+}
+run_and_check "install new xray config" install_new_conf
 run_and_check "restart xray service" systemctl restart xray.service
 
 # echo result

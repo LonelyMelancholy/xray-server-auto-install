@@ -205,5 +205,8 @@ esac
 
 run_and_check "new xray config checking" xray run -test -config "$TMP_XRAY_CONFIG"
 run_and_check "backup xray config" cp -a "$XRAY_CONFIG" "$BACKUP_PATH"
-run_and_check "install new xray config" cat "$TMP_XRAY_CONFIG" > "$XRAY_CONFIG"
+install_new_conf() {
+    cat "$TMP_XRAY_CONFIG" > "$XRAY_CONFIG"
+}
+run_and_check "install new xray config" install_new_conf
 run_and_check "restart xray service" systemctl restart xray.service

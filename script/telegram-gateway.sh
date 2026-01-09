@@ -142,7 +142,7 @@ answer_callback() {
 
 show_menu() {
   local chat_id="$1"
-  send_message "$chat_id" "Menu $HOSTNAME management bot.\nPlease choose command:\n########################################" "$MAIN_KB_JSON"
+  send_message "$chat_id" "Menu $HOSTNAME management bot.\nPlease choose command:" "$MAIN_KB_JSON"
 }
 
 is_admin_chat() {
@@ -288,59 +288,65 @@ handle_callback() {
 }
 
 handle_message() {
-  local upd="$1"
+    local upd="$1"
 
-  local chat_id text user_msg_id
-  chat_id="$(jq -r '.message.chat.id' <<<"$upd")"
-  text="$(jq -r '.message.text // empty' <<<"$upd")"
-  user_msg_id="$(jq -r '.message.message_id // empty' <<<"$upd")"
+    local chat_id text user_msg_id
+    chat_id="$(jq -r '.message.chat.id' <<<"$upd")"
+    text="$(jq -r '.message.text // empty' <<<"$upd")"
+    user_msg_id="$(jq -r '.message.message_id // empty' <<<"$upd")"
 
-  if ! is_admin_chat "$chat_id"; then
-    # Optional: tell unknown chat it is private
-    # send_message "$chat_id" "Unauthorized."
-    return
-  fi
+    if ! is_admin_chat "$chat_id"; then
+        # Optional: tell unknown chat it is private
+        # send_message "$chat_id" "Unauthorized."
+        return
+    fi
 
-  # Keep chat clean:
-  # - delete previous bot output/menu
-  # - try to delete user's message (works in groups/supergroups if bot can delete)
-  cleanup_old_bot_messages "$chat_id"
-  [[ -n "${user_msg_id:-}" && "${user_msg_id}" != "null" ]] && delete_message "$chat_id" "$user_msg_id"
+# Keep chat clean:
+# - delete previous bot output/menu
+# - try to delete user's message (works in groups/supergroups if bot can delete)
+# IMPORTANT: do NOT delete /start (some Telegram clients will show the Start button again
+# if the /start message disappears, which creates an annoying loop).
+# Also handle deep-link payloads: "/start something" and "/start@BotName".
+    if [[ -n "${user_msg_id:-}" && "${user_msg_id}" != "null" ]]; then
+        if [[ ! "$text" == "/start" ]]; then
+            delete_message "$chat_id" "$user_msg_id"
+        fi
+    fi
 
   # Commands
-  if [[ "$text" == "/start" || "$text" == "/help" ]]; then
-    local first last who
-    first="$(jq -r '.message.from.first_name // empty' <<<"$upd")"
-    last="$(jq -r '.message.from.last_name // empty' <<<"$upd")"
+    if [[ "$text" == "/start" || "$text" == "/help" ]]; then
+        local first last who
+        first="$(jq -r '.message.from.first_name // empty' <<<"$upd")"
+        last="$(jq -r '.message.from.last_name // empty' <<<"$upd")"
 
-    who="${first} ${last}"
-    who="$(tr -s ' ' <<<"$who")"
-    who="${who#"${who%%[! ]*}"}"
-    who="${who%"${who##*[! ]}"}"
-    [[ -z "$who" ]] && who="User"
+        who="${first} ${last}"
+        who="$(tr -s ' ' <<<"$who")"
+        who="${who#"${who%%[! ]*}"}"
+        who="${who%"${who##*[! ]}"}"
+        [[ -z "$who" ]] && who="User"
 
-    STATE=""
-    send_message "$chat_id" "Hello ${who}\nWelcome to $HOSTNAME management bot.\nPlease choose command:\n########################################" "$MAIN_KB_JSON"
-    return
-  fi
+        STATE=""
+        send_message "$chat_id" "Hello ${who}\nWelcome to $HOSTNAME management bot.\nPlease choose command:" "$MAIN_KB_JSON"
+        return
+    fi
 
-  if [[ "$text" == "/cancel" ]]; then
-    STATE=""
-    send_message "$chat_id" "Canceled." "$MAIN_KB_JSON"
-    return
-  fi
+    if [[ "$text" == "/cancel" ]]; then
+        STATE=""
+        send_message "$chat_id" "Canceled." "$MAIN_KB_JSON"
+        return
+    fi
 
   # If not waiting input, just show menu
-  if [[ -z "$STATE" ]]; then
-    show_menu "$chat_id"
-    return
-  fi
+    if [[ -z "$STATE" ]]; then
+        show_menu "$chat_id"
+        return
+    fi
 
   # Normalize for 2-args inputs: newlines -> spaces, trim
-  local norm
-  norm="$(tr '\n' ' ' <<<"$text" | tr -s ' ' )"
-  norm="${norm#"${norm%%[! ]*}"}"
-  norm="${norm%"${norm##*[! ]}"}"
+    local norm
+    norm="$(tr '\n' ' ' <<<"$text" | tr -s ' ' )"
+    norm="${norm#"${norm%%[! ]*}"}"
+    norm="${norm%"${norm##*[! ]}"}"
 
     case "$STATE" in
         WAIT_BLOCK|WAIT_UNBLOCK|WAIT_DELETE)

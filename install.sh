@@ -119,7 +119,7 @@ SSH_CONF_SOURCE="cfg/ssh.cfg"
 SSH_CONF_DEST="/etc/ssh/sshd_config.d/00-custom_security.conf"
 LOW="40000"
 HIGH="50000"
-PORT="$(shuf -i "${LOW}-${HIGH}" -n 1)"
+SSH_PORT="$(shuf -i "${LOW}-${HIGH}" -n 1)"
 
 # deleting previous sshd configuration with high priority
 if compgen -G "/etc/ssh/sshd_config.d/00*.conf" &> /dev/null; then
@@ -131,7 +131,7 @@ fi
 # creating a new sshd configuration
 install_sshd() {
     try install -m 644 -o root -g root "$SSH_CONF_SOURCE" "$SSH_CONF_DEST"
-    try sed -i "s/{PORT}/$PORT/g" "$SSH_CONF_DEST"
+    try sed -i "s/{PORT}/$SSH_PORT/g" "$SSH_CONF_DEST"
     try rm -f /etc/ssh/ssh_host_ecdsa_key
     try rm -f /etc/ssh/ssh_host_ecdsa_key.pub
     try rm -f /etc/ssh/ssh_host_rsa_key
@@ -210,7 +210,7 @@ TG_LOCAL_SOURCE="cfg/ssh_telegram.local"
 TG_LOCAL_DEST="/etc/fail2ban/action.d/ssh_telegram.local"
 conf_f2b() {
     try install -m 644 -o root -g root "$F2B_CONF_SOURCE" "$F2B_CONF_DEST"
-    try sed -i "s/{PORT}/$PORT/g" "$F2B_CONF_DEST"
+    try sed -i "s/{PORT}/$SSH_PORT/g" "$F2B_CONF_DEST"
     try install -m 644 -o root -g root "$TG_LOCAL_SOURCE" "$TG_LOCAL_DEST"
 }
 run_and_check "install fail2ban configuration" conf_f2b
@@ -256,7 +256,7 @@ conf_un_up() {
 APT::Periodic::Update-Package-Lists "0";
 APT::Periodic::Unattended-Upgrade "0";
 EOF
-    try systemctl disable --now apt-daily.timer apt-daily-upgrade.timer > /dev/null
+    try systemctl disable --now apt-daily.timer apt-daily-upgrade.timer &> /dev/null
 }
 run_and_check "changing unattended upgrades settings" conf_un_up
 
@@ -609,7 +609,7 @@ run_and_check "start xray service" systemctl start xray.service
 
 
 # start make link, get inbound paremetres
-readonly PORT="$(jq -r --arg tag "$INBOUND_TAG" '
+readonly XRAY_PORT="$(jq -r --arg tag "$INBOUND_TAG" '
   .inbounds[] | select(.tag==$tag) | .port
 ' "$XRAY_CONFIG_DEST")"
 
@@ -638,7 +638,7 @@ check_var() {
     fi
 }
 
-check_var PORT
+check_var XRAY_PORT
 check_var REALITY_SNI
 check_var PRIVATE_KEY
 check_var SHORT_ID
@@ -675,7 +675,7 @@ QUERY="${QUERY}&fp=$(uri_encode "chrome")"
 QUERY="${QUERY}&pbk=$(uri_encode "$PUBLIC_KEY")"
 QUERY="${QUERY}&sid=$(uri_encode "$SHORT_ID")"
 readonly NAME_ENC="$(uri_encode "$XRAY_NAME")"
-readonly VLESS_URI="vless://${UUID}@${SERVER_HOST}:${PORT}/?${QUERY}#${NAME_ENC}"
+readonly VLESS_URI="vless://${UUID}@${SERVER_HOST}:${XRAY_PORT}/?${QUERY}#${NAME_ENC}"
 readonly URI_PATH="/usr/local/etc/xray/URI_DB"
 
 # print result
@@ -868,7 +868,7 @@ echo "########## PUBLIC KEY - $PUB_KEY_PATH ##########"
 echo ""
 cat "$PUB_KEY_PATH"
 echo ""
-echo "########## SSH server port - ${PORT} ##########"
+echo "########## SSH server port - ${SSH_PORT} ##########"
 echo ""
 echo "#################################################"
 echo ""

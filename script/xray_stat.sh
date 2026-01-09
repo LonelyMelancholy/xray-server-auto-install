@@ -157,8 +157,16 @@ run_and_check "start merge tmp_m file" merge_old_new "$TMP_OLD_M" "$TMP_NEW_COMM
 run_and_check "start merge tmp_y file" merge_old_new "$TMP_OLD_Y" "$TMP_NEW_COMMON" "$TMP_OUT_Y"
 
 # install new TR_DB
-run_and_check "install new TR_DB_M file" cat "$TMP_OUT_M" > "$OUT_FILE_M"
-run_and_check "install new TR_DB_Y file" cat "$TMP_OUT_Y" > "$OUT_FILE_Y"
+install_out_m() {
+    cat "$TMP_OUT_M" > "$OUT_FILE_M"
+}
+
+install_out_y() {
+    cat "$TMP_OUT_Y" > "$OUT_FILE_Y"
+}
+
+run_and_check "install new TR_DB_M file" install_out_m
+run_and_check "install new TR_DB_Y file" install_out_y
 
 RC=0
 exit $RC
