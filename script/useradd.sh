@@ -27,7 +27,6 @@ readonly XRAY_BIN="/usr/local/bin/xray"
 readonly INBOUND_TAG="Vless"
 readonly DEFAULT_FLOW="xtls-rprx-vision"
 readonly USERNAME="$1"
-readonly FRESH_INSTALL="${3:-0}"
 readonly URI_BAK="${URI_PATH}.$(date +%Y%m%d_%H%M%S).bak"
 DAYS="$2"
 
@@ -41,13 +40,7 @@ run_and_check() {
 }
 
 # argument check
-if [[ "$#" -gt 3 ]]; then
-    echo "Use for add user in xray config, run: $0 <username> <days>"
-    echo "days 0 - infinity days"
-    exit 1
-fi
-
-if [[ "$#" -lt 2 ]]; then
+if [[ "$#" -ne 2 ]]; then
     echo "Use for add user in xray config, run: $0 <username> <days>"
     echo "days 0 - infinity days"
     exit 1
@@ -55,6 +48,11 @@ fi
 
 if ! [[ $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
     echo "❌ Error: only letters, numbers and - in name, exit"
+    exit 1
+fi
+
+if ! [[ "$DAYS" =~ ^[0-9]+$ ]]; then
+    echo "❌ Error: days must be non negative number, exit"
     exit 1
 fi
 
@@ -71,16 +69,6 @@ client_count="$(
 
 if [[ $client_count -ge 1 ]]; then
     echo "❌ Error: name already exist in xray config, exit"
-    exit 1
-fi
-
-if ! [[ "$DAYS" =~ ^[0-9]+$ ]]; then
-    echo "❌ Error: days must be non negative number, exit"
-    exit 1
-fi
-
-if ! [[ "$FRESH_INSTALL" =~ ^[0-1]$ ]]; then
-    echo "❌ Error: 3 argument must be 1 for fresh install or 0, exit"
     exit 1
 fi
 
@@ -122,8 +110,6 @@ else
 fi
 
 xray_useradd() {
-    set -e
-
     # make tmp file
     TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
     try chmod 600 "$TMP_XRAY_CONFIG"
@@ -233,19 +219,11 @@ readonly NAME_ENC="$(uri_encode "$USERNAME")"
 readonly VLESS_URI="vless://${UUID}@${SERVER_HOST}:${PORT}/?${QUERY}#${NAME_ENC}"
 
 # print result
-if [[ $FRESH_INSTALL -eq 1 ]]; then
-    tee -a "$URI_PATH" > /dev/null <<EOF
+cp -a "$URI_PATH" "$URI_BAK"
+echo "✅ Success: Backup saved $URI_BAK"
+echo "✅ Success: name $USERNAME, added"
+tee -a "$URI_PATH" <<EOF
 name: $USERNAME, created: $CREATED, days: $DAYS, expiration: $EXP
 name: $USERNAME, vless link: $VLESS_URI
 
 EOF
-else
-    cp -a "$URI_PATH" "$URI_BAK"
-    echo "✅ Success: Backup saved $URI_BAK"
-    echo "✅ Success: name $USERNAME, added"
-    tee -a "$URI_PATH" <<EOF
-name: $USERNAME, created: $CREATED, days: $DAYS, expiration: $EXP
-name: $USERNAME, vless link: $VLESS_URI
-
-EOF
-fi

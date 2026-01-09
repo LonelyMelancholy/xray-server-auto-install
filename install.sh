@@ -499,6 +499,41 @@ EOF
 }
 run_and_check "create xray systemd service" conf_xray
 
+# calculate exp and created date
+readonly CREATED="$(date +%F)"
+
+# write variable
+if [[ "$XRAY_DAYS" == "0" ]]; then
+    XRAY_EMAIL="${XRAY_NAME}|created=${CREATED}|days=infinity|exp=never"
+    XRAY_DAYS="infinity"
+    EXP="never"
+else
+    EXP="$(date -d "$CREATED + $XRAY_DAYS days" +%F)"
+    XRAY_EMAIL="${XRAY_NAME}|created=${CREATED}|days=${XRAY_DAYS}|exp=${EXP}"
+fi
+
+readonly INBOUND_TAG="Vless"
+readonly DEFAULT_FLOW="xtls-rprx-vision"
+
+# check inbound
+readonly HAS_INBOUND="$(jq --arg tag "$INBOUND_TAG" '
+  any(.inbounds[]?; .tag == $tag and .protocol == "vless")
+' "$XRAY_CONFIG_SRC")"
+
+if [[ "$HAS_INBOUND" != "true" ]]; then
+  echo "❌ Error: config not have vless-inbound, tag=\"$INBOUND_TAG\", exit"
+  exit 1
+fi
+
+readonly XRAY_BIN="/usr/local/bin/xray"
+# uuid generation
+if [[ -x "$XRAY_BIN" ]]; then
+    readonly UUID="$("$XRAY_BIN" uuid)"
+else
+    echo "❌ Error: not found $XRAY_BIN, for UUID generation, exit"
+    exit 1
+fi
+
 # configure json 
 conf_json_xray() {
 
@@ -521,22 +556,44 @@ conf_json_xray() {
     trap 'rm -rf "$TMP_XRAY_CONFIG" "$TMP_DIR"' EXIT
     
 # update json
-    try jq --arg dest "$DEST" \
-        --arg sni  "$XRAY_HOST" \
-        --arg pk   "$privateKey" \
-        --arg sid  "$shortId" '
-        .inbounds |= (map(
-            if (.protocol=="vless" and (.streamSettings.security?=="reality") and (.streamSettings.realitySettings?!=null))
-            then .streamSettings.realitySettings |= (
-            .dest=$dest
-            | .serverNames=[$sni]
-            | .privateKey=$pk
-            | .shortIds=[$sid]
+    try jq --arg tag   "$INBOUND_TAG" \
+    --arg email "$XRAY_EMAIL" \
+    --arg id    "$UUID" \
+    --arg dflow "$DEFAULT_FLOW" \
+    --arg dest  "$DEST" \
+    --arg sni   "$XRAY_HOST" \
+    --arg pk    "$privateKey" \
+    --arg sid   "$shortId" '
+    # Берём flow из первого клиента нужного inbound по tag (если нет — дефолт)
+    ([.inbounds[]? | select(.tag==$tag and .protocol=="vless") | .settings.clients[0].flow?][0] // $dflow) as $flow
+
+    | .inbounds |= map(
+        if (.tag==$tag and .protocol=="vless") then
+
+            # 1) Обновляем realitySettings ТОЛЬКО для этого tag (и если это reality)
+            (if (.streamSettings.security?=="reality" and (.streamSettings.realitySettings?!=null)) then
+            .streamSettings.realitySettings |= (
+                .dest=$dest
+                | .serverNames=[$sni]
+                | .privateKey=$pk
+                | .shortIds=[$sid]
             )
             else .
-            end
-        ))
-        ' "$XRAY_CONFIG_SRC" > "$TMP_XRAY_CONFIG"
+            end)
+
+            # 2) Добавляем пользователя
+            | (.settings = (.settings // {}))
+            | (.settings.clients = (.settings.clients // []))
+            | .settings.clients += [{
+                "email": $email,
+                "id":    $id,
+                "flow":  $flow
+            }]
+
+        else .
+        end
+        )
+    ' "$XRAY_CONFIG_SRC" > "$TMP_XRAY_CONFIG"
 }
 
 run_and_check "generate new config" conf_json_xray
@@ -550,6 +607,86 @@ run_and_check "reload systemd" systemctl daemon-reload
 run_and_check "enable autostart xray service" systemctl -q enable xray.service
 run_and_check "start xray service" systemctl start xray.service
 
+
+# start make link, get inbound paremetres
+readonly PORT="$(jq -r --arg tag "$INBOUND_TAG" '
+  .inbounds[] | select(.tag==$tag) | .port
+' "$XRAY_CONFIG")"
+
+readonly REALITY_SNI="$(jq -r --arg tag "$INBOUND_TAG" '
+  .inbounds[] | select(.tag==$tag) | .streamSettings.realitySettings.serverNames[0] // ""
+' "$XRAY_CONFIG")"
+
+readonly PRIVATE_KEY="$(jq -r --arg tag "$INBOUND_TAG" '
+  .inbounds[] | select(.tag==$tag) | .streamSettings.realitySettings.privateKey // ""
+' "$XRAY_CONFIG")"
+
+readonly SHORT_ID="$(jq -r --arg tag "$INBOUND_TAG" '
+  .inbounds[] | select(.tag==$tag) | .streamSettings.realitySettings.shortIds[0] // ""
+' "$XRAY_CONFIG")"
+
+readonly FLOW="$(jq -r --arg tag "$INBOUND_TAG" '
+  .inbounds[] | select(.tag==$tag) | .settings.clients[0].flow // ""
+' "$XRAY_CONFIG")"
+
+check_var() {
+    local name="$1"
+    local value="${!name}"
+    if [ -z "$value" ]; then
+        echo "❌ Error: $name not found in realitySettings inbound"
+        exit 1
+    fi
+}
+
+check_var PORT
+check_var REALITY_SNI
+check_var PRIVATE_KEY
+check_var SHORT_ID
+check_var FLOW
+
+# generate public key from privat key
+readonly XRAY_X25519_OUT="$("$XRAY_BIN" x25519 -i "$PRIVATE_KEY")"
+
+readonly PUBLIC_KEY="$(printf '%s\n' "$XRAY_X25519_OUT" | awk -F': ' '/Password:/ {print $2}')"
+
+if [[ -z "$PUBLIC_KEY" ]]; then
+  echo "❌ Error: empty publicKey/password, exit"
+  exit 1
+fi
+
+# get server ip
+SERVER_HOST="$(curl -4 -s https://ifconfig.io || curl -4 -s https://ipinfo.io/ip || echo "")"
+
+if [ -z "$SERVER_HOST" ]; then
+    SERVER_HOST="SERVER_IP"  # плейсхолдер, если не смогли определить
+fi
+
+# make uri link
+uri_encode() {
+    printf '%s' "$1" | jq -sRr @uri
+}
+
+QUERY="encryption=none"
+QUERY="${QUERY}&flow=$(uri_encode "$FLOW")"
+QUERY="${QUERY}&security=reality"
+QUERY="${QUERY}&type=tcp"
+QUERY="${QUERY}&sni=$(uri_encode "$REALITY_SNI")"
+QUERY="${QUERY}&fp=$(uri_encode "chrome")"
+QUERY="${QUERY}&pbk=$(uri_encode "$PUBLIC_KEY")"
+QUERY="${QUERY}&sid=$(uri_encode "$SHORT_ID")"
+readonly NAME_ENC="$(uri_encode "$XRAY_NAME")"
+readonly VLESS_URI="vless://${UUID}@${SERVER_HOST}:${PORT}/?${QUERY}#${NAME_ENC}"
+readonly URI_PATH="/usr/local/etc/xray/URI_DB"
+
+# print result
+touch "$URI_PATH"
+chmod 600 "$URI_PATH"
+chown telegram-gateway:telegram-gateway "$URI_PATH"
+tee -a "$URI_PATH" > /dev/null <<EOF
+name: $XRAY_NAME, created: $CREATED, days: $XRAY_DAYS, expiration: $EXP
+name: $XRAY_NAME, vless link: $VLESS_URI
+
+EOF
 
 # auto update xray and geobase
 XRAY_SCRIPT_SOURCE="script/xray_update.sh"
@@ -636,7 +773,6 @@ USERSHOW_SCRIPT_SRC="script/usershow.sh"
 USERSHOW_SCRIPT_DEST="/usr/local/bin/service/usershow.sh"
 SYS_INFO_SCRIPT_SRC="script/system_info.sh"
 SYS_INFO_SCRIPT_DEST="/usr/local/bin/service/system_info.sh"
-URI_PATH="/usr/local/etc/xray/URI_DB"
 
 # add link for maintance
 install_scr_service() {
@@ -646,9 +782,6 @@ install_scr_service() {
     try install -m 755 -o root -g root "$USERBLOCK_SCRIPT_SRC" "$USERBLOCK_SCRIPT_DEST"
     try install -m 755 -o root -g root "$USERSHOW_SCRIPT_SRC" "$USERSHOW_SCRIPT_DEST"
     try install -m 755 -o root -g root "$SYS_INFO_SCRIPT_SRC" "$SYS_INFO_SCRIPT_DEST"
-    try touch "$URI_PATH"
-    try chmod 600 "$URI_PATH"
-    try chown telegram-gateway:telegram-gateway "$URI_PATH"
     try ln -sfn "$USERADD_SCRIPT_DEST" "$USER_HOME/xray_user_add"
     try ln -sfn "$USERDEL_SCRIPT_DEST" "$USER_HOME/xray_user_del"
     try ln -sfn "$USEREXP_SCRIPT_DEST" "$USER_HOME/xray_user_exp"
@@ -722,10 +855,6 @@ run_and_check "create Telegram gateway service" conf_tg_gateway
 run_and_check "reload systemd" systemctl daemon-reload
 run_and_check "enable autostart Telegram gateway service" systemctl -q enable telegram-gateway.service
 run_and_check "start Telegram gateway service" systemctl start telegram-gateway.service
-
-
-# add user for xray
-sudo -u telegram-gateway "$USERADD_SCRIPT_DEST" "$XRAY_NAME" "$XRAY_DAYS" 1
 
 
 # final output
