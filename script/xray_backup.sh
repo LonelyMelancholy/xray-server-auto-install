@@ -12,9 +12,8 @@ umask 077
 # user check
 [[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the telegram-gateway user, exit"; exit 1; }
 
-
 ONLY_ARCHIVE="${1:-0}"
-if [[ "$ONLY_ARCHIVE" != 1 || "$ONLY_ARCHIVE" != 0]]; then
+if [[ "$ONLY_ARCHIVE" != 1 && "$ONLY_ARCHIVE" != 0 ]]; then
     echo "❌ Error: only 0 or 1 for argument"
     exit 1
 fi
@@ -113,8 +112,8 @@ source "$ENV_FILE"
 # check token from secret file
 [[ -z "$BOT_TOKEN" ]] && { echo "❌ Error: Telegram bot token is missing in '$ENV_FILE', exit"; exit 1; }
 
-# check id from secret file
-[[ -z "$CHAT_ID" ]] && { echo "❌ Error: Telegram chat ID is missing in '$ENV_FILE', exit"; exit 1; }
+# check group id from secret file
+[[ -z "$GROUP_ID" ]] && { echo "❌ Error: Telegram group ID is missing in '$ENV_FILE', exit"; exit 1; }
 
 FILES=(
   "/var/log/xray/TR_DB_M"
@@ -136,7 +135,7 @@ trap 'on_exit; cleanup;' EXIT
 _tg_m() {
     local response
     response="$(curl -fsS -m 10 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-        --data-urlencode "chat_id=${CHAT_ID}" \
+        --data-urlencode "chat_id=${GROUP_ID}" \
         --data-urlencode "parse_mode=HTML" \
         --data-urlencode "text=${MESSAGE}")" || return 1
     grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<< "$response" || return 1
@@ -147,7 +146,7 @@ _tg_m() {
 _tg_doc() {
     local response
     response="$(curl -fsS -m 30 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" \
-            -F "chat_id=${CHAT_ID}" \
+            -F "chat_id=${GROUP_ID}" \
             -F "document=@${ARCHIVE_PATH};filename=${ARCHIVE_NAME}")" || return 1
     grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<< "$response" || return 1
     return 0

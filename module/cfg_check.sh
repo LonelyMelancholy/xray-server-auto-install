@@ -7,17 +7,18 @@ if [[ ! -r "$CFG_FILE" ]]; then
     exit 1
 fi
 
-# username check
-NEW_HOSTNAME=$(awk -F'"' '/^[[:space:]]*Server name/ {print $2}' "$CFG_FILE")
+# hostname check
+XRAY_HOST=$(awk -F'"' '/^[[:space:]]*Server hostname/ {print $2}' "$CFG_FILE")
+NEW_HOSTNAME=$(awk -F'"' '/^[[:space:]]*Server hostname/ {print $2}' "$CFG_FILE")
 if [[ -z "$NEW_HOSTNAME" ]]; then
-    echo "❌ Error: 'Server name' is empty in '$CFG_FILE', exit"
+    echo "❌ Error: 'Server hostname' is empty in '$CFG_FILE', exit"
     exit 1
 fi
 
 if [[ $NEW_HOSTNAME =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,62}[A-Za-z0-9])?$ ]]; then
-    echo "✅ Success: server name accepted"
+    echo "✅ Success: server hostname accepted"
 else
-    echo "❌ Error: 'Server name' '$NEW_HOSTNAME' does not comply with Linux rules, exit"
+    echo "❌ Error: 'Server hostname' '$NEW_HOSTNAME' does not comply with Linux rules, exit"
     exit 1
 fi
 
@@ -62,6 +63,15 @@ else
     echo "✅ Success: Telegram chat ID accepted"
 fi
 
+# check group ID
+READ_GROUP_ID=$(awk -F'"' '/^[[:space:]]*Telegram chat group ID/ {print $2}' "$CFG_FILE")
+if [[ -z "$READ_CHAT_ID" ]]; then
+    echo "❌ Error: 'Telegram chat group ID' is empty in '$CFG_FILE', exit"
+    exit 1
+else
+    echo "✅ Success: Telegram chat group ID accepted"
+fi
+
 # check Ubuntu Pro token
 UBUNTU_PRO_TOKEN=$(awk -F'"' '/^[[:space:]]*Ubuntu Pro token/ {print $2}' "$CFG_FILE")
 if [[ -z "$UBUNTU_PRO_TOKEN" ]]; then
@@ -70,19 +80,24 @@ else
     echo "✅ Success: Ubuntu Pro token accepted"
 fi
 
-# check dest
-XRAY_HOST=$(awk -F'"' '/^[[:space:]]*Dest/ {print $2}' "$CFG_FILE")
-if [[ -z "$XRAY_HOST" ]]; then
-    echo "❌ Error: 'Dest' is empty in '$CFG_FILE', exit"
+# check email
+OWNER_EMAIL=$(awk -F'"' '/^[[:space:]]*Owner server email/ {print $2}' "$CFG_FILE")
+if [[ -z "$OWNER_EMAIL" ]]; then
+    echo "❌ Error: 'Owner server email' for certificates empty in '$CFG_FILE', exit"
+    exit 1
+fi
+
+if [[ ! $OWNER_EMAIL =~ ^[A-Za-z0-9@.-]+$ ]]; then
+    echo "❌ Error: 'Owner server email' for certificates can have only letters, numbers and .@- in name, exit"
     exit 1
 else
-    echo "✅ Success: dest for xray accepted"
+    echo "✅ Success: email for xray accepted"
 fi
 
 # check name
 XRAY_NAME=$(awk -F'"' '/^[[:space:]]*Name/ {print $2}' "$CFG_FILE")
 if [[ -z "$XRAY_NAME" ]]; then
-    echo "❌ Error: 'Name' for xrayis empty in '$CFG_FILE', exit"
+    echo "❌ Error: 'Name' for xray is empty in '$CFG_FILE', exit"
     exit 1
 fi
 

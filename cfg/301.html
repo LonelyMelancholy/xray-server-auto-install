@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#0b0b12" />
+
+  <title>301 Перемещено навсегда</title>
+  <meta name="description" content="Ресурс перемещён навсегда. Перейдите по новому адресу или обновите закладки." />
+  <meta name="robots" content="noindex,nofollow,noarchive" />
+
+  <meta property="og:title" content="301 Перемещено навсегда" />
+  <meta property="og:description" content="Ресурс перемещён навсегда. Перейдите по новому адресу или обновите закладки." />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="ru_RU" />
+
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" />
+
+  <style>
+    :root{
+      --bg: #07070c;
+      --panel: rgba(18, 12, 28, .72);
+      --panel-2: rgba(10, 10, 18, .65);
+      --stroke: rgba(255, 86, 188, .22);
+      --stroke-2: rgba(255, 86, 188, .14);
+
+      --text: rgba(255, 240, 252, .92);
+      --muted: rgba(255, 240, 252, .72);
+
+      --pink: #ff56bc;
+      --pink-2: #ff2aa5;
+      --magenta: #b41dff;
+
+      --good: #3dffb6;
+      --warn: #ffd05d;
+      --bad:  #ff4d6d;
+
+      --radius: 18px;
+      --shadow: 0 18px 60px rgba(0,0,0,.55);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif;
+    }
+
+    *{ box-sizing:border-box; }
+    html, body{ height:100%; }
+    body{
+      margin:0;
+      font-family: var(--sans);
+      color: var(--text);
+      background: radial-gradient(1200px 900px at 10% 15%, rgba(255, 86, 188, .15), transparent 55%),
+                  radial-gradient(900px 700px at 90% 25%, rgba(180, 29, 255, .12), transparent 55%),
+                  radial-gradient(900px 700px at 50% 90%, rgba(255, 42, 165, .10), transparent 60%),
+                  linear-gradient(180deg, #05050a 0%, #07070c 55%, #05050a 100%);
+      overflow-x:hidden;
+    }
+
+    a{ color: inherit; }
+    a:focus-visible, button:focus-visible{
+      outline: 3px solid rgba(255, 86, 188, .65);
+      outline-offset: 3px;
+      border-radius: 12px;
+    }
+
+    .skip-link{
+      position:absolute;
+      left:12px;
+      top:12px;
+      padding:10px 12px;
+      background:#0c0c14;
+      border:1px solid var(--stroke);
+      border-radius: 12px;
+      transform: translateY(-200%);
+      transition: transform .18s ease;
+      z-index: 50;
+    }
+    .skip-link:focus{ transform: translateY(0); }
+
+    .wrap{
+      min-height: 100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding: 28px 18px 40px;
+      position:relative;
+    }
+
+    .bg{
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      opacity: .9;
+    }
+    .grid{
+      position:absolute;
+      inset:-2px;
+      background:
+        linear-gradient(to right, rgba(255,86,188,.08) 1px, transparent 1px) 0 0 / 44px 44px,
+        linear-gradient(to bottom, rgba(255,86,188,.06) 1px, transparent 1px) 0 0 / 44px 44px;
+      mask-image: radial-gradient(ellipse at center, rgba(0,0,0,.9) 0%, rgba(0,0,0,.2) 45%, transparent 70%);
+    }
+    .scanline{
+      position:absolute;
+      left:-20%;
+      right:-20%;
+      top:-30%;
+      height: 55%;
+      background: linear-gradient(180deg, transparent, rgba(255,86,188,.08), transparent);
+      transform: rotate(10deg);
+      animation: none !important;
+      filter: blur(0.2px);
+      opacity:.65;
+    }
+
+    .shell{
+      width: min(1080px, 100%);
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+    @media (max-width: 940px){
+      .shell{ grid-template-columns: 1fr; }
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(26, 16, 42, .78), rgba(12, 12, 20, .72));
+      border: 1px solid var(--stroke);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      position:relative;
+      overflow:hidden;
+    }
+
+    .card::before{
+      content:"";
+      position:absolute;
+      inset:-2px;
+      background: radial-gradient(520px 260px at 20% 10%, rgba(255,86,188,.18), transparent 62%),
+                  radial-gradient(560px 340px at 90% 30%, rgba(180,29,255,.14), transparent 60%);
+      pointer-events:none;
+    }
+
+    header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding: 18px 18px 0;
+      position:relative;
+      z-index: 1;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .brand{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      min-width: 240px;
+    }
+
+    .logo{
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(255,86,188,.2), rgba(180,29,255,.14));
+      border: 1px solid var(--stroke);
+      display:grid;
+      place-items:center;
+      box-shadow: 0 10px 28px rgba(0,0,0,.35);
+    }
+
+    .brand-title{ line-height: 1.1; }
+    .brand-title strong{ font-weight: 650; letter-spacing: .2px; }
+    .brand-title small{ display:block; color: var(--muted); font-size: 12px; margin-top: 3px; }
+
+    .meta{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items:center;
+      justify-content:flex-end;
+    }
+
+    .pill{
+      font-family: var(--mono);
+      font-size: 12px;
+      color: rgba(255,240,252,.82);
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--stroke-2);
+      background: rgba(7,7,12,.45);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    main{
+      padding: 14px 18px 18px;
+      position:relative;
+      z-index: 1;
+    }
+
+    .hero{
+      display:grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 18px;
+      align-items:center;
+      margin-top: 6px;
+    }
+    @media (max-width: 940px){
+      .hero{ grid-template-columns: 1fr; }
+    }
+
+    h1{
+      margin: 8px 0 6px;
+      font-size: clamp(28px, 3.2vw, 42px);
+      letter-spacing: .2px;
+    }
+
+    .lead{
+      margin: 0 0 14px;
+      color: var(--muted);
+      max-width: 62ch;
+      line-height: 1.55;
+    }
+
+    .callouts{
+      display:flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 14px 0 0;
+    }
+
+    .btn{
+      border: 1px solid var(--stroke);
+      background: rgba(12, 12, 20, .55);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 14px;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      gap: 10px;
+      transition: transform .12s ease, border-color .12s ease, background .12s ease;
+      cursor:pointer;
+      user-select:none;
+    }
+    .btn:hover{
+      transform: translateY(-1px);
+      border-color: rgba(255,86,188,.45);
+      background: rgba(26, 16, 42, .55);
+    }
+
+    .btn.primary{
+      border-color: rgba(255,86,188,.55);
+      background: linear-gradient(135deg, rgba(255,86,188,.22), rgba(180,29,255,.16));
+    }
+
+    .btn .icon{ width: 18px; height: 18px; opacity: .95; }
+
+    .note{
+      margin-top: 14px;
+      padding: 12px 12px;
+      border-radius: 14px;
+      border: 1px dashed rgba(255,86,188,.35);
+      background: rgba(7,7,12,.35);
+      color: rgba(255,240,252,.78);
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .note b{ color: rgba(255,240,252,.92); }
+    .note a{ text-decoration: underline; text-decoration-color: rgba(255,86,188,.55); }
+
+    .art{
+      border: 1px solid var(--stroke-2);
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(10,10,18,.55), rgba(7,7,12,.35));
+      padding: 12px;
+      position:relative;
+      overflow:hidden;
+      min-height: 260px;
+    }
+
+    .art svg{ width: 100%; height: auto; display:block; }
+
+    .art .glow{
+      position:absolute;
+      inset:-80px -30px auto auto;
+      width: 280px;
+      height: 280px;
+      background: radial-gradient(circle at 30% 30%, rgba(255,86,188,.25), transparent 60%);
+      filter: blur(8px);
+      opacity:.9;
+      pointer-events:none;
+    }
+
+    .art .glow2{
+      position:absolute;
+      inset:auto auto -110px -60px;
+      width: 320px;
+      height: 320px;
+      background: radial-gradient(circle at 30% 30%, rgba(180,29,255,.22), transparent 60%);
+      filter: blur(10px);
+      opacity:.85;
+      pointer-events:none;
+    }
+
+    .shimmer{
+      animation: shimmer 4.8s ease-in-out infinite;
+      transform-origin: center;
+    }
+    @keyframes shimmer{
+      0%, 100%{ opacity: .72; transform: translateY(0); }
+      50%{ opacity: .92; transform: translateY(-2px); }
+    }
+
+    aside{
+      padding: 16px 16px 16px;
+      position:relative;
+      z-index: 1;
+    }
+
+    .status-title{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .status-title h2{
+      margin:0;
+      font-size: 14px;
+      letter-spacing: .4px;
+      text-transform: uppercase;
+      color: rgba(255,240,252,.86);
+    }
+    .status-sub{
+      font-family: var(--mono);
+      font-size: 12px;
+      color: rgba(255,240,252,.65);
+    }
+
+    .status{ display:grid; gap: 10px; }
+
+    .row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 12px;
+      padding: 12px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--stroke-2);
+      background: rgba(7,7,12,.38);
+    }
+
+    .svc{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .dot{
+      width: 10px; height: 10px;
+      border-radius: 999px;
+      flex: 0 0 auto;
+      box-shadow: 0 0 0 6px rgba(255,86,188,.08);
+    }
+    .dot.good{ background: var(--good); box-shadow: 0 0 0 6px rgba(61,255,182,.10); }
+    .dot.warn{ background: var(--warn); box-shadow: 0 0 0 6px rgba(255,208,93,.10); }
+    .dot.bad{  background: var(--bad);  box-shadow: 0 0 0 6px rgba(255,77,109,.10); }
+
+    .svc b{
+      font-weight: 600;
+      white-space: nowrap;
+      overflow:hidden;
+      text-overflow: ellipsis;
+      max-width: 220px;
+    }
+    .svc small{
+      display:block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow:hidden;
+      text-overflow: ellipsis;
+      max-width: 260px;
+    }
+
+    .tag{
+      font-family: var(--mono);
+      font-size: 12px;
+      color: rgba(255,240,252,.78);
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,86,188,.18);
+      background: rgba(26, 16, 42, .35);
+      flex: 0 0 auto;
+    }
+
+    .foot{
+      padding: 0 18px 18px;
+      position:relative;
+      z-index: 1;
+      color: rgba(255,240,252,.60);
+      font-size: 12px;
+      display:flex;
+      justify-content:space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .foot code{
+      font-family: var(--mono);
+      font-size: 12px;
+      color: rgba(255,240,252,.72);
+    }
+
+    @media (prefers-reduced-motion: reduce){
+      .scanline, .shimmer{ animation:none !important; }
+      .btn{ transition:none; }
+    }
+  </style>
+</head>
+
+<body>
+  <a class="skip-link" href="#content">Перейти к содержимому</a>
+
+  <div class="wrap">
+    <div class="bg" aria-hidden="true">
+      <div class="grid"></div>
+      <div class="scanline"></div>
+    </div>
+
+    <div class="shell" role="presentation">
+      <section class="card" aria-labelledby="title301">
+        <header>
+          <div class="brand" aria-label="Сервис хостинга данных">
+            <div class="logo" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M4 12h12" stroke="rgba(255,240,252,.82)" stroke-width="1.8" stroke-linecap="round"/>
+                <path d="M12 6l6 6-6 6" stroke="rgba(255,86,188,.92)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M4 6v12" stroke="rgba(255,86,188,.35)" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="brand-title">
+              <strong>DataCrystal</strong>
+              <small>Маршрутизация и редиректы</small>
+            </div>
+          </div>
+
+          <div class="meta" aria-label="Технические метки">
+            <span class="pill" id="pill-code" title="HTTP статус">HTTP 301</span>
+            <span class="pill" id="pill-zone" title="Зона">zone: nl-eu</span>
+            <span class="pill" id="pill-target" title="Новый адрес">to: —</span>
+            <span class="pill" id="pill-request" title="Идентификатор запроса">req: …</span>
+          </div>
+        </header>
+
+        <main id="content">
+          <div class="hero">
+            <div>
+              <h1 id="title301">301 Перемещено навсегда</h1>
+              <p class="lead">
+                Этот ресурс переехал на новый адрес. Обновите закладки и используйте ссылку ниже.
+              </p>
+
+              <nav class="callouts" aria-label="Действия">
+                <a class="btn primary" id="target-link" href="/" aria-label="Перейти по новому адресу">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M5 12h11" stroke="rgba(255,240,252,.92)" stroke-width="1.7" stroke-linecap="round"/>
+                    <path d="M12 7l5 5-5 5" stroke="rgba(255,240,252,.92)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  Перейти
+                </a>
+
+                <a class="btn" href="/" aria-label="Перейти на главную">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-8.5Z"
+                          stroke="rgba(255,240,252,.92)" stroke-width="1.7" />
+                  </svg>
+                  На главную
+                </a>
+              </nav>
+
+              <div class="note" role="note" aria-label="Подсказка по перенаправлению">
+                <div><b>Новый адрес:</b> <span id="target-inline">/</span></div>
+                <div>Если редирект неожиданен: проверьте актуальность ссылки, настройки vpn и кеш браузера.</div>
+                <div>При создании тикета приложите <b>req-id</b>: <span id="req-inline">…</span></div>
+              </div>
+            </div>
+
+            <div class="art" aria-label="Схема переноса">
+              <div class="glow" aria-hidden="true"></div>
+              <div class="glow2" aria-hidden="true"></div>
+
+              <!-- Иллюстрация: "переезд" между узлами -->
+              <svg viewBox="0 0 520 360" role="img" aria-label="Иллюстрация: перенос маршрута">
+                <defs>
+                  <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="rgba(255,86,188,.95)" />
+                    <stop offset="1" stop-color="rgba(180,29,255,.70)" />
+                  </linearGradient>
+                  <linearGradient id="g2" x1="0" y1="1" x2="1" y2="0">
+                    <stop offset="0" stop-color="rgba(255,240,252,.55)" />
+                    <stop offset="1" stop-color="rgba(255,86,188,.30)" />
+                  </linearGradient>
+                  <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+                    <feGaussianBlur stdDeviation="2.8" result="b"/>
+                    <feMerge>
+                      <feMergeNode in="b"/>
+                      <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                  </filter>
+                </defs>
+
+                <g opacity=".75" stroke="rgba(255,86,188,.30)" stroke-width="1">
+                  <path d="M70 250 C140 210, 190 290, 260 250 S390 220, 470 260" fill="none"/>
+                  <path d="M80 205 C150 165, 200 245, 270 205 S390 185, 460 220" fill="none"/>
+                </g>
+
+                <g filter="url(#soft)">
+                  <g opacity=".95">
+                    <rect x="70" y="110" width="165" height="190" rx="18" fill="rgba(10,10,18,.70)" stroke="rgba(255,86,188,.22)"/>
+                    <text x="152" y="145" text-anchor="middle" fill="rgba(255,240,252,.78)" font-family="ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace" font-size="12">old</text>
+                    <rect x="95" y="165" width="115" height="18" rx="9" fill="rgba(255,86,188,.10)" stroke="rgba(255,86,188,.18)"/>
+                    <rect x="95" y="195" width="115" height="18" rx="9" fill="rgba(255,86,188,.08)" stroke="rgba(255,86,188,.16)"/>
+                    <rect x="95" y="225" width="115" height="18" rx="9" fill="rgba(255,86,188,.10)" stroke="rgba(255,86,188,.18)"/>
+                    <circle cx="212" cy="285" r="6" fill="rgba(255,208,93,.92)"/>
+                  </g>
+
+                  <g opacity=".95">
+                    <rect x="285" y="80" width="165" height="220" rx="18" fill="rgba(10,10,18,.70)" stroke="rgba(255,86,188,.22)"/>
+                    <text x="368" y="115" text-anchor="middle" fill="rgba(255,240,252,.78)" font-family="ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace" font-size="12">new</text>
+                    <rect x="310" y="135" width="115" height="18" rx="9" fill="rgba(255,86,188,.12)" stroke="rgba(255,86,188,.22)"/>
+                    <rect x="310" y="165" width="115" height="18" rx="9" fill="rgba(255,86,188,.10)" stroke="rgba(255,86,188,.18)"/>
+                    <rect x="310" y="195" width="115" height="18" rx="9" fill="rgba(255,86,188,.08)" stroke="rgba(255,86,188,.16)"/>
+                    <rect x="310" y="225" width="115" height="18" rx="9" fill="rgba(255,86,188,.10)" stroke="rgba(255,86,188,.18)"/>
+                    <circle cx="437" cy="285" r="6" fill="rgba(61,255,182,.85)"/>
+                  </g>
+
+                  <g class="shimmer">
+                    <path d="M240 155c40-55 95-55 135 0" fill="none" stroke="url(#g1)" stroke-width="4" stroke-linecap="round"/>
+                    <path d="M380 155l-10-10m10 10l-12 6" fill="none" stroke="rgba(255,240,252,.55)" stroke-width="2" stroke-linecap="round"/>
+                  </g>
+                </g>
+
+                <g transform="translate(228, 250)" filter="url(#soft)" opacity=".95">
+                  <rect x="0" y="20" width="64" height="46" rx="14" fill="rgba(7,7,12,.55)" stroke="rgba(255,86,188,.35)"/>
+                  <text x="32" y="49" text-anchor="middle" fill="rgba(255,240,252,.85)" font-family="ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace" font-size="14">301</text>
+                </g>
+              </svg>
+            </div>
+          </div>
+        </main>
+
+        <div class="foot" aria-label="Служебная информация">
+          <div>© <span id="year"></span> DataCrystal. <span aria-hidden="true">•</span> <span>Постоянный редирект.</span></div>
+          <div><span class="status-sub">Время:</span> <code id="clock">--:--:--</code></div>
+        </div>
+      </section>
+
+      <section class="card" aria-label="Статус компонентов" role="region">
+        <aside>
+          <div class="status-title">
+            <h2>Статус платформы</h2>
+          </div>
+
+          <div class="status" role="status" aria-label="Компоненты и состояние">
+            <div class="row">
+              <div class="svc">
+                <span class="dot warn" aria-hidden="true"></span>
+                <div>
+                  <b>Redirect Service</b>
+                  <small>Отдаёт постоянный редирект на новый адрес</small>
+                </div>
+              </div>
+              <span class="tag" aria-label="Состояние: перенос">moved</span>
+            </div>
+
+            <div class="row">
+              <div class="svc">
+                <span class="dot good" aria-hidden="true"></span>
+                <div>
+                  <b>Storage Cluster</b>
+                  <small>Хранилище доступно и стабильно</small>
+                </div>
+              </div>
+              <span class="tag" aria-label="Состояние: норма">ok</span>
+            </div>
+
+            <div class="row">
+              <div class="svc">
+                <span class="dot warn" aria-hidden="true"></span>
+                <div>
+                  <b>Auth Service</b>
+                  <small>Проверьте токен или сессию</small>
+                </div>
+              </div>
+              <span class="tag" aria-label="Состояние: требуется внимание">check</span>
+            </div>
+
+            <div class="row">
+              <div class="svc">
+                <span class="dot good" aria-hidden="true"></span>
+                <div>
+                  <b>Edge Network</b>
+                  <small>Маршрутизация в норме</small>
+                </div>
+              </div>
+              <span class="tag" aria-label="Состояние: норма">ok</span>
+            </div>
+
+          </div>
+        </aside>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const $ = (id) => document.getElementById(id);
+
+      const year = $("year");
+      if (year) year.textContent = String(new Date().getFullYear());
+
+      function tick() {
+        const d = new Date();
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mm = String(d.getMinutes()).padStart(2, "0");
+        const ss = String(d.getSeconds()).padStart(2, "0");
+        const clock = $("clock");
+        if (clock) clock.textContent = `${hh}:${mm}:${ss}`;
+      }
+      tick();
+      setInterval(tick, 1000);
+
+      function makeId() {
+        const a = crypto.getRandomValues(new Uint8Array(8));
+        return Array.from(a).map(b => b.toString(16).padStart(2, "0")).join("");
+      }
+      const reqId = `dc-${makeId()}`;
+      const pillReq = $("pill-request");
+      if (pillReq) pillReq.textContent = `req: ${reqId}`;
+      const reqInline = $("req-inline");
+      if (reqInline) reqInline.textContent = reqId;
+
+      // target URL from query string (?to=...)
+      const params = new URLSearchParams(location.search);
+      const raw = params.get("to");
+      const target = raw && raw.trim().length ? raw.trim() : "/";
+
+      const pillTarget = $("pill-target");
+      if (pillTarget) pillTarget.textContent = `to: ${target}`;
+
+      const targetInline = $("target-inline");
+      if (targetInline) targetInline.textContent = target;
+
+      const targetLink = $("target-link");
+      if (targetLink) {
+        targetLink.setAttribute("href", target);
+        targetLink.setAttribute("rel", "nofollow");
+      }
+    })();
+  </script>
+</body>
+</html>

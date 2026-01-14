@@ -62,8 +62,8 @@ source "$ENV_FILE"
 # check token from secret file
 [[ -z "$BOT_TOKEN" ]] && { echo "❌ Error: Telegram bot token is missing in '$ENV_FILE', exit"; exit 1; }
 
-# check id from secret file
-[[ -z "$CHAT_ID" ]] && { echo "❌ Error: Telegram chat ID is missing in '$ENV_FILE', exit"; exit 1; }
+# check group id from secret file
+[[ -z "$GROUP_ID" ]] && { echo "❌ Error: Telegram group ID is missing in '$ENV_FILE', exit"; exit 1; }
 
 # check another instanсe of the script is not running (with retries)
 readonly LOCK_FILE="/run/lock/xray_config.lock"
@@ -103,7 +103,7 @@ done
 _tg_m() {
     local response
     response="$(curl -fsS -m 10 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-        --data-urlencode "chat_id=${CHAT_ID}" \
+        --data-urlencode "chat_id=${GROUP_ID}" \
         --data-urlencode "parse_mode=HTML" \
         --data-urlencode "text=${MESSAGE}")" || return 1
     grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<< "$response" || return 1
@@ -229,10 +229,10 @@ MESSAGE+=$'\n'"🔚 <b>Time:</b>"
 
 while IFS=$' ' read -r EMAIL DAYS; do
     [[ -z "$EMAIL" ]] && continue
-    if [[ $DAYS -le 10 ]]; then
-        MESSAGE+=$'\n'"⚠️ <b>User time:</b> $EMAIL - $DAYS days left"
-    elif [[ $DAYS -le 0 ]]; then
+    if [[ $DAYS -le 0 ]]; then
         MESSAGE+=$'\n'"❌ <b>User time:</b> $EMAIL - $DAYS days left"
+    elif [[ $DAYS -le 10 ]]; then
+        MESSAGE+=$'\n'"⚠️ <b>User time:</b> $EMAIL - $DAYS days left"
     else
         MESSAGE+=$'\n'"🔚 <b>User time:</b> $EMAIL - $DAYS days left"
     fi

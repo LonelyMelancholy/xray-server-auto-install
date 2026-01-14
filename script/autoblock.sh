@@ -97,8 +97,8 @@ source "$ENV_FILE"
 # check token from secret file
 [[ -z "$BOT_TOKEN" ]] && { echo "❌ Error: Telegram bot token is missing in '$ENV_FILE', exit"; exit 1; }
 
-# check id from secret file
-[[ -z "$CHAT_ID" ]] && { echo "❌ Error: Telegram chat ID is missing in '$ENV_FILE', exit"; exit 1; }
+# check group id from secret file
+[[ -z "$GROUP_ID" ]] && { echo "❌ Error: Telegram group ID is missing in '$ENV_FILE', exit"; exit 1; }
 
 # helper func
 try() { "$@" || return 1; }
@@ -113,7 +113,7 @@ run_and_check() {
 _tg_m() {
     local response
     response="$(curl -fsS -m 10 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-        --data-urlencode "chat_id=${CHAT_ID}" \
+        --data-urlencode "chat_id=${GROUP_ID}" \
         --data-urlencode "parse_mode=HTML" \
         --data-urlencode "text=${MESSAGE}")" || return 1
     grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<< "$response" || return 1

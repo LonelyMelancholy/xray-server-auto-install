@@ -81,6 +81,7 @@ install_tg_secret() {
     try tee "$ENV_FILE" > /dev/null <<EOF
 BOT_TOKEN="$READ_BOT_TOKEN"
 CHAT_ID="$READ_CHAT_ID"
+GROUP_ID="$READ_GROUP_ID"
 EOF
     try chown telegram-gateway:telegram-gateway "$ENV_FILE"
     try chmod 600 "$ENV_FILE"
@@ -300,6 +301,114 @@ EOF
 }
 
 run_and_check "server boot notification script installation" install_scr_boot
+
+
+# nginx+sert install (test, need re write)
+
+install_with_retry "install nginx and certbot package" apt-get install -y nginx certbot python3-certbot-nginx 
+
+conf_nginx() {
+    mkdir -p "/var/www/${XRAY_HOST}/html" || return 1
+    install -m 644 -g root -o root "cfg/403.html" "/var/www/${XRAY_HOST}/html/403.html" || return 1
+    install -m 644 -g root -o root "cfg/301.html" "/var/www/${XRAY_HOST}/html/301.html" || return 1
+
+    tee /etc/nginx/sites-available/${XRAY_HOST}.conf >/dev/null <<'EOF'
+server {
+    server_name __HOST__;
+
+    root /var/www/__HOST__/html;
+
+    access_log /var/log/nginx/__HOST__.8443.access.log;
+    error_log  /var/log/nginx/__HOST__.8443.error.log;
+
+    error_page 403 =403 /403.html;
+
+    location / {
+        return 403;
+    }
+
+    location = /403.html {
+        internal;
+    }
+
+    listen [::1]:8443 ssl ipv6only=on;
+    listen 127.0.0.1:8443 ssl;
+
+    ssl_certificate /etc/letsencrypt/live/__HOST__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/__HOST__/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+}
+
+server {
+    server_name __HOST__;
+
+    root /var/www/__HOST__/html;
+
+    access_log /var/log/nginx/__HOST__.80.access.log;
+    error_log  /var/log/nginx/__HOST__.80.error.log;
+
+    error_page 301 =301 /301.html;
+    error_page 403 =403 /403.html;
+
+    location ^~ /.well-known/acme-challenge/ {
+        try_files $uri =403;
+        default_type "text/plain";
+        allow all;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+
+    location = /301.html {
+        internal;
+    }
+
+    location = /403.html {
+        internal;
+    }
+
+    listen 80;
+    listen [::]:80;
+}
+EOF
+
+    # заменяем маркер на значение XRAY_HOST
+    sed -i "s/__HOST__/${XRAY_HOST}/g" /etc/nginx/sites-available/${XRAY_HOST}.conf || return 1
+
+    ln -s /etc/nginx/sites-available/selfsteal.conf /etc/nginx/sites-enabled/ || return 1
+}
+run_and_check "configure nginx" conf_nginx
+
+systemctl enable --now nginx
+nginx -t
+systemctl restart nginx
+
+# certbot --nginx -d ${XRAY_HOST}
+
+# mkdir -p /var/www/decoy/.well-known/acme-challenge
+# chmod -R 755 /var/www/decoy
+
+certbot certonly --webroot -w "/var/www/${XRAY_HOST}/html" -d "${XRAY_HOST}" --agree-tos -m "$OWNER_EMAIL" --non-interactive
+
+# hooks after update sert
+conf_hooks() {
+    tee /etc/letsencrypt/renewal-hooks/deploy/10-restart-nginx.sh >/dev/null <<'EOF'
+#!/bin/bash
+sleep 1
+systemctl restart nginx.service
+EOF
+    chmod 755 /etc/letsencrypt/renewal-hooks/deploy/10-restart-nginx.sh
+
+    tee /etc/letsencrypt/renewal-hooks/deploy/20-restart-xray.sh >/dev/null <<'EOF'
+#!/bin/bash
+sleep 1
+systemctl restart xray.service
+EOF
+    chmod 755 /etc/letsencrypt/renewal-hooks/deploy/20-restart-xray.sh
+}
+run_and_check "configure hooks for sertificates" conf_hooks
 
 
 # xray install
@@ -550,7 +659,6 @@ fi
 conf_json_xray() {
 
     XRAY_PORT="443"
-    DEST="${XRAY_HOST}:${XRAY_PORT}"
 
     # key generation
     keys="$(xray x25519)"
@@ -572,7 +680,6 @@ conf_json_xray() {
     --arg email "$XRAY_EMAIL" \
     --arg id    "$UUID" \
     --arg dflow "$DEFAULT_FLOW" \
-    --arg dest  "$DEST" \
     --arg sni   "$XRAY_HOST" \
     --arg pk    "$privateKey" \
     --arg sid   "$shortId" '
@@ -585,8 +692,7 @@ conf_json_xray() {
             # 1) Обновляем realitySettings ТОЛЬКО для этого tag (и если это reality)
             (if (.streamSettings.security?=="reality" and (.streamSettings.realitySettings?!=null)) then
             .streamSettings.realitySettings |= (
-                .dest=$dest
-                | .serverNames=[$sni]
+                .serverNames=[$sni]
                 | .privateKey=$pk
                 | .shortIds=[$sid]
             )
@@ -785,22 +891,27 @@ USERSHOW_SCRIPT_SRC="script/usershow.sh"
 USERSHOW_SCRIPT_DEST="/usr/local/bin/service/usershow.sh"
 SYS_INFO_SCRIPT_SRC="script/system_info.sh"
 SYS_INFO_SCRIPT_DEST="/usr/local/bin/service/system_info.sh"
+RESTORE_BACKUP_SCRIPT_SRC="script/restore_backup.sh"
+RESTORE_BACKUP_SCRIPT_DEST="/usr/local/bin/service/restore_backup.sh"
 
 # add link for maintance
 install_scr_service() {
-    try install -m 755 -o root -g root "$USERADD_SCRIPT_SRC" "$USERADD_SCRIPT_DEST"
-    try install -m 755 -o root -g root "$USERDEL_SCRIPT_SRC" "$USERDEL_SCRIPT_DEST"
-    try install -m 755 -o root -g root "$USEREXP_SCRIPT_SRC" "$USEREXP_SCRIPT_DEST"
-    try install -m 755 -o root -g root "$USERBLOCK_SCRIPT_SRC" "$USERBLOCK_SCRIPT_DEST"
-    try install -m 755 -o root -g root "$USERSHOW_SCRIPT_SRC" "$USERSHOW_SCRIPT_DEST"
-    try install -m 755 -o root -g root "$SYS_INFO_SCRIPT_SRC" "$SYS_INFO_SCRIPT_DEST"
-    try ln -sfn "$USERADD_SCRIPT_DEST" "$USER_HOME/xray_user_add"
-    try ln -sfn "$USERDEL_SCRIPT_DEST" "$USER_HOME/xray_user_del"
-    try ln -sfn "$USEREXP_SCRIPT_DEST" "$USER_HOME/xray_user_exp"
-    try ln -sfn "$USERBLOCK_SCRIPT_DEST" "$USER_HOME/xray_user_block"
-    try ln -sfn "$USERSHOW_SCRIPT_DEST" "$USER_HOME/xray_user_show"
+    install -m 755 -o root -g root "$USERADD_SCRIPT_SRC" "$USERADD_SCRIPT_DEST" || return 1
+    install -m 755 -o root -g root "$USERDEL_SCRIPT_SRC" "$USERDEL_SCRIPT_DEST" || return 1
+    install -m 755 -o root -g root "$USEREXP_SCRIPT_SRC" "$USEREXP_SCRIPT_DEST" || return 1
+    install -m 755 -o root -g root "$USERBLOCK_SCRIPT_SRC" "$USERBLOCK_SCRIPT_DEST" || return 1
+    install -m 755 -o root -g root "$USERSHOW_SCRIPT_SRC" "$USERSHOW_SCRIPT_DEST" || return 1
+    install -m 755 -o root -g root "$SYS_INFO_SCRIPT_SRC" "$SYS_INFO_SCRIPT_DEST" || return 1
+    install -m 755 -o root -g root "$RESTORE_BACKUP_SCRIPT_SRC" "$RESTORE_BACKUP_SCRIPT_DEST" || return 1
+    
+    ln -sfn "$USERADD_SCRIPT_DEST" "$USER_HOME/xray_user_add" || return 1
+    ln -sfn "$USERDEL_SCRIPT_DEST" "$USER_HOME/xray_user_del" || return 1
+    ln -sfn "$USEREXP_SCRIPT_DEST" "$USER_HOME/xray_user_exp" || return 1
+    ln -sfn "$USERBLOCK_SCRIPT_DEST" "$USER_HOME/xray_user_block" || return 1
+    ln -sfn "$USERSHOW_SCRIPT_DEST" "$USER_HOME/xray_user_show" || return 1
+    ln -sfn "$RESTORE_BACKUP_SCRIPT_DEST" "$USER_HOME/restore_backup" || return 1
 
-    try find "$USER_HOME" -type l -exec chown -h $SECOND_USER:$SECOND_USER {} +
+    find "$USER_HOME" -type l -exec chown -h $SECOND_USER:$SECOND_USER {} +  || return 1
 }
 run_and_check "install service script and create link in home directory" install_scr_service
 

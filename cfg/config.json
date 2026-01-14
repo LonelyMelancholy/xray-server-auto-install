@@ -34,7 +34,7 @@
         "network": "tcp",
         "security": "reality",
         "realitySettings": {
-          "dest": "",
+          "dest": "127.0.0.1:8443",
           "privateKey": "",
           "serverNames": [
 

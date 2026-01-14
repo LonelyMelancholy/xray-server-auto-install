@@ -234,8 +234,8 @@ print_all_table() {
     devices="${DEVICES_BY_USER[$u]:-0}"
     [[ "$devices" =~ ^[0-9]+$ ]] || devices=0
 
-    online="offline"
-    (( devices > 0 )) && online="online"
+    online="⚫ offline"
+    (( devices > 0 )) && online="🟢 online"
 
     status="${STATUS_BY_USER[$u]:-enable}"
     bytes="${TRAFFIC_BY_USER[$u]:-0}"
@@ -247,10 +247,10 @@ print_all_table() {
 
     days="${DAYS_LEFT_BY_USER[$u]:--}"
 
-    out+="${u} (${online})\t${devices}\t${status}\t${traffic}\t${days}"$'\n'
+    out+="🧑🏿‍💻${u} - (${online}) - 📱${devices} - 🔏${status} - 📊${traffic} - 🗓${days}"$'\n'
   done < <(printf '%s\n' "${!USER_SET[@]}" | LC_ALL=C sort)
 
-    printf '%b' "$out" | column -t -s $'\t'
+    printf '%s' "$out"
 
 }
 

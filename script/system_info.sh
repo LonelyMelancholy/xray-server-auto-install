@@ -82,13 +82,65 @@ network_stat() {
     NR>2 {rx+=$1; tx+=$2; n++}
     END {
       if (n>0) {
-        printf "Net load: receive - %.2f Mbit/s transmit - %.2f Mbit/s\n", (rx/n)*8/1000, (tx/n)*8/1000
+        printf "Net load: 🔽 receive - %.2f Mbit/s ⬆️ transmit - %.2f Mbit/s\n", (rx/n)*8/1000, (tx/n)*8/1000
       } else {
         print "Net load: no data"
       }
     }'
 }
 NET="$(network_stat)"
+
+ONLINE_USERS=0
+ACTIVE_DEVICES=0
+
+# Собираем devices по username (как у тебя: uid%%|*)
+declare -A DEVICES_BY_USER=()
+
+stats_json="$(xray api statsquery 2>/dev/null)"
+if [[ -z "$stats_json" ]]; then
+  # нет статистики - значит онлайн никого
+  ONLINE_USERS=0
+  ACTIVE_DEVICES=0
+else
+  mapfile -t USER_IDS < <(
+    jq -r '
+      (.stat // [])[]
+      | .name
+      | select(type=="string")
+      | select(startswith("user>>>"))
+      | (split("user>>>")[1] | split(">>>traffic>>>")[0])
+    ' <<<"$stats_json" 2>/dev/null | awk 'NF' | sort -u
+  )
+
+  for uid in "${USER_IDS[@]}"; do
+    username="${uid%%|*}"
+    [[ -z "$username" ]] && continue
+
+    online_json="$(xray api statsonline --email "$uid" 2>/dev/null || true)"
+    online_val="$(jq -r '.stat.value // 0' <<<"$online_json" 2>/dev/null || echo 0)"
+    [[ "$online_val" =~ ^[0-9]+$ ]] || online_val=0
+
+    if (( online_val > 0 )); then
+      DEVICES_BY_USER["$username"]=$(( ${DEVICES_BY_USER["$username"]:-0} + online_val ))
+    fi
+  done
+
+  # считаем итоговые переменные
+  ONLINE_USERS=0
+  ACTIVE_DEVICES=0
+  for u in "${!DEVICES_BY_USER[@]}"; do
+    d="${DEVICES_BY_USER[$u]:-0}"
+    if (( d > 0 )); then
+      ONLINE_USERS=$(( ONLINE_USERS + 1 ))
+      ACTIVE_DEVICES=$(( ACTIVE_DEVICES + d ))
+    fi
+  done
+fi
+
+IFACE="$(ip route | awk '/^default/ {print $5; exit}')"
+IP_4="$(ip -4 addr show dev "$IFACE" | awk '/inet / {print $2}' | cut -d/ -f1 | head -n1)"
+IP_6="$(ip -6 addr show dev "$IFACE" scope global | awk '/inet6 / {print $2}' | cut -d/ -f1 | head -n1)"
+[[ -z $IP_6 ]] && IP_6=none
 
 readonly RAW_M="$(cat "/var/log/xray/TR_DB_M")"
 readonly RAW_Y="$(cat "/var/log/xray/TR_DB_Y")"
@@ -124,14 +176,19 @@ readonly RAW_Y="$(cat "/var/log/xray/TR_DB_Y")"
         #annual traffic
 
 # --- Output ---
-echo "Hostname: ${HOSTNAME}"
-echo "Uptime: ${uptime_str}"
-echo "Load average (1/5/15m): ${load1} ${load5} ${load15}"
-echo "Mem total: ${total_mb} MB"
-echo "Mem free: ${free_mb} MB"
-echo "Mem buff+cache: ${bc_mb} MB"
-echo "Mem load: ${used_mb} MB (${used_pct}%)"
-echo "Host annual traffic: $TFAFFIC_Y"
-echo "Host monthly traffic: $TFAFFIC_M"
-echo "$NET"
+echo "🖥️ Hostname: ${HOSTNAME}"
+echo "🌐 IPv4 ${IP_4}"
+echo "🌐 IPv6 ${IP_6}"
+echo "⏱️ Uptime: ${uptime_str}"
+echo "🧑🏿‍💻 Online users ${ONLINE_USERS}"
+echo "📱 Online devices ${ACTIVE_DEVICES}"
+echo "📈 Load average (1/5/15m): ${load1} ${load5} ${load15}"
+echo "🧠 Mem total: ${total_mb} MB"
+echo "🆓 Mem free: ${free_mb} MB"
+echo "🗂️ Mem buff+cache: ${bc_mb} MB"
+echo "🧮 Mem load: ${used_mb} MB (${used_pct}%)"
+echo "📅 Host annual traffic: $TFAFFIC_Y"
+echo "🗓️ Host monthly traffic: $TFAFFIC_M"
+echo "📡 $NET"
+
 exit 0

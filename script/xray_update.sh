@@ -54,6 +54,20 @@ for ((attempt=1; attempt<=MAX_ATTEMPTS; attempt++)); do
   fi
 done
 
+# check secret file
+readonly ENV_FILE="/usr/local/etc/telegram/secrets.env"
+if [[ ! -f "$ENV_FILE" ]] || [[ "$(stat -L -c '%U:%a' "$ENV_FILE")" != "telegram-gateway:600" ]]; then
+    echo "❌ Error: env file '$ENV_FILE' not found or has wrong permissions, exit"
+    exit 1
+fi
+source "$ENV_FILE"
+
+# check token from secret file
+[[ -z "$BOT_TOKEN" ]] && { echo "❌ Error: Telegram bot token is missing in $ENV_FILE, exit"; exit 1; }
+
+# check group id from secret file
+[[ -z "$GROUP_ID" ]] && { echo "❌ Error: Telegram group ID is missing in '$ENV_FILE', exit"; exit 1; }
+
 # main variables
 readonly ASSET_DIR="/usr/local/share/xray"
 readonly XRAY_DIR="/usr/local/bin"
@@ -106,25 +120,11 @@ cleanup_old_backups_and_logs() {
     cleanup_old "$LOG_DIR"       "xray_update.*.log"  "$LOG_DIR/xray_update.${DATE}.log"    "xray update log backup"
 }
 
-# check secret file
-readonly ENV_FILE="/usr/local/etc/telegram/secrets.env"
-if [[ ! -f "$ENV_FILE" ]] || [[ "$(stat -L -c '%U:%a' "$ENV_FILE")" != "telegram-gateway:600" ]]; then
-    echo "❌ Error: env file '$ENV_FILE' not found or has wrong permissions, exit"
-    exit 1
-fi
-source "$ENV_FILE"
-
-# check token from secret file
-[[ -z "$BOT_TOKEN" ]] && { echo "❌ Error: Telegram bot token is missing in $ENV_FILE, exit"; exit 1; }
-
-# check id from secret file
-[[ -z "$CHAT_ID" ]] && { echo "❌ Error: Telegram chat ID is missing in $ENV_FILE, exit"; exit 1; }
-
 # pure telegram message function with checking the sending status
 _tg_m() {
     local response
     response="$(curl -fsS -m 10 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-        --data-urlencode "chat_id=${CHAT_ID}" \
+        --data-urlencode "chat_id=${GROUP_ID}" \
         --data-urlencode "parse_mode=HTML" \
         --data-urlencode "text=${MESSAGE}")" || return 1
     grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<< "$response" || return 1
