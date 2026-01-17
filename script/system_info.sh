@@ -30,18 +30,24 @@ for ((attempt=1; attempt<=MAX_ATTEMPTS; attempt++)); do
   fi
 done
 
-# Uptime (pretty) from /proc/uptime
+# system uptime
 read -r up _ < /proc/uptime
 up="${up%.*}"
-
 days=$((up / 86400))
 hrs=$(( (up % 86400) / 3600 ))
 mins=$(( (up % 3600) / 60 ))
 secs=$(( up % 60 ))
+uptime_str=$(printf "%dd:%02dh:%02dm:%02ds" "$days" "$hrs" "$mins" "$secs")
 
-uptime_str=""
-if (( days > 0 )); then uptime_str+="${days}d "; fi
-uptime_str+=$(printf "%02dh:%02dm:%02ds" "$hrs" "$mins" "$secs")
+# uptime xray
+start_epoch_xray="$(date -d "$(systemctl show -p ActiveEnterTimestamp --value xray.service)" +%s)"
+runtime_xray=$(( $(date +%s) - start_epoch_xray ))
+days_xray=$((runtime_xray/86400))
+hrs_xray=$((runtime_xray%86400/3600))
+mins_xray=$((runtime_xray%3600/60))
+secs_xray=$((runtime_xray%60))
+uptime_xray=$(printf "%dd:%02dh:%02dm:%02ds" "$days_xray" "$hrs_xray" "$mins_xray" "$secs_xray")
+
 
 # Load average
 read -r load1 load5 load15 _ < /proc/loadavg
@@ -173,13 +179,38 @@ readonly RAW_Y="$(cat "/var/log/xray/TR_DB_Y")"
         TFAFFIC_M="$(fmt "$SERVER_TOTAL_M")"
         TFAFFIC_Y="$(fmt "$SERVER_TOTAL_Y")"
 
-        #annual traffic
+systemctl is-active --quiet ssh.socket && SSH_STATUS="running" || SSH_STATUS="fail"
+systemctl is-active --quiet cron.service && CRON_STATUS="running" || CRON_STATUS="fail"
+systemctl is-active --quiet fail2ban.service && FAIL2BAN_STATUS="running" || FAIL2BAN_STATUS="fail"
+systemctl is-active --quiet nginx.service && NGINX_STATUS="running" || NGINX_STATUS="fail"
+systemctl is-active --quiet xray.service && XRAY_STATUS="running" || XRAY_STATUS="fail"
+
+# helper func for make status
+make_status() {
+    if [[  "$1" ==  "running" ]]; then
+        echo "☑️ ${2}: $1"
+    else
+        echo "❌ ${2}: $1"
+    fi
+}
+
+SSH_STATUS="$(make_status "$SSH_STATUS" "Status ssh")"
+CRON_STATUS="$(make_status "$CRON_STATUS" "Status cron")"
+FAIL2BAN_STATUS="$(make_status "$FAIL2BAN_STATUS" "Status fail2ban")"
+NGINX_STATUS="$(make_status "$NGINX_STATUS" "Status nginx")"
+XRAY_STATUS="$(make_status "$XRAY_STATUS" "Status xray")"
 
 # --- Output ---
 echo "🖥️ Hostname: ${HOSTNAME}"
 echo "🌐 IPv4 ${IP_4}"
 echo "🌐 IPv6 ${IP_6}"
-echo "⏱️ Uptime: ${uptime_str}"
+echo "⏱️ Uptime server: ${uptime_str}"
+echo "⏱️ Uptime xray: ${uptime_xray}"
+echo "${SSH_STATUS}"
+echo "${CRON_STATUS}"
+echo "${FAIL2BAN_STATUS}"
+echo "${NGINX_STATUS}"
+echo "${XRAY_STATUS}"
 echo "🧑🏿‍💻 Online users ${ONLINE_USERS}"
 echo "📱 Online devices ${ACTIVE_DEVICES}"
 echo "📈 Load average (1/5/15m): ${load1} ${load5} ${load15}"

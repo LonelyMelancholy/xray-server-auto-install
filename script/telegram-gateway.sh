@@ -46,8 +46,8 @@ MAIN_KB_JSON='{
             {"text":"🔄🌐 Xray restart","callback_data":"ASK_XRAY_RESTART"}
         ],
         [
-            {"text":"🔎🧑🏿‍💻 Show users links","callback_data":"SHOW_LINK"},
-            {"text":"🔎🧑🏿‍💻 Show users info","callback_data":"SHOW_ALL"}
+            {"text":"🔎🧑🏿‍💻 Show all users","callback_data":"SHOW_ALL"},
+            {"text":"🔎🧑🏿‍💻 Show user info","callback_data":"ASK_SHOW"}
         ],
         [
             {"text":"🔒🧑🏿‍💻 Block user","callback_data":"ASK_BLOCK"},
@@ -55,11 +55,12 @@ MAIN_KB_JSON='{
             
         ],
         [
-            {"text":"➕🧑🏿‍💻 Add new user","callback_data":"ASK_ADD"},
+            {"text":"➕🧑🏿‍💻 Add user","callback_data":"ASK_ADD"},
             {"text":"☠️🧑🏿‍💻 Delete user","callback_data":"ASK_DELETE"}
         ],
         [
-            {"text":"⌚🧑🏿‍💻 Add time expired user","callback_data":"ASK_EXP"}
+            {"text":"⌚🧑🏿‍💻 Change user time","callback_data":"ASK_EXP"},
+            {"text":"⌚🧑🏿‍💻 Reset user traffic","callback_data":"ASK_TR"}
         ]
     ]
 }'
@@ -247,17 +248,16 @@ handle_callback() {
             run_and_send_output "$chat_id" /usr/local/bin/service/xray_backup.sh "1"
             show_menu "$chat_id"
             ;;
-        SHOW_LINK)
-            STATE=""
-            run_and_send_output "$chat_id" /usr/local/bin/service/usershow.sh links
-            show_menu "$chat_id"
-            ;;
         SHOW_ALL)
             STATE=""
             run_and_send_output "$chat_id" /usr/local/bin/service/usershow.sh all
             show_menu "$chat_id"
             ;;
 
+        ASK_SHOW)
+            STATE="WAIT_SHOW"
+            prompt_one "$chat_id" "Show user info."
+        ;;
         ASK_SERVER_REBOOT)
             STATE="WAIT_REBOOT"
             prompt_reboot "$chat_id" "Server reboot."
@@ -284,7 +284,11 @@ handle_callback() {
             ;;
         ASK_EXP)
             STATE="WAIT_EXP"
-            prompt_two "$chat_id" "Adding time to user."
+            prompt_two "$chat_id" "Change user time."
+            ;;
+        ASK_TR)
+            STATE="WAIT_TR"
+            prompt_one "$chat_id" "Reset user traffic."
             ;;
         *)
             send_message "$chat_id" "Unknown button. Showing menu." "$MAIN_KB_JSON"
@@ -354,7 +358,7 @@ handle_message() {
     norm="${norm%"${norm##*[! ]}"}"
 
     case "$STATE" in
-        WAIT_BLOCK|WAIT_UNBLOCK|WAIT_DELETE)
+        WAIT_BLOCK|WAIT_UNBLOCK|WAIT_DELETE|WAIT_TR)
             local username action
             username="$norm"
 
@@ -362,6 +366,8 @@ handle_message() {
             WAIT_BLOCK)   action="Blocking user." ;;
             WAIT_UNBLOCK) action="Unblocking user." ;;
             WAIT_DELETE)  action="Deleting user." ;;
+            WAIT_SHOW)  action="Show user info." ;;
+            WAIT_TR)  action="Reset user traffic." ;;
         esac
 
         if ! valid_arg "$username"; then
@@ -383,6 +389,16 @@ handle_message() {
             WAIT_DELETE)
                 STATE=""
                 run_and_send_output "$chat_id" /usr/local/bin/service/userdel.sh "$username"
+                show_menu "$chat_id"
+                ;;
+            WAIT_SHOW)
+                STATE=""
+                run_and_send_output "$chat_id" /usr/local/bin/service/userinfo.sh "$username"
+                show_menu "$chat_id"
+                ;;
+            WAIT_TR)
+                STATE=""
+                run_and_send_output "$chat_id" /usr/local/bin/service/traffic_unblock.sh "$username"
                 show_menu "$chat_id"
                 ;;
         esac
@@ -450,7 +466,7 @@ handle_message() {
                 ;;
             WAIT_EXP)
                 STATE=""
-                run_and_send_output "$chat_id" /usr/local/bin/service/userexp.sh "$a" "$b"
+                run_and_send_output "$chat_id" /usr/local/bin/service/time_unblock.sh "$a" "$b"
                 show_menu "$chat_id"
                 ;;
             esac

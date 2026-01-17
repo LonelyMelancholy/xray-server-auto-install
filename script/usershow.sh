@@ -1,10 +1,5 @@
 #!/bin/bash
 # script for show users from xray config and URI_DB
-#
-# Options:
-#   links - print URI_DB (unchanged)
-#   all   - print table:
-#           username (online/offline), number of device, (blocked/expired/enable), traffic, number days left
 
 # export path just in case
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -45,7 +40,8 @@ readonly TR_DB_M="/var/log/xray/TR_DB_M"
 
 # tags used for status detection
 readonly MANUAL_BLOCK_TAG="manual-block-users"
-readonly AUTO_BLOCK_TAG="autoblock-expired-users"
+readonly AUTO_BLOCK_EXPIRED_TAG="autoblock-expired-users"
+readonly AUTO_BLOCK_TRAFFIC_TAG="autoblock-traffic-users"
 
 if [[ ! -r "$URI_PATH" ]]; then
     echo "❌ Error: check $URI_PATH it's missing or you do not have read permissions, exit"
@@ -57,6 +53,10 @@ if [[ ! -r "$XRAY_CONFIG" ]]; then
     exit 1
 fi
 
+if [[ ! -r "$TR_DB_M" ]]; then
+    echo "❌ Error: check $TR_DB_M it's missing or you do not have read permissions, exit"
+    exit 1
+fi
 # global (script-wide) storage for the "all" option
 declare -A USER_SET=()
 declare -A DAYS_LEFT_BY_USER=()
@@ -193,9 +193,7 @@ collect_traffic() {
     [[ -z "$uid" ]] && continue
     username="${uid%%|*}"
     [[ -z "$username" ]] && continue
-    add_user "$username"
-    set_days_left_from_record "$uid"
-
+    [[ -n "${USER_SET[$username]:-}" ]] || continue
     [[ "$bytes" =~ ^-?[0-9]+$ ]] || bytes=0
     TRAFFIC_BY_USER["$username"]=$(( ${TRAFFIC_BY_USER["$username"]:-0} + bytes ))
   done <<<"$lines"
@@ -213,7 +211,8 @@ print_all_table() {
 
   collect_inbound_users
   collect_blocked_users "$MANUAL_BLOCK_TAG" "blocked"
-  collect_blocked_users "$AUTO_BLOCK_TAG" "expired"
+  collect_blocked_users "$AUTO_BLOCK_EXPIRED_TAG" "expired ban"
+  collect_blocked_users "$AUTO_BLOCK_TRAFFIC_TAG" "traffic ban"
   collect_online_devices
   collect_traffic
 
@@ -225,7 +224,7 @@ print_all_table() {
 
   # build output as TSV (then pretty-print with column if available)
   local out
-  out+=$'user (online/offline)\tdevices\tstatus\ttraffic\tdays_left\n'
+  out+=$'[user]-[online/offline]-[devices]-[status]-[traffic]-[days_left]\n'
 
   while IFS= read -r u; do
     [[ -z "$u" ]] && continue
@@ -247,7 +246,7 @@ print_all_table() {
 
     days="${DAYS_LEFT_BY_USER[$u]:--}"
 
-    out+="🧑🏿‍💻${u} - (${online}) - 📱${devices} - 🔏${status} - 📊${traffic} - 🗓${days}"$'\n'
+    out+="[🧑🏿‍💻${u}]-[${online}]-[📱${devices}]-[🔏${status}]-[📊${traffic}]-[🗓${days}]"$'\n'
   done < <(printf '%s\n' "${!USER_SET[@]}" | LC_ALL=C sort)
 
     printf '%s' "$out"

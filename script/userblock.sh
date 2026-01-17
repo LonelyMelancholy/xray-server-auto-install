@@ -131,7 +131,7 @@ case "$ACTION" in
 
             # set trap for tmp removing
             trap 'rm -f "$TMP_XRAY_CONFIG"' EXIT
-        
+
             jq --arg tag "$INBOUND_TAG" --arg bot "$BLOCK_OUTBOUND_TAG" --arg rt "$RULE_TAG" \
             --argjson emails "$(printf '%s\n' "${EMAILS[@]}" | jq -R . | jq -s .)" '
             '"$jq_common_preamble"' |

@@ -11,7 +11,7 @@ export PATH
 [[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the root user, exit"; exit 1; }
 
 # wait for all service started
-sleep 120
+sleep 200
 
 # enable logging, the directory should already be created, but let's check just in case
 readonly DATE_LOG="$(date +"%Y-%m-%d")"
@@ -116,6 +116,7 @@ SYSTEM_STATUS="$(systemctl is-system-running)"
 systemctl is-active --quiet ssh.socket && SSH_STATUS="running" || SSH_STATUS="fail"
 systemctl is-active --quiet cron.service && CRON_STATUS="running" || CRON_STATUS="fail"
 systemctl is-active --quiet fail2ban.service && FAIL2BAN_STATUS="running" || FAIL2BAN_STATUS="fail"
+systemctl is-active --quiet nginx.service && NGINX_STATUS="running" || NGINX_STATUS="fail"
 systemctl is-active --quiet xray.service && XRAY_STATUS="running" || XRAY_STATUS="fail"
 
 # start collecting message
@@ -123,10 +124,10 @@ readonly HOSTNAME="$(hostname)"
 readonly DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
 
 # collecting title
-if [[  "$SSH_STATUS" ==  "running" && "$CRON_STATUS" == "running" && "$FAIL2BAN_STATUS" == "running" && "$XRAY_STATUS" == "running" && "$SYSTEM_STATUS" == "running" ]]; then
+if [[  "$SSH_STATUS" ==  "running" && "$CRON_STATUS" == "running" && "$FAIL2BAN_STATUS" == "running" && "$NGINX_STATUS" == "running" && "$XRAY_STATUS" == "running" && "$SYSTEM_STATUS" == "running" ]]; then
 TITLE="✅ <b>Server up, all services are running</b>"
 SYSTEM_STATUS="☑️ <b>Init system:</b> $SYSTEM_STATUS"
-elif [[ "$SSH_STATUS" ==  "running" && "$CRON_STATUS" == "running" && "$FAIL2BAN_STATUS" == "running" && "$XRAY_STATUS" == "running" ]]; then
+elif [[ "$SSH_STATUS" ==  "running" && "$CRON_STATUS" == "running" && "$FAIL2BAN_STATUS" == "running" && "$NGINX_STATUS" == "running" && "$XRAY_STATUS" == "running" ]]; then
 TITLE="⚠️ <b>Server up, non-critical service down</b>"
 SYSTEM_STATUS="⚠️ <b>Init system:</b> $SYSTEM_STATUS"
 else 
@@ -145,6 +146,7 @@ make_status() {
 SSH_STATUS="$(make_status "$SSH_STATUS" "Status ssh")"
 CRON_STATUS="$(make_status "$CRON_STATUS" "Status cron")"
 FAIL2BAN_STATUS="$(make_status "$FAIL2BAN_STATUS" "Status fail2ban")"
+NGINX_STATUS="$(make_status "$NGINX_STATUS" "Status nginx")"
 XRAY_STATUS="$(make_status "$XRAY_STATUS" "Status xray")"
 
 # collecting message body
@@ -156,6 +158,7 @@ $SYSTEM_STATUS
 $SSH_STATUS
 $CRON_STATUS
 $FAIL2BAN_STATUS
+$NGINX_STATUS
 $XRAY_STATUS
 💾 <b>Notify log:</b> $NOTIFY_LOG"
 

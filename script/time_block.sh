@@ -1,7 +1,7 @@
 #!/bin/bash
-# script for autoblock xray expired user via cron every day 0:01 night time
+# script for time block xray expired user via cron every day 0:01 night time
 # all errors are logged, except the first three, for debugging, add a redirect to the debug log
-# 1 0 * * * telegram-gateway /usr/local/bin/service/autoblock.sh &> /dev/null
+# 1 0 * * * telegram-gateway /usr/local/bin/service/time_block.sh &> /dev/null
 # exit codes work to tell Cron about success
 
 # export path just in case
@@ -14,22 +14,22 @@ export PATH
 # enable logging, the directory should already be created, but let's check just in case
 readonly DATE_LOG="$(date +"%Y-%m-%d")"
 readonly LOG_DIR="/var/log/service"
-readonly AUTOBLOCK_LOG="${LOG_DIR}/autoblock.${DATE_LOG}.log"
-exec &>> "$AUTOBLOCK_LOG" || { echo "❌ Error: cannot write to log '$AUTOBLOCK_LOG', exit"; exit 1; }
+readonly TIME_BLOCK_LOG="${LOG_DIR}/time_block.${DATE_LOG}.log"
+exec &>> "$TIME_BLOCK_LOG" || { echo "❌ Error: cannot write to log '$TIME_BLOCK_LOG', exit"; exit 1; }
 
 # start logging message
 readonly DATE_START="$(date "+%Y-%m-%d %H:%M:%S")"
-echo "########## autoblock started - $DATE_START ##########"
+echo "########## time block started - $DATE_START ##########"
 
 # exit logging message function
 RC="1"
 on_exit() {
     if [[ "$RC" -eq "0" ]]; then
         local date_end="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## autoblock ended - $date_end ##########"
+        echo "########## time block ended - $date_end ##########"
     else
         local date_fail="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## autoblock failed - $date_fail ##########"
+        echo "########## time block failed - $date_fail ##########"
     fi
 }
 
@@ -266,9 +266,9 @@ fi
 readonly DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
 
 if [[ $XR_ST == 0 ]]; then
-    TITLE="⚠️<b> Scheduled autoblock</b>"
+    TITLE="⚠️<b> Scheduled time block</b>"
 else
-    TITLE="❌<b> Scheduled autoblock</b>"
+    TITLE="❌<b> Scheduled time block</b>"
 fi
 
 MESSAGE="$TITLE
@@ -279,7 +279,7 @@ $XRAY_STATUS"
 
 if (( ${#expired_emails[@]} == 0 )); then
     MESSAGE+=$'\n'"⚠️ <b>Expired users:</b> not found"
-    MESSAGE+=$'\n'"⚠️ <b>Action:</b> cleanup old autoblock rule"
+    MESSAGE+=$'\n'"⚠️ <b>Action:</b> cleanup old time block rule"
 else
     MESSAGE+=$'\n'"❌ <b>Expired users blocked:</b>"
     while IFS= read -r EMAIL; do
@@ -289,7 +289,7 @@ else
     done < <(printf '%s\n' "${expired_emails[@]}")
 fi
 
-MESSAGE+=$'\n'"💾 <b>Autoblock log:</b> $AUTOBLOCK_LOG"
+MESSAGE+=$'\n'"💾 <b>Time block log:</b> $TIME_BLOCK_LOG"
 
 # logging message
 echo "########## collected message - $DATE_MESSAGE ##########"

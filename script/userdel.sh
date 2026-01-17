@@ -73,10 +73,10 @@ readonly COUNT_FILTER='[
   | select((.email | split("|")[0]) == $t)
 ] | length'
 
-# count blocked records in routing rules (only these 2 ruleTag)
+# count blocked records in routing rules (only these 3 ruleTag)
 readonly BLOCK_COUNT_FILTER='[
   .routing.rules[]?
-  | select(.ruleTag == "autoblock-expired-users" or .ruleTag == "manual-block-users")
+  | select(.ruleTag == "autoblock-expired-users" or .ruleTag == "manual-block-users" or .ruleTag == "autoblock-traffic-users")
   | .user[]?
   | select((split("|")[0]) == $t)
 ] | length'
@@ -119,7 +119,7 @@ xray_userdel() {
         (if (.routing? and .routing.rules?) then
             .routing.rules |= (
             map(
-                if ((.ruleTag? == "autoblock-expired-users") or (.ruleTag? == "manual-block-users"))
+                if ((.ruleTag? == "autoblock-expired-users") or (.ruleTag? == "manual-block-users") or (.ruleTag? == "autoblock-traffic-users"))
                     and (.user? and (.user|type)=="array") then
                 .user |= map(select((. | base) != $t))
                 else
@@ -129,7 +129,7 @@ xray_userdel() {
 
             # drop empty block rules
             | map(select(
-                if ((.ruleTag? == "autoblock-expired-users") or (.ruleTag? == "manual-block-users"))
+                if ((.ruleTag? == "autoblock-expired-users") or (.ruleTag? == "manual-block-users") or (.ruleTag? == "autoblock-traffic-users"))
                     and (.user? and (.user|type)=="array") then
                     (.user | length) > 0
                 else
@@ -168,9 +168,9 @@ run_and_check "restart xray service" systemctl restart xray.service
 echo "✅ Success: removed $REMOVED client(s) for '$USERNAME' from inbound tag '$INBOUND_TAG'"
 echo "✅ Success: Backup saved $BACKUP_PATH"
 if [[ "$BLOCK_REMOVED" -gt 0 ]]; then
-    echo "✅ Success: removed $BLOCK_REMOVED block record(s) for '$USERNAME' from routing rules (autoblock-expired-users/manual-block-users)"
+    echo "✅ Success: removed $BLOCK_REMOVED block record(s) for '$USERNAME' from routing rules (autoblock-expired-users/manual-block-users/autoblock-traffic-users)"
 else
-    echo "✅ Success: block record for '$USERNAME' from routing rules (autoblock-expired-users/manual-block-users) not found"
+    echo "✅ Success: block record for '$USERNAME' from routing rules (autoblock-expired-users/manual-block-users/autoblock-traffic-users) not found"
 fi
 
 # if user removed need to remove user from uri file

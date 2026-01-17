@@ -229,8 +229,8 @@ readonly VLESS_URI="vless://${UUID}@${SERVER_HOST}:${PORT}/?${QUERY}#${NAME_ENC}
 cp -a "$URI_PATH" "$URI_BAK"
 echo "✅ Success: Backup saved $URI_BAK"
 echo "✅ Success: name $USERNAME, added"
+echo "✅ Success: created: $CREATED, days: $DAYS, expiration: $EXP"
 tee -a "$URI_PATH" <<EOF
-name: $USERNAME, created: $CREATED, days: $DAYS, expiration: $EXP
 name: $USERNAME, vless link: $VLESS_URI
 
 EOF

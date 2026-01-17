@@ -10,6 +10,8 @@ else
     echo "✅ Success: you are root user, continued"
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
 # check another instanse of the script is not running
 readonly LOCK_FILE="/run/lock/vpn_install.lock"
@@ -304,15 +306,77 @@ run_and_check "server boot notification script installation" install_scr_boot
 
 
 # nginx+sert install (test, need re write)
-
 install_with_retry "install nginx and certbot package" apt-get install -y nginx certbot python3-certbot-nginx 
 
 conf_nginx() {
     mkdir -p "/var/www/${XRAY_HOST}/html" || return 1
-    install -m 644 -g root -o root "cfg/403.html" "/var/www/${XRAY_HOST}/html/403.html" || return 1
-    install -m 644 -g root -o root "cfg/301.html" "/var/www/${XRAY_HOST}/html/301.html" || return 1
 
-    tee /etc/nginx/sites-available/${XRAY_HOST}.conf >/dev/null <<'EOF'
+    install -m 644 -g root -o root "cfg/301.html" "/var/www/${XRAY_HOST}/html/301.html" || return 1
+    install -m 644 -g root -o root "cfg/400.html" "/var/www/${XRAY_HOST}/html/400.html" || return 1
+    install -m 644 -g root -o root "cfg/403.html" "/var/www/${XRAY_HOST}/html/403.html" || return 1
+
+    IFACE="$(ip route | awk '/^default/ {print $5; exit}')"
+    IP_4="$(ip -4 addr show dev "$IFACE" | awk '/inet / {print $2}' | cut -d/ -f1 | head -n1)"
+
+    tee /etc/nginx/sites-available/${XRAY_HOST}.conf >/dev/null <<'EOF' || return 1
+server {
+    server_name __HOST__ __IP_4__;
+
+    root /var/www/__HOST__/html;
+
+    access_log /var/log/nginx/__HOST__.80.access.log;
+    error_log  /var/log/nginx/__HOST__.80.error.log;
+
+    error_page 301 =301 /301.html;
+
+    location ^~ /.well-known/acme-challenge/ {
+        try_files $uri @301;
+        default_type "text/plain";
+        allow all;
+    }
+
+    location / {
+        return 301 https://__HOST__$request_uri;
+    }
+
+    location @301 {
+        return 301 https://__HOST__$request_uri;
+    }
+
+    location = /301.html {
+        internal;
+    }
+
+    listen 80;
+}
+
+EOF
+
+    # delete default site
+    rm -r /etc/nginx/sites-enabled/default || return 1
+
+    # change marker XRAY_HOST, IP_4 to variable value
+    sed -i "s/__HOST__/${XRAY_HOST}/g" /etc/nginx/sites-available/${XRAY_HOST}.conf || return 1
+    sed -i "s/__IP_4__/${IP_4}/g" /etc/nginx/sites-available/${XRAY_HOST}.conf || return 1
+
+    # turn on site
+    ln -s /etc/nginx/sites-available/${XRAY_HOST}.conf /etc/nginx/sites-enabled/ || return 1
+
+    # turn on nginx
+    nginx -t  || return 1
+    systemctl enable --now nginx  || return 1
+    systemctl restart nginx  || return 1
+
+}
+run_and_check "configure nginx" conf_nginx
+
+conf_cert() {
+    certbot certonly --webroot -w "/var/www/${XRAY_HOST}/html" -d "${XRAY_HOST}" --agree-tos -m "$OWNER_EMAIL" --non-interactive || return 1
+}
+run_and_check "configure sertificates" conf_cert
+
+conf_nginx_sert() {
+        tee -a /etc/nginx/sites-available/${XRAY_HOST}.conf >/dev/null <<'EOF' || return 1
 server {
     server_name __HOST__;
 
@@ -322,6 +386,7 @@ server {
     error_log  /var/log/nginx/__HOST__.8443.error.log;
 
     error_page 403 =403 /403.html;
+    error_page 400 =400 /400.html;
 
     location / {
         return 403;
@@ -330,83 +395,42 @@ server {
     location = /403.html {
         internal;
     }
+    location = /400.html {
+        internal;
+    }
 
-    listen [::1]:8443 ssl ipv6only=on;
-    listen 127.0.0.1:8443 ssl;
+    set_real_ip_from 127.0.0.1;
+    real_ip_header proxy_protocol;
 
+    listen 127.0.0.1:8443 ssl http2 proxy_protocol;
+
+    ssl_protocols TLSv1.3;
     ssl_certificate /etc/letsencrypt/live/__HOST__/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/__HOST__/privkey.pem;
-    include /etc/letsencrypt/options-ssl-nginx.conf;
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
-}
-
-server {
-    server_name __HOST__;
-
-    root /var/www/__HOST__/html;
-
-    access_log /var/log/nginx/__HOST__.80.access.log;
-    error_log  /var/log/nginx/__HOST__.80.error.log;
-
-    error_page 301 =301 /301.html;
-    error_page 403 =403 /403.html;
-
-    location ^~ /.well-known/acme-challenge/ {
-        try_files $uri =403;
-        default_type "text/plain";
-        allow all;
-    }
-
-    location / {
-        return 301 https://$host$request_uri;
-    }
-
-    location = /301.html {
-        internal;
-    }
-
-    location = /403.html {
-        internal;
-    }
-
-    listen 80;
-    listen [::]:80;
 }
 EOF
 
-    # заменяем маркер на значение XRAY_HOST
     sed -i "s/__HOST__/${XRAY_HOST}/g" /etc/nginx/sites-available/${XRAY_HOST}.conf || return 1
-
-    ln -s /etc/nginx/sites-available/selfsteal.conf /etc/nginx/sites-enabled/ || return 1
+    
+    nginx -t  || return 1
+    systemctl restart nginx  || return 1
 }
-run_and_check "configure nginx" conf_nginx
-
-systemctl enable --now nginx
-nginx -t
-systemctl restart nginx
-
-# certbot --nginx -d ${XRAY_HOST}
-
-# mkdir -p /var/www/decoy/.well-known/acme-challenge
-# chmod -R 755 /var/www/decoy
-
-certbot certonly --webroot -w "/var/www/${XRAY_HOST}/html" -d "${XRAY_HOST}" --agree-tos -m "$OWNER_EMAIL" --non-interactive
+run_and_check "configure nginx work with sertificates" conf_nginx_sert
 
 # hooks after update sert
 conf_hooks() {
-    tee /etc/letsencrypt/renewal-hooks/deploy/10-restart-nginx.sh >/dev/null <<'EOF'
+    tee /etc/letsencrypt/renewal-hooks/deploy/10-restart-nginx.sh >/dev/null <<'EOF' || return 1
 #!/bin/bash
-sleep 1
 systemctl restart nginx.service
 EOF
-    chmod 755 /etc/letsencrypt/renewal-hooks/deploy/10-restart-nginx.sh
+    chmod 755 /etc/letsencrypt/renewal-hooks/deploy/10-restart-nginx.sh || return 1
 
-    tee /etc/letsencrypt/renewal-hooks/deploy/20-restart-xray.sh >/dev/null <<'EOF'
+    tee /etc/letsencrypt/renewal-hooks/deploy/20-restart-xray.sh >/dev/null <<'EOF' || return 1
 #!/bin/bash
 sleep 1
 systemctl restart xray.service
 EOF
-    chmod 755 /etc/letsencrypt/renewal-hooks/deploy/20-restart-xray.sh
+    chmod 755 /etc/letsencrypt/renewal-hooks/deploy/20-restart-xray.sh || return 1
 }
 run_and_check "configure hooks for sertificates" conf_hooks
 
@@ -420,14 +444,14 @@ else
 fi
 
 install_xray_dir() {
-    try mkdir -p /usr/local/share/xray
-    try chmod 755 /usr/local/share/xray
-    try mkdir -p /usr/local/etc/xray
-    try chmod 770 /usr/local/etc/xray
-    try chown xray:telegram-gateway /usr/local/etc/xray
-    try mkdir -p /var/log/xray
-    try chmod 770 /var/log/xray
-    try chown xray:telegram-gateway /var/log/xray
+    mkdir -p /usr/local/share/xray || return 1
+    chmod 755 /usr/local/share/xray || return 1
+    mkdir -p /usr/local/etc/xray || return 1
+    chmod 770 /usr/local/etc/xray || return 1
+    chown xray:telegram-gateway /usr/local/etc/xray || return 1
+    mkdir -p /var/log/xray || return 1
+    chmod 770 /var/log/xray || return 1
+    chown xray:telegram-gateway /var/log/xray || return 1
     TMP_DIR="$(mktemp -d)"
     readonly TMP_DIR
     try touch "/var/log/xray/TR_DB_M"
@@ -801,7 +825,6 @@ touch "$URI_PATH"
 chmod 600 "$URI_PATH"
 chown telegram-gateway:telegram-gateway "$URI_PATH"
 tee "$URI_PATH" > /dev/null <<EOF
-name: $XRAY_NAME, created: $CREATED, days: $XRAY_DAYS, expiration: $EXP
 name: $XRAY_NAME, vless link: $VLESS_URI
 
 EOF
@@ -836,6 +859,21 @@ EOF
 run_and_check "xray statistic script installation" install_scr_xray_stat
 
 
+# user traffic ban
+TRAFFIC_BLOCK_SCRIPT_SRC="script/traffic_block.sh"
+TRAFFIC_BLOCK_SCRIPT_DEST="/usr/local/bin/service/traffic_block.sh"
+
+install_scr_traffic_block() {
+    install -m 755 -o root -g root "$TRAFFIC_BLOCK_SCRIPT_SRC" "$TRAFFIC_BLOCK_SCRIPT_DEST" || return 1
+    tee /etc/cron.d/traffic_block > /dev/null <<EOF || return 1
+SHELL=/bin/bash
+10 * * * * telegram-gateway "$TRAFFIC_BLOCK_SCRIPT_DEST" &> /dev/null
+EOF
+    chmod 644 "/etc/cron.d/traffic_block" || return 1
+}
+run_and_check "traffic block script installation" install_scr_traffic_block
+
+
 # user, server traffic + user exp date Telegram bot notify
 USER_NOTIFY_SCRIPT_SOURCE="script/user_notify.sh"
 USER_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/user_notify.sh"
@@ -850,18 +888,18 @@ EOF
 run_and_check "user daily report script installation" install_scr_user
 
 
-# autoblock exp users + Telegram bot notify
-AUTOBLOCK_SCRIPT_SOURCE="script/autoblock.sh"
-AUTOBLOCK_SCRIPT_DEST="/usr/local/bin/service/autoblock.sh"
-install_scr_autoblock() {
-    try install -m 755 -o root -g root "$AUTOBLOCK_SCRIPT_SOURCE" "$AUTOBLOCK_SCRIPT_DEST"
-    try tee /etc/cron.d/autoblock > /dev/null <<EOF
+# time block exp users + Telegram bot notify
+TIME_BLOCK_SCRIPT_SOURCE="script/time_block.sh"
+TIME_BLOCK_SCRIPT_DEST="/usr/local/bin/service/time_block.sh"
+install_scr_time_block() {
+    install -m 755 -o root -g root "$TIME_BLOCK_SCRIPT_SOURCE" "$TIME_BLOCK_SCRIPT_DEST" || return 1
+    tee /etc/cron.d/time_block > /dev/null <<EOF || return 1
 SHELL=/bin/bash
-1 0 * * * telegram-gateway "$AUTOBLOCK_SCRIPT_DEST" &> /dev/null
+1 0 * * * telegram-gateway "$TIME_BLOCK_SCRIPT_DEST" &> /dev/null
 EOF
-    try chmod 644 "/etc/cron.d/autoblock"
+    chmod 644 "/etc/cron.d/time_block" || return 1
 }
-run_and_check "autoblock exp user script installation" install_scr_autoblock
+run_and_check "time block exp user script installation" install_scr_time_block
 
 
 # xray backup Telegram bot notify
@@ -883,8 +921,8 @@ USERADD_SCRIPT_SRC="script/useradd.sh"
 USERADD_SCRIPT_DEST="/usr/local/bin/service/useradd.sh"
 USERDEL_SCRIPT_SRC="script/userdel.sh"
 USERDEL_SCRIPT_DEST="/usr/local/bin/service/userdel.sh"
-USEREXP_SCRIPT_SRC="script/userexp.sh"
-USEREXP_SCRIPT_DEST="/usr/local/bin/service/userexp.sh"
+TIME_UNBLOCK_SCRIPT_SRC="script/time_unblock.sh"
+TIME_UNBLOCK_SCRIPT_DEST="/usr/local/bin/service/time_unblock.sh"
 USERBLOCK_SCRIPT_SRC="script/userblock.sh"
 USERBLOCK_SCRIPT_DEST="/usr/local/bin/service/userblock.sh"
 USERSHOW_SCRIPT_SRC="script/usershow.sh"
@@ -893,23 +931,32 @@ SYS_INFO_SCRIPT_SRC="script/system_info.sh"
 SYS_INFO_SCRIPT_DEST="/usr/local/bin/service/system_info.sh"
 RESTORE_BACKUP_SCRIPT_SRC="script/restore_backup.sh"
 RESTORE_BACKUP_SCRIPT_DEST="/usr/local/bin/service/restore_backup.sh"
+USERINFO_SCRIPT_SRC="script/userinfo.sh"
+USERINFO_SCRIPT_DEST="/usr/local/bin/service/userinfo.sh"
+TRAFFIC_UNBLOCK_SCRIPT_SRC="script/traffic_unblock.sh"
+TRAFFIC_UNBLOCK_SCRIPT_DEST="/usr/local/bin/service/traffic_unblock.sh"
 
 # add link for maintance
 install_scr_service() {
     install -m 755 -o root -g root "$USERADD_SCRIPT_SRC" "$USERADD_SCRIPT_DEST" || return 1
     install -m 755 -o root -g root "$USERDEL_SCRIPT_SRC" "$USERDEL_SCRIPT_DEST" || return 1
-    install -m 755 -o root -g root "$USEREXP_SCRIPT_SRC" "$USEREXP_SCRIPT_DEST" || return 1
+    install -m 755 -o root -g root "$TIME_UNBLOCK_SCRIPT_SRC" "$TIME_UNBLOCK_SCRIPT_DEST" || return 1
     install -m 755 -o root -g root "$USERBLOCK_SCRIPT_SRC" "$USERBLOCK_SCRIPT_DEST" || return 1
     install -m 755 -o root -g root "$USERSHOW_SCRIPT_SRC" "$USERSHOW_SCRIPT_DEST" || return 1
     install -m 755 -o root -g root "$SYS_INFO_SCRIPT_SRC" "$SYS_INFO_SCRIPT_DEST" || return 1
     install -m 755 -o root -g root "$RESTORE_BACKUP_SCRIPT_SRC" "$RESTORE_BACKUP_SCRIPT_DEST" || return 1
-    
+    install -m 755 -o root -g root "$USERINFO_SCRIPT_SRC" "$USERINFO_SCRIPT_DEST" || return 1
+    install -m 755 -o root -g root "$TRAFFIC_UNBLOCK_SCRIPT_SRC" "$TRAFFIC_UNBLOCK_SCRIPT_DEST" || return 1
+
     ln -sfn "$USERADD_SCRIPT_DEST" "$USER_HOME/xray_user_add" || return 1
     ln -sfn "$USERDEL_SCRIPT_DEST" "$USER_HOME/xray_user_del" || return 1
-    ln -sfn "$USEREXP_SCRIPT_DEST" "$USER_HOME/xray_user_exp" || return 1
+    ln -sfn "$TIME_UNBLOCK_SCRIPT_DEST" "$USER_HOME/time_unblock" || return 1
     ln -sfn "$USERBLOCK_SCRIPT_DEST" "$USER_HOME/xray_user_block" || return 1
     ln -sfn "$USERSHOW_SCRIPT_DEST" "$USER_HOME/xray_user_show" || return 1
+    ln -sfn "$SYS_INFO_SCRIPT_DEST" "$USER_HOME/system_info" || return 1
     ln -sfn "$RESTORE_BACKUP_SCRIPT_DEST" "$USER_HOME/restore_backup" || return 1
+    ln -sfn "$USERINFO_SCRIPT_DEST" "$USER_HOME/user_info" || return 1
+    ln -sfn "$TRAFFIC_UNBLOCK_SCRIPT_DEST" "$USER_HOME/traffic_unblock" || return 1
 
     find "$USER_HOME" -type l -exec chown -h $SECOND_USER:$SECOND_USER {} +  || return 1
 }

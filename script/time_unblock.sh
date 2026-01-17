@@ -127,6 +127,34 @@ if [[ $client_count -gt 1 ]]; then
   exit 1
 fi
 
+# we have rule with manual block?
+readonly MANUAL_BLOCK_TAG="manual-block-users"
+rule_manual_exists="$(
+  jq -r --arg ruleTag "$MANUAL_BLOCK_TAG" '
+    any(.routing.rules[]?; (.ruleTag? // "") == $ruleTag)
+  ' "$XRAY_CONFIG" 2>/dev/null || echo "false"
+)"
+
+# count how many time name blocked
+blocked_manualy_count=0
+if [[ "$rule_manual_exists" == "true" ]]; then
+  blocked_manualy_count="$(
+    jq -r --arg ruleTag "$MANUAL_BLOCK_TAG" --arg name "$USERNAME" '
+      [
+        .routing.rules[]? | select(.ruleTag == $ruleTag) |
+        ((.user // [])[]) |
+        select((split("|")[0]) == $name)
+      ] | length
+    ' "$XRAY_CONFIG"
+  )"
+fi
+
+# exit if have manual block for not changing unic name
+if [[ $blocked_manualy_count -gt 0 ]]; then
+  echo "❌ Error: '$USERNAME' blocked manualy, unblock user first, exit"
+  exit 1
+fi
+
 # main func for renew email and deleting from block rule
 unblock_and_add_time() {
     # make tmp file
@@ -211,7 +239,7 @@ echo "✅ Success: Backup saved $XRAY_BACKUP_PATH"
 
 update_uri_db() {
     # make tmp file
-    TMP_URI_FILE="$(mktemp --suffix=.json)"
+    TMP_URI_FILE="$(mktemp)"
 
     # set trap for deleting tmp files
     trap 'rm -f "$TMP_URI_FILE"' EXIT
@@ -229,13 +257,13 @@ update_uri_db() {
         next
         }
         {print}
-    ' "$URI_FILE" > "$TMP_URI_FILE" | return 1
+    ' "$URI_FILE" > "$TMP_URI_FILE" || return 1
 
     # backup
-    try cp -a "$URI_FILE" "$URI_BACKUP_PATH"
+    try cp -a "$URI_FILE" "$URI_BACKUP_PATH" || return 1
 
     # write from tmp to uri
-    cat "$TMP_URI_FILE" > "$URI_FILE" | return 1
+    cat "$TMP_URI_FILE" > "$URI_FILE" || return 1
 
 }
 
