@@ -6,12 +6,12 @@
   <meta name="color-scheme" content="dark" />
   <meta name="theme-color" content="#0b0b12" />
 
-  <title>403 Доступ ограничен</title>
-  <meta name="description" content="Доступ к сервису ограничен. Проверьте права доступа или обратитесь в поддержку." />
+  <title>400 Некорректный запрос</title>
+  <meta name="description" content="Сервер не смог обработать запрос: формат или параметры некорректны. Проверьте данные и повторите попытку." />
   <meta name="robots" content="noindex,nofollow,noarchive" />
 
-  <meta property="og:title" content="403 Доступ ограничен" />
-  <meta property="og:description" content="Доступ к сервису ограничен. Проверьте права доступа или обратитесь в поддержку." />
+  <meta property="og:title" content="400 Некорректный запрос" />
+  <meta property="og:description" content="Сервер не смог обработать запрос: формат или параметры некорректны. Проверьте данные и повторите попытку." />
   <meta property="og:type" content="website" />
   <meta property="og:locale" content="ru_RU" />
 
@@ -75,9 +75,7 @@
       transition: transform .18s ease;
       z-index: 50;
     }
-    .skip-link:focus{
-      transform: translateY(0);
-    }
+    .skip-link:focus{ transform: translateY(0); }
 
     .wrap{
       min-height: 100%;
@@ -114,10 +112,6 @@
       filter: blur(0.2px);
       opacity:.65;
     }
-    @keyframes drift{
-      0%{ transform: translateY(-30%) rotate(10deg); }
-      100%{ transform: translateY(140%) rotate(10deg); }
-    }
 
     .shell{
       width: min(1080px, 100%);
@@ -126,7 +120,6 @@
       gap: 18px;
       align-items: stretch;
     }
-
     @media (max-width: 940px){
       .shell{ grid-template-columns: 1fr; }
     }
@@ -178,18 +171,16 @@
       box-shadow: 0 10px 28px rgba(0,0,0,.35);
     }
 
-    .brand-title{
-      line-height: 1.1;
-    }
+    .brand-title{ line-height: 1.1; }
     .brand-title strong{ font-weight: 650; letter-spacing: .2px; }
     .brand-title small{ display:block; color: var(--muted); font-size: 12px; margin-top: 3px; }
 
     .meta{
       display:flex;
       gap: 10px;
-      flex-wrap: wrap;
-      align-items:center;
-      justify-content:flex-end;
+      flex-wrap: nowrap;
+      align-items: center;
+      justify-content: flex-end;
     }
 
     .pill{
@@ -217,7 +208,6 @@
       align-items:center;
       margin-top: 6px;
     }
-
     @media (max-width: 940px){
       .hero{ grid-template-columns: 1fr; }
     }
@@ -255,6 +245,7 @@
       transition: transform .12s ease, border-color .12s ease, background .12s ease;
       cursor:pointer;
       user-select:none;
+      font: inherit;
     }
     .btn:hover{
       transform: translateY(-1px);
@@ -267,10 +258,7 @@
       background: linear-gradient(135deg, rgba(255,86,188,.22), rgba(180,29,255,.16));
     }
 
-    .btn .icon{
-      width: 18px; height: 18px;
-      opacity: .95;
-    }
+    .btn .icon{ width: 18px; height: 18px; opacity: .95; }
 
     .note{
       margin-top: 14px;
@@ -284,6 +272,12 @@
       line-height: 1.55;
     }
 
+    .note b{ color: rgba(255,240,252,.92); }
+    .note code{
+      font-family: var(--mono);
+      color: rgba(255,240,252,.82);
+    }
+
     .art{
       border: 1px solid var(--stroke-2);
       border-radius: 16px;
@@ -294,11 +288,7 @@
       min-height: 260px;
     }
 
-    .art svg{
-      width: 100%;
-      height: auto;
-      display:block;
-    }
+    .art svg{ width: 100%; height: auto; display:block; }
 
     .art .glow{
       position:absolute;
@@ -357,10 +347,7 @@
       color: rgba(255,240,252,.65);
     }
 
-    .status{
-      display:grid;
-      gap: 10px;
-    }
+    .status{ display:grid; gap: 10px; }
 
     .row{
       display:flex;
@@ -453,25 +440,24 @@
     </div>
 
     <div class="shell" role="presentation">
-      <!-- Основная карточка -->
-      <section class="card" aria-labelledby="title403">
+      <section class="card" aria-labelledby="title400">
         <header>
           <div class="brand" aria-label="Сервис хостинга данных">
             <div class="logo" aria-hidden="true">
-              <!-- Мини-иконка: куб данных -->
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M12 2 3 6.5V17.5L12 22l9-4.5V6.5L12 2Z" stroke="rgba(255,86,188,.9)" stroke-width="1.6"/>
-                <path d="M3 6.5 12 11l9-4.5M12 11v11" stroke="rgba(255,240,252,.75)" stroke-width="1.6"/>
+                <path d="M4.5 7.5 12 3l7.5 4.5V16.5L12 21 4.5 16.5V7.5Z" stroke="rgba(255,86,188,.9)" stroke-width="1.6"/>
+                <path d="M4.5 7.5 12 12l7.5-4.5M12 12v9" stroke="rgba(255,240,252,.75)" stroke-width="1.6"/>
+                <path d="M8 9.2h3.8M8 12h6.2" stroke="rgba(255,240,252,.55)" stroke-width="1.4" stroke-linecap="round"/>
               </svg>
             </div>
             <div class="brand-title">
               <strong>Data Crystal</strong>
-              <small>Контур доступа и хранение</small>
+              <small>Проверка запросов и маршрутизация</small>
             </div>
           </div>
 
           <div class="meta" aria-label="Технические метки">
-            <span class="pill" id="pill-code" title="HTTP статус">HTTP 403</span>
+            <span class="pill" id="pill-code" title="HTTP статус">HTTP 400</span>
             <span class="pill" id="pill-zone" title="Зона">zone: nl-eu</span>
             <span class="pill" id="pill-request" title="Идентификатор запроса">req: …</span>
           </div>
@@ -480,9 +466,9 @@
         <main id="content">
           <div class="hero">
             <div>
-              <h1 id="title403">403 Доступ ограничен</h1>
+              <h1 id="title400">400 Некорректный запрос</h1>
               <p class="lead">
-                Этот ресурс недоступен для вашего аккаунта, IP-диапазона, роли или токена.
+                Сервер получил запрос, но не смог его обработать: формат, параметры или тело запроса выглядят неправильно.
               </p>
 
               <nav class="callouts" aria-label="Действия">
@@ -494,20 +480,26 @@
                   На главную
                 </a>
 
+                <button class="btn" type="button" id="btn-back" aria-label="Вернуться назад">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M14 6 8 12l6 6" stroke="rgba(255,240,252,.92)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M9 12h11" stroke="rgba(255,240,252,.92)" stroke-width="1.7" stroke-linecap="round"/>
+                  </svg>
+                  Назад
+                </button>
               </nav>
 
               <div class="note" role="note" aria-label="Подсказка по диагностике">
-                <div><strong>Подсказка:</strong> если вы уверены, что доступ должен быть, проверьте: 
-                    роль/группу и политики (ACL, RBAC), срок действия токена, активный VPN. 
-                    Если вы считаете что это ошибка создайте тикет о проблемах доступа, приложите req-id</div>
+                <div>Подсказка: проверьте Content-Type, корректность JSON, кодировку URL, обязательные поля и длину параметров.
+                При создании тикета об ошибках API, приложите req-id</div>
               </div>
             </div>
 
-            <div class="art" aria-label="Схема хостинга данных">
+            <div class="art" aria-label="Схема валидации запроса">
               <div class="glow" aria-hidden="true"></div>
               <div class="glow2" aria-hidden="true"></div>
 
-              <svg viewBox="0 0 520 360" role="img" aria-label="Иллюстрация: дата-центр">
+              <svg viewBox="0 0 520 360" role="img" aria-label="Иллюстрация: проверка запроса">
                 <defs>
                   <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
                     <stop offset="0" stop-color="rgba(255,86,188,.95)" />
@@ -526,56 +518,50 @@
                   </filter>
                 </defs>
 
-                <g opacity=".7" stroke="rgba(255,86,188,.35)" stroke-width="1">
-                  <path d="M40 240 C120 210, 170 280, 250 250 S380 230, 480 260" fill="none"/>
-                  <path d="M60 200 C140 170, 190 240, 270 210 S390 190, 470 220" fill="none"/>
-                  <path d="M70 280 C160 250, 210 320, 300 290 S410 270, 490 300" fill="none"/>
+                <g opacity=".70" stroke="rgba(255,86,188,.30)" stroke-width="1">
+                  <path d="M60 245 C140 210, 170 285, 250 250 S380 230, 460 260" fill="none"/>
+                  <path d="M70 205 C150 170, 190 245, 270 210 S390 190, 470 220" fill="none"/>
                 </g>
 
                 <g filter="url(#soft)">
-                  <g opacity=".92">
-                    <rect x="55" y="95" width="150" height="210" rx="16" fill="rgba(10,10,18,.70)" stroke="rgba(255,86,188,.22)"/>
-                    <rect x="80" y="125" width="100" height="18" rx="9" fill="rgba(255,86,188,.12)" stroke="rgba(255,86,188,.22)"/>
-                    <rect x="80" y="155" width="100" height="18" rx="9" fill="rgba(255,86,188,.10)" stroke="rgba(255,86,188,.18)"/>
-                    <rect x="80" y="185" width="100" height="18" rx="9" fill="rgba(255,86,188,.08)" stroke="rgba(255,86,188,.16)"/>
-                    <rect x="80" y="215" width="100" height="18" rx="9" fill="rgba(255,86,188,.10)" stroke="rgba(255,86,188,.18)"/>
-                    <rect x="80" y="245" width="100" height="18" rx="9" fill="rgba(255,86,188,.12)" stroke="rgba(255,86,188,.22)"/>
-                    <circle cx="178" cy="290" r="6" fill="rgba(61,255,182,.85)"/>
+                  <g opacity=".95">
+                    <rect x="70" y="105" width="165" height="205" rx="18" fill="rgba(10,10,18,.70)" stroke="rgba(255,86,188,.22)"/>
+                    <text x="152" y="140" text-anchor="middle" fill="rgba(255,240,252,.78)" font-family="ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace" font-size="12">request</text>
+
+                    <rect x="95" y="160" width="115" height="18" rx="9" fill="rgba(255,86,188,.10)" stroke="rgba(255,86,188,.18)"/>
+                    <rect x="95" y="190" width="115" height="18" rx="9" fill="rgba(255,86,188,.08)" stroke="rgba(255,86,188,.16)"/>
+                    <rect x="95" y="220" width="115" height="18" rx="9" fill="rgba(255,86,188,.10)" stroke="rgba(255,86,188,.18)"/>
+
+                    <path d="M110 255c10-8 18-8 28 0" fill="none" stroke="rgba(255,77,109,.9)" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M150 255c10-8 18-8 28 0" fill="none" stroke="rgba(255,77,109,.65)" stroke-width="3" stroke-linecap="round"/>
                   </g>
 
                   <g opacity=".92">
-                    <rect x="220" y="70" width="150" height="235" rx="16" fill="rgba(10,10,18,.70)" stroke="rgba(255,86,188,.22)"/>
-                    <rect x="245" y="105" width="100" height="18" rx="9" fill="rgba(255,86,188,.12)" stroke="rgba(255,86,188,.22)"/>
-                    <rect x="245" y="135" width="100" height="18" rx="9" fill="rgba(255,86,188,.10)" stroke="rgba(255,86,188,.18)"/>
-                    <rect x="245" y="165" width="100" height="18" rx="9" fill="rgba(255,86,188,.08)" stroke="rgba(255,86,188,.16)"/>
-                    <rect x="245" y="195" width="100" height="18" rx="9" fill="rgba(255,86,188,.10)" stroke="rgba(255,86,188,.18)"/>
-                    <rect x="245" y="225" width="100" height="18" rx="9" fill="rgba(255,86,188,.12)" stroke="rgba(255,86,188,.22)"/>
-                    <circle cx="343" cy="290" r="6" fill="rgba(255,208,93,.92)"/>
+                    <rect x="262" y="125" width="70" height="170" rx="18" fill="rgba(7,7,12,.55)" stroke="rgba(255,86,188,.30)"/>
+                    <path d="M280 155h34M280 185h34M280 215h34M280 245h34" stroke="rgba(255,240,252,.22)" stroke-width="1.4" stroke-linecap="round"/>
+                    <path d="M269 145c18 10 38 10 56 0" fill="none" stroke="rgba(255,240,252,.28)" stroke-width="1.4" />
+                    <text x="297" y="308" text-anchor="middle" fill="rgba(255,240,252,.65)" font-family="ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace" font-size="11">validate</text>
                   </g>
 
-                  <g opacity=".90">
-                    <rect x="385" y="110" width="85" height="195" rx="16" fill="rgba(10,10,18,.65)" stroke="rgba(255,86,188,.20)"/>
-                    <rect x="402" y="140" width="50" height="16" rx="8" fill="rgba(255,86,188,.10)" stroke="rgba(255,86,188,.18)"/>
-                    <rect x="402" y="166" width="50" height="16" rx="8" fill="rgba(255,86,188,.08)" stroke="rgba(255,86,188,.16)"/>
-                    <rect x="402" y="192" width="50" height="16" rx="8" fill="rgba(255,86,188,.10)" stroke="rgba(255,86,188,.18)"/>
-                    <circle cx="452" cy="290" r="6" fill="rgba(255,77,109,.92)"/>
+                  <g opacity=".95">
+                    <rect x="360" y="90" width="120" height="220" rx="18" fill="rgba(10,10,18,.70)" stroke="rgba(255,86,188,.22)"/>
+                    <text x="420" y="125" text-anchor="middle" fill="rgba(255,240,252,.78)" font-family="ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace" font-size="12">edge</text>
+
+                    <g class="shimmer">
+                      <path d="M240 190c35-35 65-40 120-25" fill="none" stroke="url(#g1)" stroke-width="4" stroke-linecap="round"/>
+                      <path d="M338 167l16-5-6 15" fill="none" stroke="rgba(255,240,252,.55)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </g>
+
+                    <g transform="translate(402, 250)">
+                      <circle cx="0" cy="0" r="18" fill="rgba(255,77,109,.22)" stroke="rgba(255,77,109,.85)" stroke-width="2"/>
+                      <path d="M-8 0h16" stroke="rgba(255,240,252,.85)" stroke-width="2.2" stroke-linecap="round"/>
+                    </g>
                   </g>
                 </g>
 
-                <g class="shimmer">
-                  <path d="M410 60 442 92 422 134 388 126 372 88Z"
-                        fill="url(#g1)" opacity=".65" stroke="rgba(255,240,252,.35)"/>
-                  <path d="M120 40 150 70 140 112 106 104 92 68Z"
-                        fill="url(#g1)" opacity=".55" stroke="rgba(255,240,252,.30)"/>
-                  <path d="M260 18 292 52 278 98 242 92 228 52Z"
-                        fill="url(#g2)" opacity=".55" stroke="rgba(255,240,252,.28)"/>
-                </g>
-
-                <g transform="translate(235, 250)" filter="url(#soft)" opacity=".95">
-                  <rect x="0" y="24" width="50" height="42" rx="12" fill="rgba(7,7,12,.55)" stroke="rgba(255,86,188,.35)"/>
-                  <path d="M12 24v-7a13 13 0 0 1 26 0v7"
-                        fill="none" stroke="rgba(255,240,252,.7)" stroke-width="2"/>
-                  <circle cx="25" cy="46" r="6" fill="rgba(255,86,188,.65)"/>
+                <g transform="translate(232, 246)" filter="url(#soft)" opacity=".95">
+                  <rect x="0" y="20" width="64" height="46" rx="14" fill="rgba(7,7,12,.55)" stroke="rgba(255,86,188,.35)"/>
+                  <text x="32" y="49" text-anchor="middle" fill="rgba(255,240,252,.85)" font-family="ui-monospace, Menlo, Monaco, Consolas, 'Courier New', monospace" font-size="14">400</text>
                 </g>
               </svg>
             </div>
@@ -583,12 +569,11 @@
         </main>
 
         <div class="foot" aria-label="Служебная информация">
-          <div>© <span id="year"></span> Data Crystal. <span aria-hidden="true">•</span> <span>Доступ контролируется политиками безопасности.</span></div>
+          <div>© <span id="year"></span> Data Crystal. <span aria-hidden="true">•</span> <span>Запрос отклонён валидатором.</span></div>
           <div><span class="status-sub">Время:</span> <code id="clock">--:--:--</code></div>
         </div>
       </section>
 
-      <!-- Статус блок -->
       <section class="card" aria-label="Статус компонентов" role="region">
         <aside>
           <div class="status-title">
@@ -600,11 +585,11 @@
               <div class="svc">
                 <span class="dot bad" aria-hidden="true"></span>
                 <div>
-                  <b>Access Gateway</b>
-                  <small>Политики доступа не пропускают запрос</small>
+                  <b>API Gateway</b>
+                  <small>Запрос не прошёл первичную проверку</small>
                 </div>
               </div>
-              <span class="tag" aria-label="Состояние: блокировка">blocked</span>
+              <span class="tag" aria-label="Состояние: отклонено">rejected</span>
             </div>
 
             <div class="row">
@@ -626,7 +611,7 @@
                   <small>Проверьте токен или сессию</small>
                 </div>
               </div>
-              <span class="tag" aria-label="Состояние: требуется внимание">check</span>
+              <span class="tag" aria-label="Состояние: проверить">check</span>
             </div>
 
             <div class="row">
@@ -641,9 +626,9 @@
             </div>
           </div>
 
-          <div class="note" style="margin-top: 12px;" role="note" aria-label="Пояснение статуса">
-            Если запрашиваемые данные относятся к другому подразделению - создайте тикет для добавления вашего аккаунта в нужную группу.
-            Увеличение прав доступа без необходимости будет игнорироватся.
+          <div class="note" style="margin-top: 12px;" role="note" aria-label="Пояснение">
+            Если вы тестируете API - включите логирование запроса (без секретов), сравните схему и убедитесь, что
+            прокси/балансировщик не меняет тело или заголовки.
           </div>
         </aside>
       </section>
@@ -654,14 +639,16 @@
     (function () {
       const $ = (id) => document.getElementById(id);
 
-      $("year").textContent = String(new Date().getFullYear());
+      const year = $("year");
+      if (year) year.textContent = String(new Date().getFullYear());
 
       function tick() {
         const d = new Date();
         const hh = String(d.getHours()).padStart(2, "0");
         const mm = String(d.getMinutes()).padStart(2, "0");
         const ss = String(d.getSeconds()).padStart(2, "0");
-        $("clock").textContent = `${hh}:${mm}:${ss}`;
+        const clock = $("clock");
+        if (clock) clock.textContent = `${hh}:${mm}:${ss}`;
       }
       tick();
       setInterval(tick, 1000);
@@ -671,10 +658,29 @@
         return Array.from(a).map(b => b.toString(16).padStart(2, "0")).join("");
       }
       const reqId = `dc-${makeId()}`;
-      $("pill-request").textContent = `req: ${reqId}`;
-      $("req-inline").textContent = reqId;
-      $("req-inline-2").textContent = reqId;
-;})();
+      const pillReq = $("pill-request");
+      if (pillReq) pillReq.textContent = `req: ${reqId}`;
+      const reqInline = $("req-inline");
+      if (reqInline) reqInline.textContent = reqId;
+
+      // reason from query string (?reason=... or ?why=... or ?msg=...)
+      const params = new URLSearchParams(location.search);
+      const raw = params.get("reason") || params.get("why") || params.get("msg") || "";
+      const reason = raw.trim().replace(/\s+/g, " ").slice(0, 80);
+      const safeReason = reason.length ? reason : "invalid request";
+
+      const pillReason = $("pill-reason");
+      if (pillReason) pillReason.textContent = `reason: ${safeReason}`;
+
+      const reasonInline = $("reason-inline");
+      if (reasonInline) reasonInline.textContent = safeReason;
+
+      const btnRetry = $("btn-retry");
+      if (btnRetry) btnRetry.addEventListener("click", () => location.reload());
+
+      const btnBack = $("btn-back");
+      if (btnBack) btnBack.addEventListener("click", () => history.length > 1 ? history.back() : location.assign("/"));
+    })();
   </script>
 </body>
 </html>
