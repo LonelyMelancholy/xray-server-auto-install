@@ -91,6 +91,7 @@
     .bg{
       position:absolute;
       inset:0;
+      overflow: hidden;
       pointer-events:none;
       opacity: .95;
     }
@@ -500,7 +501,7 @@
 
           <div class="meta" aria-label="Технические метки">
             <span class="pill" id="pill-code" title="HTTP статус">HTTP 403</span>
-            <span class="pill" id="pill-zone" title="Зона">zone: nl-eu</nl-eu></span>
+            <span class="pill" id="pill-zone" title="Зона">zone: nl-eu</span>
             <span class="pill" id="pill-request" title="Идентификатор запроса">req: …</span>
           </div>
         </header>
@@ -735,20 +736,7 @@
 
       const reqId = `cd-${makeId()}`;
       $("pill-request").textContent = `req: ${reqId}`;
-      $("req-inline").textContent = `req-id: ${reqId}`;
 
-      const btn = $("btn-copy");
-      btn.addEventListener("click", async () => {
-        const text = reqId;
-        try {
-          await navigator.clipboard.writeText(text);
-          btn.textContent = "Скопировано ✓";
-          setTimeout(() => (btn.textContent = "Скопировать req-id"), 1400);
-        } catch (e) {
-          // Фолбэк для сред без clipboard API
-          window.prompt("Скопируйте req-id:", text);
-        }
-      });
     })();
   </script>
 </body>
