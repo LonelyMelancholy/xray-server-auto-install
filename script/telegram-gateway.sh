@@ -8,19 +8,19 @@ export PATH
 # user check
 [[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the telegram-gateway user, exit"; exit 1; }
 
-# check secret file, file already source it via systemd
+# check secret file, if the file have right permissions, we source it.
 readonly ENV_FILE="/usr/local/etc/telegram/secrets.env"
-if [[ ! -f "$ENV_FILE" ]] || [[ "$(stat -L -c '%U:%a' "$ENV_FILE" 2> /dev/null)" != "telegram-gateway:600" ]]; then
+if [[ ! -f "$ENV_FILE" ]] || [[ "$(stat -L -c '%U:%G:%a' "$ENV_FILE" 2> /dev/null)" != "root:telegram-gateway:640" ]]; then
     echo "❌ Error: env file '$ENV_FILE' not found or has wrong permissions, exit"
     exit 1
 fi
-source "$ENV_FILE"
+source "$ENV_FILE" || { echo "❌ Error: failed to source '$ENV_FILE', exit"; exit 1; }
 
 # check token from secret file
 [[ -z "$BOT_TOKEN" ]] && { echo "❌ Error: Telegram bot token is missing in '$ENV_FILE', exit"; exit 1; }
 
-# check id from secret file
-[[ -z "$CHAT_ID" ]] && { echo "❌ Error: Telegram chat ID is missing in '$ENV_FILE', exit"; exit 1; }
+# check group id from secret file
+[[ -z "$CHAT_ID" ]] && { echo "❌ Error: Telegram group ID is missing in '$ENV_FILE', exit"; exit 1; }
 
 API="https://api.telegram.org/bot${BOT_TOKEN}"
 TIMEOUT=50

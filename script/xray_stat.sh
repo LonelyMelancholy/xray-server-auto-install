@@ -38,22 +38,8 @@ trap 'on_exit' EXIT
 readonly WAIT_SEC="$(shuf -i "10-60" -n 1)"
 
 # check another instanсe of the script is not running (with retries)
-readonly LOCK_FILE_3="/run/lock/tr_db.lock"
-exec 10> "$LOCK_FILE_3" || { echo "❌ Error: cannot open lock file '$LOCK_FILE_3', exit"; exit 1; }
-readonly MAX_ATTEMPTS="3"
-for ((attempt=1; attempt<=MAX_ATTEMPTS; attempt++)); do
-  if flock -n 10; then
-    break
-  fi
-
-  if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-    echo "❌ Error: Lock busy ($LOCK_FILE_3). Waiting ${WAIT_SEC}s... (attempt $attempt/$MAX_ATTEMPTS)"
-    sleep "$WAIT_SEC"
-  else
-    echo "❌ Error: lock ($LOCK_FILE_3) is still busy after $MAX_ATTEMPTS attempts, exit"
-    exit 1
-  fi
-done
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
+tr_db_lock_retry
 
 # helper func
 try() { "$@" || return 1; }

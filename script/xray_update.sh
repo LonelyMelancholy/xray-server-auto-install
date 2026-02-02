@@ -35,38 +35,19 @@ on_exit() {
 # error exit log message for end log
 trap 'on_exit' EXIT
 RC=1
-readonly WAIT_SEC="$(shuf -i "10-60" -n 1)"
+
 readonly MAX_ATTEMPTS=3
 
-# check another instanсe of the script is not running
-readonly LOCK_FILE_4="/run/lock/xray_update.lock"
-exec 99> "$LOCK_FILE_4" || { echo "❌ Error: cannot open lock file '$LOCK_FILE_4', exit"; exit 1; }
-for ((attempt=1; attempt<=MAX_ATTEMPTS; attempt++)); do
-  if flock -n 99; then
-    break
-  fi
-  if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-    echo "⚠️  Non-critical error: Lock busy ($LOCK_FILE_4). Waiting ${WAIT_SEC}s... (attempt $attempt/$MAX_ATTEMPTS)"
-    sleep "$WAIT_SEC"
-  else
-    echo "❌ Error: lock ($LOCK_FILE_4) is still busy after $MAX_ATTEMPTS attempts, exit"
-    exit 1
-  fi
-done
+readonly LOCK_FILE_5="/run/lock/xray_update.lock"
+exec 99> "$LOCK_FILE_5" || { echo "❌ Error: cannot open lock file '$LOCK_FILE_5', exit"; exit 1; }
+flock -n 99 || { echo "❌ Error: another instance working on backup, exit"; exit 1; }
 
-# check secret file
-readonly ENV_FILE="/usr/local/etc/telegram/secrets.env"
-if [[ ! -f "$ENV_FILE" ]] || [[ "$(stat -L -c '%U:%a' "$ENV_FILE")" != "telegram-gateway:600" ]]; then
-    echo "❌ Error: env file '$ENV_FILE' not found or has wrong permissions, exit"
-    exit 1
-fi
-source "$ENV_FILE"
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
+xray_lock_retry
+tr_db_lock_retry
+uri_db_lock_retry
 
-# check token from secret file
-[[ -z "$BOT_TOKEN" ]] && { echo "❌ Error: Telegram bot token is missing in $ENV_FILE, exit"; exit 1; }
-
-# check group id from secret file
-[[ -z "$GROUP_ID" ]] && { echo "❌ Error: Telegram group ID is missing in '$ENV_FILE', exit"; exit 1; }
+source "/usr/local/lib/service/telegram.lib" || { echo "❌ Error: failed to source '/usr/local/lib/service/telegram.lib', exit"; exit 1; }
 
 # main variables
 readonly ASSET_DIR="/usr/local/share/xray"
@@ -118,36 +99,6 @@ cleanup_old_backups_and_logs() {
     cleanup_old "$ASSET_DIR"     "geoip.dat.*.bak"    "$ASSET_DIR/geoip.dat.${DATE}.bak"    "geoip.dat backup"
     cleanup_old "$ASSET_DIR"     "geosite.dat.*.bak"  "$ASSET_DIR/geosite.dat.${DATE}.bak"  "geosite.dat backup"
     cleanup_old "$LOG_DIR"       "xray_update.*.log"  "$LOG_DIR/xray_update.${DATE}.log"    "xray update log backup"
-}
-
-# pure telegram message function with checking the sending status
-_tg_m() {
-    local response
-    response="$(curl -fsS -m 10 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-        --data-urlencode "chat_id=${GROUP_ID}" \
-        --data-urlencode "parse_mode=HTML" \
-        --data-urlencode "text=${MESSAGE}")" || return 1
-    grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<< "$response" || return 1
-    return 0
-}
-
-# Telegram message with logging and retry
-telegram_message() {
-    local attempt=1
-    while true; do
-        if ! _tg_m; then
-            if [ "$attempt" -ge "$MAX_ATTEMPTS" ]; then
-                echo "❌ Error: failed to send telegram message after $attempt attempts, exit"
-                return 1
-            fi
-            sleep 60
-            ((attempt++))
-            continue
-        else
-            echo "✅ Success: message was sent to telegram after $attempt attempts"
-            return 0
-        fi
-    done
 }
 
 # exit cleanup and log message function

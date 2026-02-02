@@ -22,20 +22,6 @@ else
     exit 1
 fi
 
-# username check
-SECOND_USER=$(awk -F'"' '/^[[:space:]]*Server administrator username/ {print $2}' "$CFG_FILE")
-if [[ -z "$SECOND_USER" ]]; then
-    echo "❌ Error: 'Server administrator username' is empty in '$CFG_FILE', exit"
-    exit 1
-fi
-
-if [[ "$SECOND_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]{0,31}$ ]]; then
-    echo "✅ Success: server administrator username accepted"
-else
-    echo "❌ Error: 'Server administrator username' '$SECOND_USER' does not comply with Linux rules, exit"
-    exit 1
-fi
-
 # password check
 PASS=$(awk -F'"' '/^[[:space:]]*Password for root and new user/ {print $2}' "$CFG_FILE")
 if [[ -z "$PASS" ]]; then

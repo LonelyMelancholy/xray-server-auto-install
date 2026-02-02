@@ -35,67 +35,11 @@ on_exit() {
 # trap for the end log message for the end log
 trap 'on_exit' EXIT
 
-readonly MAX_ATTEMPTS="3"
-readonly LOCK_FILE="/run/lock/xray_config.lock"
-exec 8> "$LOCK_FILE" || { echo "❌ Error: cannot open lock file '$LOCK_FILE', exit"; exit 1; }
-for ((attempt=1; attempt<=MAX_ATTEMPTS; attempt++)); do
-  if flock -n 8; then
-    break
-  fi
-  if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-    echo "⚠️  Non-critical error: Lock busy ($LOCK_FILE). Waiting ${WAIT_SEC}s... (attempt $attempt/$MAX_ATTEMPTS)"
-    sleep "$WAIT_SEC"
-  else
-    echo "❌ Error: lock ($LOCK_FILE) is still busy after $MAX_ATTEMPTS attempts, exit"
-    exit 1
-  fi
-done
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
+xray_lock_retry
+tr_db_lock_retry
 
-readonly LOCK_FILE_3="/run/lock/tr_db.lock"
-exec 10> "$LOCK_FILE_3" || { echo "❌ Error: cannot open lock file '$LOCK_FILE_3', exit"; exit 1; }
-for ((attempt=1; attempt<=MAX_ATTEMPTS; attempt++)); do
-  if flock -n 10; then
-    break
-  fi
-
-  if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-    echo "❌ Error: Lock busy ($LOCK_FILE_3). Waiting ${WAIT_SEC}s... (attempt $attempt/$MAX_ATTEMPTS)"
-    sleep "$WAIT_SEC"
-  else
-    echo "❌ Error: lock ($LOCK_FILE_3) is still busy after $MAX_ATTEMPTS attempts, exit"
-    exit 1
-  fi
-done
-
-# prevents attempts to restart via this script while the update is in progress (with retries)
-readonly LOCK_FILE_4="/run/lock/xray_update.lock"
-exec 99> "$LOCK_FILE_4" || { echo "❌ Error: cannot open lock file '$LOCK_FILE_4', exit"; exit 1; }
-for ((attempt=1; attempt<=MAX_ATTEMPTS; attempt++)); do
-  if flock -n 99; then
-    break
-  fi
-  if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-    echo "⚠️  Non-critical error: Lock busy ($LOCK_FILE_4). Waiting ${WAIT_SEC}s... (attempt $attempt/$MAX_ATTEMPTS)"
-    sleep "$WAIT_SEC"
-  else
-    echo "❌ Error: lock ($LOCK_FILE_4) is still busy after $MAX_ATTEMPTS attempts, exit"
-    exit 1
-  fi
-done
-
-# check secret file, if the file is ok, we source it.
-readonly ENV_FILE="/usr/local/etc/telegram/secrets.env"
-if [[ ! -f "$ENV_FILE" ]] || [[ "$(stat -c '%U:%a' "$ENV_FILE" 2>/dev/null)" != "telegram-gateway:600" ]]; then
-    echo "❌ Error: env file '$ENV_FILE' not found or has wrong permissions, exit"
-    exit 1
-fi
-source "$ENV_FILE"
-
-# check token from secret file
-[[ -z "$BOT_TOKEN" ]] && { echo "❌ Error: Telegram bot token is missing in '$ENV_FILE', exit"; exit 1; }
-
-# check group id from secret file
-[[ -z "$GROUP_ID" ]] && { echo "❌ Error: Telegram group ID is missing in '$ENV_FILE', exit"; exit 1; }
+source "/usr/local/lib/service/telegram.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit"; exit 1; }
 
 run_and_check() {
     action="$1"
@@ -103,38 +47,6 @@ run_and_check() {
     "$@" > /dev/null && echo "✅ Success: $action" || { echo "❌ Error: $action, exit"; exit 1; }
 }
 
-# pure Telegram message function with checking the sending status
-_tg_m() {
-    local response
-    response="$(curl -fsS -m 10 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-        --data-urlencode "chat_id=${GROUP_ID}" \
-        --data-urlencode "parse_mode=HTML" \
-        --data-urlencode "text=${MESSAGE}")" || return 1
-    grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<< "$response" || return 1
-    return 0
-}
-
-# Telegram message with logging and retry
-telegram_message() {
-    local attempt="1"
-    while true; do
-        if ! _tg_m; then
-            if [[ "$attempt" -ge "$MAX_ATTEMPTS" ]]; then
-                echo "❌ Error: failed to send Telegram message after $attempt attempt, exit"
-                exit 1
-            fi
-            sleep 60
-            ((attempt++))
-            continue
-        else
-            echo "✅ Success: message was sent to Telegram after $attempt attempt"
-            break
-        fi
-    done
-    return 0
-}
-
-readonly URI_PATH="/usr/local/etc/xray/URI_DB"
 readonly XRAY_CONFIG="/usr/local/etc/xray/config.json"
 readonly XRAY_CONFIG_BACKUP="${XRAY_CONFIG}.bak.$(date +%Y%m%d_%H%M%S)"
 readonly INBOUND_TAG="Vless"
@@ -300,3 +212,5 @@ if (( changed == 1 )); then
 else
   echo "OK: превышений не найдено, конфиг не менялся."
 fi
+
+RC=0

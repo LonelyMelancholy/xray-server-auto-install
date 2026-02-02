@@ -35,13 +35,12 @@ readonly NOTIFY_LOG="${LOG_DIR}/ssh_pam.${DATE_LOG}.log"
 exec &>> "$NOTIFY_LOG" || { echo "❌ Error: cannot write to log '$NOTIFY_LOG', exit"; exit 1; }
 
 # start logging message
-readonly DATE_START="$(date "+%Y-%m-%d %H:%M:%S")"
-echo "########## ssh pam notify started - $DATE_START ##########"
+echo "########## ssh pam notify started - $(date '+%Y-%m-%d %H:%M:%S') ##########"
 
 # exit logging message function
-RC="1"
+RC_M="1"
 on_exit() {
-    if [[ "$RC" -eq "0" ]]; then
+    if [[ "$RC_M" -eq "0" ]]; then
         local date_end="$(date "+%Y-%m-%d %H:%M:%S")"
         echo "########## ssh pam notify ended - $date_end ##########"
     else
@@ -53,58 +52,13 @@ on_exit() {
 # trap for the end log message for the end log
 trap 'on_exit' EXIT
 
-# check secret file, if the file is ok, we source it.
-readonly ENV_FILE="/usr/local/etc/telegram/secrets.env"
-if [[ ! -f "$ENV_FILE" ]] || [[ "$(stat -c '%U:%a' "$ENV_FILE" 2>/dev/null)" != "telegram-gateway:600" ]]; then
-    echo "❌ Error: env file '$ENV_FILE' not found or has wrong permissions, exit"
-    exit 1
-fi
-source "$ENV_FILE"
-
-# check token from secret file
-[[ -z "$BOT_TOKEN" ]] && { echo "❌ Error: Telegram bot token is missing in '$ENV_FILE', exit"; exit 1; }
-
-# check group id from secret file
-[[ -z "$GROUP_ID" ]] && { echo "❌ Error: Telegram group ID is missing in '$ENV_FILE', exit"; exit 1; }
+source "/usr/local/lib/service/telegram.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit"; exit 1; }
 
 # main variables
 readonly HOSTNAME="$(hostname)"
 readonly IP="$PAM_RHOST"
 readonly USER="$PAM_USER"
 readonly SESSION="$PAM_TYPE"
-readonly MAX_ATTEMPTS="3"
-
-# pure Telegram message function with checking the sending status
-_tg_m() {
-    local response
-    response="$(curl -fsS -m 10 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-        --data-urlencode "chat_id=${GROUP_ID}" \
-        --data-urlencode "parse_mode=HTML" \
-        --data-urlencode "text=${MESSAGE}")" || return 1
-    grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<< "$response" || return 1
-    return 0
-}
-
-# Telegram message with logging and retry
-telegram_message() {
-    local attempt="1"
-    while true; do
-        if ! _tg_m; then
-            if [[ "$attempt" -ge "$MAX_ATTEMPTS" ]]; then
-                echo "❌ Error: failed to send Telegram message after $attempt attempt, exit"
-                exit 1
-            fi
-            sleep 60
-            ((attempt++))
-            continue
-        else
-            echo "✅ Success: message was sent to Telegram after $attempt attempt"
-            RC="0"
-            break
-        fi
-    done
-    return 0
-}
 
 # start collecting message
 readonly DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
@@ -148,4 +102,4 @@ echo "$MESSAGE"
 # send message
 telegram_message
 
-exit $RC
+exit $RC_M

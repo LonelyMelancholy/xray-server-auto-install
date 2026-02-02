@@ -8,27 +8,11 @@ export PATH
 [[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the telegram-gateway user, exit"; exit 1; }
 
 # main variables
-readonly MAX_ATTEMPTS="3"
-readonly WAIT_SEC="$(shuf -i "10-60" -n 1)"
 readonly HOSTNAME="$(hostname)"
 
-# check another instanсe of the script is not running
-readonly LOCK_FILE_3="/run/lock/tr_db.lock"
-exec 10> "$LOCK_FILE_3" || { echo "❌ Error: cannot open lock file '$LOCK_FILE_3', exit"; exit 1; }
-
-# check another instance is not running (with retries)
-for ((attempt=1; attempt<=MAX_ATTEMPTS; attempt++)); do
-  if flock -n 10; then
-    break
-  fi
-  if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-    echo "❌ Error: Lock busy ($LOCK_FILE_3). Waiting ${WAIT_SEC}s... (attempt $attempt/$MAX_ATTEMPTS)"
-    sleep "$WAIT_SEC"
-  else
-    echo "❌ Error: lock ($LOCK_FILE_3) is still busy after $MAX_ATTEMPTS attempts, exit"
-    exit 1
-  fi
-done
+# check another instance working on tr_db
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
+tr_db_lock_retry
 
 # system uptime
 read -r up _ < /proc/uptime

@@ -9,19 +9,9 @@ export PATH
 [[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the telegram-gateway user, exit"; exit 1; }
 
 # check another instanсe of the script is not running
-readonly LOCK_FILE="/run/lock/xray_config.lock"
-exec 8> "$LOCK_FILE" || { echo "❌ Error: cannot open lock file '$LOCK_FILE', exit"; exit 1; }
-flock -n 8 || { echo "❌ Error: another instance working on '$LOCK_FILE', exit"; exit 1; }
-
-# check another instanсe of the script is not running
-readonly LOCK_FILE_2="/run/lock/uri_db.lock"
-exec 9> "$LOCK_FILE_2" || { echo "❌ Error: cannot open lock file '$LOCK_FILE_2', exit"; exit 1; }
-flock -n 9 || { echo "❌ Error: another instance working on '$LOCK_FILE_2', exit"; exit 1; }
-
-# prevents attempts to restart via this script while the update is in progress
-readonly LOCK_FILE_4="/run/lock/xray_update.lock"
-exec 99> "$LOCK_FILE_4" || { echo "❌ Error: cannot open lock file '$LOCK_FILE_4', exit"; exit 1; }
-flock -n 99 || { echo "❌ Error: another instance is running, exit"; exit 1; }
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
+xray_lock
+uri_db_lock
 
 # main variables
 readonly XRAY_CONFIG="/usr/local/etc/xray/config.json"

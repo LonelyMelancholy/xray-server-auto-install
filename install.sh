@@ -11,7 +11,7 @@ else
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+cd "$SCRIPT_DIR" || exit 1
 
 # check another instanse of the script is not running
 readonly LOCK_FILE="/run/lock/vpn_install.lock"
@@ -50,8 +50,6 @@ install_with_retry() {
     done
 }
 
-# helper func
-try() { "$@" || return 1; }
 
 run_and_check() {
     action="$1"
@@ -79,14 +77,14 @@ else
 fi
 
 install_tg_secret() {
-    try mkdir -p "$ENV_PATH"
+    mkdir -p "$ENV_PATH" || return 1
     try tee "$ENV_FILE" > /dev/null <<EOF
 BOT_TOKEN="$READ_BOT_TOKEN"
 CHAT_ID="$READ_CHAT_ID"
 GROUP_ID="$READ_GROUP_ID"
 EOF
-    try chown telegram-gateway:telegram-gateway "$ENV_FILE"
-    try chmod 600 "$ENV_FILE"
+    chown root:telegram-gateway "$ENV_FILE" || return 1
+    chmod 640 "$ENV_FILE" || return 1
 }
 run_and_check "install secret file with token and ID for Telegram scripts" install_tg_secret
 
@@ -101,12 +99,44 @@ else
 fi
 
 # create user and add in ssh and sudo group
+gen_service_user() {
+    local prefix="service_user_"
+    local len=8
+    local suffix user
+
+    while true; do
+        suffix="$(tr -dc 'a-z0-9' </dev/urandom | head -c "$len")"
+        user="${prefix}${suffix}"
+        if ! getent passwd "$user" >/dev/null; then
+            printf '%s\n' "$user"
+            return 0
+        fi
+    done
+}
+
+SECOND_USER="$(gen_service_user)"
 if ! getent shadow "$SECOND_USER" &> /dev/null; then
     run_and_check "creating user and added to $SSH_GROUP and sudo groups" useradd -m -s /bin/bash -G sudo,"$SSH_GROUP" "$SECOND_USER"
 else 
     echo "✅ Success: user $SECOND_USER already exists"
     run_and_check "added $SECOND_USER to $SSH_GROUP and sudo groups" usermod -aG sudo,"$SSH_GROUP" "$SECOND_USER"
 fi
+
+
+# sudo without password
+ensure_nopasswd_sudo_for_group() {
+    local sudoers_file="/etc/sudoers.d/90-${SSH_GROUP}-nopasswd"
+    local line="%${SSH_GROUP} ALL=(ALL:ALL) NOPASSWD: ALL"
+    local tmp
+
+    tmp="$(mktemp)" || return 1
+    printf '%s\n' "$line" >"$tmp" || return 1
+
+    install -m 0440 -o root -g root "$tmp" "$sudoers_file" || return 1
+    rm -f "$tmp" || return 1
+}
+run_and_check "enabled passwordless sudo for group: $SSH_GROUP" ensure_nopasswd_sudo_for_group
+
 
 # changing password for root and user
 conf_pswd() {
@@ -125,8 +155,8 @@ HIGH="50000"
 SSH_PORT="$(shuf -i "${LOW}-${HIGH}" -n 1)"
 
 # deleting previous sshd configuration with high priority
-if compgen -G "/etc/ssh/sshd_config.d/00*.conf" &> /dev/null; then
-    run_and_check "deleting previous sshd configuration files" rm -f /etc/ssh/sshd_config.d/00*.conf
+if compgen -G "/etc/ssh/sshd_config.d/*.conf" &> /dev/null; then
+    run_and_check "deleting previous sshd configuration files" rm -f /etc/ssh/sshd_config.d/*.conf
 else
     echo "✅ Success: previous sshd configurations files not found"
 fi
@@ -134,6 +164,9 @@ fi
 # creating a new sshd configuration
 install_sshd() {
     try install -m 644 -o root -g root "$SSH_CONF_SOURCE" "$SSH_CONF_DEST"
+    tee /etc/ssh/sshd_config > /dev/null <<EOF
+Include /etc/ssh/sshd_config.d/*.conf
+EOF
     try sed -i "s/{PORT}/$SSH_PORT/g" "$SSH_CONF_DEST"
     try rm -f /etc/ssh/ssh_host_ecdsa_key
     try rm -f /etc/ssh/ssh_host_ecdsa_key.pub
@@ -271,7 +304,7 @@ un_up_scr() {
 SHELL=/bin/bash
 1 3 1 * * root "$UNATTENDED_UPGRADE_SCRIPT_DEST" &> /dev/null
 EOF
-    try chmod 644 "/etc/cron.d/unattended-upgrade"
+    chmod 644 "/etc/cron.d/unattended-upgrade" || return 1
 }
 run_and_check "security update script installation" un_up_scr
 
@@ -378,7 +411,7 @@ run_and_check "configure sertificates" conf_cert
 conf_nginx_sert() {
         tee -a /etc/nginx/sites-available/${XRAY_HOST}.conf >/dev/null <<'EOF' || return 1
 server {
-    server_name __HOST__;
+    server_name __HOST__ __IP_4__;
 
     root /var/www/__HOST__/html;
 
@@ -411,6 +444,7 @@ server {
 EOF
 
     sed -i "s/__HOST__/${XRAY_HOST}/g" /etc/nginx/sites-available/${XRAY_HOST}.conf || return 1
+    sed -i "s/__IP_4__/${IP_4}/g" /etc/nginx/sites-available/${XRAY_HOST}.conf || return 1
     
     nginx -t  || return 1
     systemctl restart nginx  || return 1
@@ -470,7 +504,7 @@ install_xray_dir() {
 run_and_check "create directory for the xray service" install_xray_dir
 
 # download function
-_dl() { curl -fsSL --max-time 60 "$1" -o "$2"; }
+_dl() { curl -fsSL -m 60 "$1" -o "$2"; }
 
 _dl_with_retry() {
     local url="$1"
@@ -938,6 +972,11 @@ TRAFFIC_UNBLOCK_SCRIPT_DEST="/usr/local/bin/service/traffic_unblock.sh"
 
 # add link for maintance
 install_scr_service() {
+    # module script
+    mkdir -p /usr/local/lib/service
+    install -m 644 -o root -g root "script/share/telegram.lib.sh" "/usr/local/lib/service/telegram.lib.sh" || return 1
+    install -m 644 -o root -g root "script/share/run_lock.lib.sh" "/usr/local/lib/service/run_lock.lib.sh" || return 1
+
     install -m 755 -o root -g root "$USERADD_SCRIPT_SRC" "$USERADD_SCRIPT_DEST" || return 1
     install -m 755 -o root -g root "$USERDEL_SCRIPT_SRC" "$USERDEL_SCRIPT_DEST" || return 1
     install -m 755 -o root -g root "$TIME_UNBLOCK_SCRIPT_SRC" "$TIME_UNBLOCK_SCRIPT_DEST" || return 1
@@ -1028,19 +1067,20 @@ run_and_check "start Telegram gateway service" systemctl start telegram-gateway.
 
 
 # final output
-echo "#################################################"
+echo "#############[ SSH USERNAME - PORT ]#############"
 echo ""
-echo "################## PRIVATE KEY ##################"
+echo "$SECOND_USER - $SSH_PORT"
+echo ""
+echo "#################[ PRIVATE KEY ]#################"
 echo ""
 echo "$PRIV_KEY"
 echo ""
-echo "########## PUBLIC KEY - $PUB_KEY_PATH ##########"
+echo "#########[ PUBLIC KEY - $PUB_KEY_PATH ]##########"
 echo ""
 cat "$PUB_KEY_PATH"
 echo ""
-echo "########## SSH server port - ${SSH_PORT} ##########"
-echo ""
-echo "#################################################"
+echo "#################[ VLESS LINK ]##################"
 echo ""
 cat "$URI_PATH"
+echo ""
 echo "#################################################"

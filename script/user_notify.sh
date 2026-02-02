@@ -22,9 +22,9 @@ readonly DATE_START="$(date "+%Y-%m-%d %H:%M:%S")"
 echo "########## user notify started - $DATE_START ##########"
 
 # exit logging message function
-RC="1"
+RC_M="1"
 on_exit() {
-    if [[ "$RC" -eq "0" ]]; then
+    if [[ "$RC_M" -eq "0" ]]; then
         local date_end="$(date "+%Y-%m-%d %H:%M:%S")"
         echo "########## user notify ended - $date_end ##########"
     else
@@ -51,85 +51,11 @@ if [[ ! -r "$XRAY_CONFIG" ]]; then
     exit 1
 fi
 
-# check secret file, if the file is ok, we source it.
-readonly ENV_FILE="/usr/local/etc/telegram/secrets.env"
-if [[ ! -f "$ENV_FILE" ]] || [[ "$(stat -c '%U:%a' "$ENV_FILE" 2>/dev/null)" != "telegram-gateway:600" ]]; then
-    echo "❌ Error: env file '$ENV_FILE' not found or has wrong permissions, exit"
-    exit 1
-fi
-source "$ENV_FILE"
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
+xray_lock_retry
+tr_db_lock_retry
 
-# check token from secret file
-[[ -z "$BOT_TOKEN" ]] && { echo "❌ Error: Telegram bot token is missing in '$ENV_FILE', exit"; exit 1; }
-
-# check group id from secret file
-[[ -z "$GROUP_ID" ]] && { echo "❌ Error: Telegram group ID is missing in '$ENV_FILE', exit"; exit 1; }
-
-# check another instanсe of the script is not running (with retries)
-readonly LOCK_FILE="/run/lock/xray_config.lock"
-exec 8> "$LOCK_FILE" || { echo "❌ Error: cannot open lock file '$LOCK_FILE', exit"; exit 1; }
-for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
-  if flock -n 8; then
-    break
-  fi
-
-  if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-    echo "❌ Error: Lock busy ($LOCK_FILE). Waiting ${WAIT_SEC}s... (attempt $attempt/$MAX_ATTEMPTS)"
-    sleep "$WAIT_SEC"
-  else
-    echo "❌ Error: lock ($LOCK_FILE) is still busy after $MAX_ATTEMPTS attempts, exit"
-    exit 1
-  fi
-done
-
-# check another instanсe of the script is not running (with retries)
-readonly LOCK_FILE_3="/run/lock/tr_db.lock"
-exec 10> "$LOCK_FILE_3" || { echo "❌ Error: cannot open lock file '$LOCK_FILE_3', exit"; exit 1; }
-for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
-  if flock -n 10; then
-    break
-  fi
-
-  if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-    echo "❌ Error: Lock busy ($LOCK_FILE_3). Waiting ${WAIT_SEC}s... (attempt $attempt/$MAX_ATTEMPTS)"
-    sleep "$WAIT_SEC"
-  else
-    echo "❌ Error: lock ($LOCK_FILE_3) is still busy after $MAX_ATTEMPTS attempts, exit"
-    exit 1
-  fi
-done
-
-# pure Telegram message function with checking the sending status
-_tg_m() {
-    local response
-    response="$(curl -fsS -m 10 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-        --data-urlencode "chat_id=${GROUP_ID}" \
-        --data-urlencode "parse_mode=HTML" \
-        --data-urlencode "text=${MESSAGE}")" || return 1
-    grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<< "$response" || return 1
-    return 0
-}
-
-# Telegram message with logging and retry
-telegram_message() {
-    local attempt="1"
-    while true; do
-        if ! _tg_m; then
-            if [[ "$attempt" -ge "$MAX_ATTEMPTS" ]]; then
-                echo "❌ Error: failed to send Telegram message after $attempt attempt, exit"
-                return 1
-            fi
-            sleep 60
-            ((attempt++))
-            continue
-        else
-            echo "✅ Success: message was sent to Telegram after $attempt attempt"
-            RC="0"
-            break
-        fi
-    done
-    return 0
-}
+source "/usr/local/lib/service/telegram.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit"; exit 1; }
 
 # reset traffic 1 day of month and year
 RESET_ARG_M="0"
@@ -249,4 +175,4 @@ echo "$MESSAGE"
 # send message
 telegram_message
 
-exit $RC
+exit $RC_M

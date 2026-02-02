@@ -11,15 +11,18 @@
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export PATH
 
+# main variables
+readonly HOSTNAME="$(hostname)"
+readonly MAX_ATTEMPTS="3"
+readonly TODAY="$(date +%Y-%m-%d)"
+
 # enable logging, the directory should already be created, but let's check just in case
-readonly DATE_LOG="$(date +"%Y-%m-%d")"
 readonly LOG_DIR="/var/log/service"
-readonly UPGRADE_LOG="${LOG_DIR}/unattended-upgrade.${DATE_LOG}.log"
+readonly UPGRADE_LOG="${LOG_DIR}/unattended-upgrade.$(date '+%Y-%m-%d').log"
 exec &>> "$UPGRADE_LOG" || { echo "❌ Error: cannot write to log '$UPGRADE_LOG', exit"; exit 1; }
 
 # start logging message
-readonly DATE_START="$(date "+%Y-%m-%d %H:%M:%S")"
-echo "########## unattended upgrade started - $DATE_START ##########"
+echo "########## unattended upgrade started - $(date '+%Y-%m-%d %H:%M:%S') ##########"
 
 # exit logging message function
 RC="1"
@@ -43,54 +46,7 @@ readonly LOCK_FILE="/run/lock/unattended_upgrade.lock"
 exec 99> "$LOCK_FILE" || { echo "❌ Error: cannot open lock file '$LOCK_FILE', exit"; exit 1; }
 flock -n 99 || { echo "❌ Error: another instance is running, exit"; exit 1; }
 
-# check secret file, if the file is ok, we source it.
-readonly ENV_FILE="/usr/local/etc/telegram/secrets.env"
-if [[ ! -f "$ENV_FILE" ]] || [[ "$(stat -L -c '%U:%a' "$ENV_FILE")" != "telegram-gateway:600" ]]; then
-    echo "❌ Error: env file '$ENV_FILE' not found or has wrong permissions, exit"
-    exit 1
-fi
-source "$ENV_FILE"
-
-# check token from secret file
-[[ -z "$BOT_TOKEN" ]] && { echo "❌ Error: Telegram bot token is missing in '$ENV_FILE', exit"; exit 1; }
-
-# check group id from secret file
-[[ -z "$GROUP_ID" ]] && { echo "❌ Error: Telegram group ID is missing in '$ENV_FILE', exit"; exit 1; }
-
-# pure Telegram message function with checking the sending status
-_tg_m() {
-    local response
-    response="$(curl -fsS -m 10 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-        --data-urlencode "chat_id=${GROUP_ID}" \
-        --data-urlencode "parse_mode=HTML" \
-        --data-urlencode "text=${MESSAGE}")" || return 1
-    grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<< "$response" || return 1
-    return 0
-}
-
-# Telegram message with logging and retry
-telegram_message() {
-    local attempt="1"
-    while true; do
-        if ! _tg_m; then
-            if [[ "$attempt" -ge "$MAX_ATTEMPTS" ]]; then
-                echo "❌ Error: failed to send Telegram message after $attempt attempts, exit"
-                return 1
-            fi
-            sleep 60
-            ((attempt++))
-            continue
-        else
-            echo "✅ Success: message was sent to Telegram after $attempt attempt"
-            return 0
-        fi
-    done
-}
-
-# main variables
-readonly HOSTNAME="$(hostname)"
-readonly MAX_ATTEMPTS="3"
-readonly TODAY="$(date +%Y-%m-%d)"
+source "/usr/local/lib/service/telegram.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit"; exit 1; }
 
 # main logic start here
 DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
