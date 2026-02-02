@@ -25,18 +25,15 @@ readonly BACKUP_LOG="${LOG_DIR}/backup.${DATE_LOG}.log"
 exec &>> "$BACKUP_LOG" || { echo "❌ Error: cannot write to log '$BACKUP_LOG', exit"; exit 1; }
 
 # start logging message
-readonly DATE_START="$(date "+%Y-%m-%d %H:%M:%S")"
-echo "########## backup started - $DATE_START ##########"
+echo "########## backup started - $(date '+%Y-%m-%d %H:%M:%S') ##########"
 
 # exit logging message function
 RC_F="1"
 on_exit() {
     if [[ "$RC_F" -eq "0" ]]; then
-        local date_end="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## backup ended - $date_end ##########"
+        echo "########## backup ended - $(date '+%Y-%m-%d %H:%M:%S') ##########"
     else
-        local date_fail="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## backup failed - $date_fail ##########"
+        echo "########## backup failed - $(date '+%Y-%m-%d %H:%M:%S') ##########"
     fi
 }
 
@@ -44,8 +41,8 @@ on_exit() {
 trap 'on_exit' EXIT
 
 # check another instanсe of the script is not running
-readonly LOCK_FILE_5="/run/lock/backup.lock"
-exec 99> "$LOCK_FILE_5" || { echo "❌ Error: cannot open lock file '$LOCK_FILE_5', exit"; exit 1; }
+readonly LOCK_FILE="/run/lock/backup.lock"
+exec 99> "$LOCK_FILE" || { echo "❌ Error: cannot open lock file '$LOCK_FILE', exit"; exit 1; }
 flock -n 99 || { echo "❌ Error: another instance working on backup, exit"; exit 1; }
 
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
@@ -62,9 +59,7 @@ FILES=(
   "/usr/local/etc/xray/config.json"
 )
 
-TS="$(date +'%Y-%m-%d_%H-%M-%S')"
-HOST="$(hostname)"
-FILE_NAME="xray_backup_${HOST}_${TS}.tar.gz"
+FILE_NAME="xray_backup_$(hostname)_$(date '+%Y-%m-%d_%H-%M-%S').tar.gz"
 FILE_PATH="/tmp/${FILE_NAME}"
 
 TMPDIR="$(mktemp -d)"
@@ -98,16 +93,14 @@ if [[ "$ONLY_ARCHIVE" == 1 ]]; then
     telegram_file
 else
     # start collecting message
-    readonly DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
-
     MESSAGE="📢<b> Scheduled backup</b> 
 
-🖥️ <b>Host:</b> $HOSTNAME
-⌚ <b>Time:</b> $DATE_MESSAGE
+🖥️ <b>Host:</b> $(hostname)
+⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 💾 <b>Backup log:</b> $BACKUP_LOG"
 
     # logging message
-    echo "########## collected message - $DATE_MESSAGE ##########"
+    echo "########## collected message - $(date '+%Y-%m-%d %H:%M:%S') ##########"
     echo "$MESSAGE"
 
     telegram_file

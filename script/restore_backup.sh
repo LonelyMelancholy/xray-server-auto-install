@@ -1,16 +1,11 @@
 #!/bin/bash
 
 # root checking
-if [[ $EUID -ne 0 ]]; then
-    echo "❌ Error: you are not the root user, exit"
-    exit 1
-else
-    echo "✅ Success: you are root user, continued"
-fi
+[[ $EUID -ne 0 ]] && { echo "❌ Error: you are not the root user, exit"; exit 1; }
 
 # check another instanсe of the script is not running
-readonly LOCK_FILE_5="/run/lock/backup.lock"
-exec 99> "$LOCK_FILE_5" || { echo "❌ Error: cannot open lock file '$LOCK_FILE_5', exit"; exit 1; }
+readonly LOCK_FILE="/run/lock/backup.lock"
+exec 99> "$LOCK_FILE" || { echo "❌ Error: cannot open lock file '$LOCK_FILE', exit"; exit 1; }
 flock -n 99 || { echo "❌ Error: another instance working on backup, exit"; exit 1; }
 
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
@@ -27,9 +22,14 @@ if [[ -z $ARCHIVE || $# -gt 1 ]]; then
 fi
 
 run_and_check() {
-    local action="$1"
+    action="$1"
     shift 1
-    "$@" > /dev/null && echo "✅ Success: $action" || { echo "❌ Error: $action, exit"; exit 1; }
+    if "$@" > /dev/null; then
+        echo "✅ Success: $action"
+    else
+        echo "❌ Error: $action, exit"
+        exit 1
+    fi
 }
 
 # make absolute path

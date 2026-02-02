@@ -18,18 +18,15 @@ readonly NOTIFY_LOG="${LOG_DIR}/user.${DATE_LOG}.log"
 exec &>> "$NOTIFY_LOG" || { echo "❌ Error: cannot write to log '$NOTIFY_LOG', exit"; exit 1; }
 
 # start logging message
-readonly DATE_START="$(date "+%Y-%m-%d %H:%M:%S")"
-echo "########## user notify started - $DATE_START ##########"
+echo "########## user notify started - $(date '+%Y-%m-%d %H:%M:%S') ##########"
 
 # exit logging message function
 RC_M="1"
 on_exit() {
     if [[ "$RC_M" -eq "0" ]]; then
-        local date_end="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## user notify ended - $date_end ##########"
+        echo "########## user notify ended - $(date '+%Y-%m-%d %H:%M:%S') ##########"
     else
-        local date_fail="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## user notify failed - $date_fail ##########"
+        echo "########## user notify failed - $(date '+%Y-%m-%d %H:%M:%S') ##########"
     fi
 }
 
@@ -41,9 +38,6 @@ readonly XRAY_CONFIG="/usr/local/etc/xray/config.json"
 readonly TR_DB_M="/var/log/xray/TR_DB_M"
 readonly TR_DB_Y="/var/log/xray/TR_DB_Y"
 readonly INBOUND_TAG="Vless"
-readonly HOSTNAME="$(hostname)"
-readonly MAX_ATTEMPTS="3"
-readonly WAIT_SEC="$(shuf -i "10-60" -n 1)"
 
 # check xray conf
 if [[ ! -r "$XRAY_CONFIG" ]]; then
@@ -136,12 +130,10 @@ while IFS= read -r email; do
 done <<< "$EMAILS"
 
 # start collecting message
-readonly DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
-
 MESSAGE="📢<b> Daily user report</b> 
 
-🖥️ <b>Host:</b> $HOSTNAME
-⌚ <b>Time:</b> $DATE_MESSAGE
+🖥️ <b>Host:</b> $(hostname)
+⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 🔛 <b>Traffic:</b>
 🔛 <b>Host traffic:</b> $(fmt "$SERVER_TOTAL")"
 
@@ -169,7 +161,7 @@ MESSAGE+=$'\n'"💾 <b>Xray error log:</b> /var/log/xray/error.log
 💾 <b>Notify log:</b> $NOTIFY_LOG"
 
 # logging message
-echo "########## collected message - $DATE_MESSAGE ##########"
+echo "########## collected message - $(date '+%Y-%m-%d %H:%M:%S') ##########"
 echo "$MESSAGE"
 
 # send message

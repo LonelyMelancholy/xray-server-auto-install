@@ -7,9 +7,6 @@ export PATH
 # user check
 [[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the telegram-gateway user, exit"; exit 1; }
 
-# main variables
-readonly HOSTNAME="$(hostname)"
-
 # check another instance working on tr_db
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
 tr_db_lock_retry
@@ -185,7 +182,7 @@ NGINX_STATUS="$(make_status "$NGINX_STATUS" "Status nginx")"
 XRAY_STATUS="$(make_status "$XRAY_STATUS" "Status xray")"
 
 # --- Output ---
-echo "🖥️ Hostname: ${HOSTNAME}"
+echo "🖥️ Hostname: $(hostname)"
 echo "🌐 IPv4 ${IP_4}"
 echo "🌐 IPv6 ${IP_6}"
 echo "⏱️ Uptime server: ${uptime_str}"

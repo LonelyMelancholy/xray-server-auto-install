@@ -44,7 +44,12 @@ source "/usr/local/lib/service/telegram.lib.sh" || { echo "❌ Error: failed to 
 run_and_check() {
     action="$1"
     shift 1
-    "$@" > /dev/null && echo "✅ Success: $action" || { echo "❌ Error: $action, exit"; exit 1; }
+    if "$@" > /dev/null; then
+        echo "✅ Success: $action"
+    else
+        echo "❌ Error: $action, exit"
+        exit 1
+    fi
 }
 
 readonly XRAY_CONFIG="/usr/local/etc/xray/config.json"

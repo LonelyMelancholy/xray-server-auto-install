@@ -46,12 +46,15 @@ if [[ ! $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
 fi
 
 # helper func
-try() { "$@" || return 1; }
-
 run_and_check() {
     action="$1"
     shift 1
-    "$@" > /dev/null && echo "✅ Success: $action" || { echo "❌ Error: $action, exit"; exit 1; }
+    if "$@" > /dev/null; then
+        echo "✅ Success: $action"
+    else
+        echo "❌ Error: $action, exit"
+        exit 1
+    fi
 }
 
 # count clients var for jd
@@ -81,11 +84,11 @@ fi
 
 xray_userdel() {
     # backup
-    try cp -a "$XRAY_CONFIG" "$BACKUP_PATH"
+    cp -a "$XRAY_CONFIG" "$BACKUP_PATH" || return 1
     
     # make tmp file
     readonly TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
-    try chmod 600 "$TMP_XRAY_CONFIG"
+    chmod 600 "$TMP_XRAY_CONFIG" || return 1
     
     # set trap for tmp file
     trap 'rm -f "$TMP_XRAY_CONFIG" "$TMP_URI"' EXIT
@@ -166,7 +169,7 @@ fi
 if [[ "$REMOVED" -gt 0 && -f "$URI_PATH" ]]; then
     uri_userdel() {
         # backup
-        try cp -a "$URI_PATH" "$URI_BAK"
+        cp -a "$URI_PATH" "$URI_BAK" || return 1
 
         # create tmp file
         readonly TMP_URI="$(mktemp)"

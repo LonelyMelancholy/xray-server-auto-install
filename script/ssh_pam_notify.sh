@@ -29,9 +29,7 @@ fi
 [[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the root user, exit"; exit 1; }
 
 # enable logging, the directory should already be created, but let's check just in case
-readonly DATE_LOG="$(date +"%Y-%m-%d")"
-readonly LOG_DIR="/var/log/telegram"
-readonly NOTIFY_LOG="${LOG_DIR}/ssh_pam.${DATE_LOG}.log"
+readonly NOTIFY_LOG="/var/log/telegram/ssh_pam.$(date '+%Y-%m-%d').log"
 exec &>> "$NOTIFY_LOG" || { echo "❌ Error: cannot write to log '$NOTIFY_LOG', exit"; exit 1; }
 
 # start logging message
@@ -41,11 +39,9 @@ echo "########## ssh pam notify started - $(date '+%Y-%m-%d %H:%M:%S') #########
 RC_M="1"
 on_exit() {
     if [[ "$RC_M" -eq "0" ]]; then
-        local date_end="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## ssh pam notify ended - $date_end ##########"
+        echo "########## ssh pam notify ended - $(date '+%Y-%m-%d %H:%M:%S') ##########"
     else
-        local date_fail="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## ssh pam notify failed - $date_fail ##########"
+        echo "########## ssh pam notify failed - $(date '+%Y-%m-%d %H:%M:%S') ##########"
     fi
 }
 
@@ -61,14 +57,12 @@ readonly USER="$PAM_USER"
 readonly SESSION="$PAM_TYPE"
 
 # start collecting message
-readonly DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
-
 case "$SESSION" in
     open_session)
     MESSAGE="📢 <b>SSH PAM notify (login)</b>
 
 🖥️ <b>Host:</b> $HOSTNAME
-⌚ <b>Time:</b> $DATE_MESSAGE
+⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 🧑🏿‍💻 <b>User:</b> $USER
 🏴 <b>From:</b> $IP
 💾 <b>Auth log:</b> /var/log/auth.log
@@ -78,7 +72,7 @@ case "$SESSION" in
     MESSAGE="📢 <b>SSH PAM notify (logout)</b>
 
 🖥️ <b>Host:</b> $HOSTNAME
-⌚ <b>Time:</b> $DATE_MESSAGE
+⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 🧑🏿‍💻 <b>User:</b> $USER
 🏴 <b>From:</b> $IP
 💾 <b>Auth log:</b> /var/log/auth.log
@@ -88,7 +82,7 @@ case "$SESSION" in
     MESSAGE="⚠️ <b>SSH PAM notify (unknown)</b>
 
 🖥️ <b>Host:</b> $HOSTNAME
-⌚ <b>Time:</b> $DATE_MESSAGE
+⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 ❌ Error: unknown PAM session type, check settings
 💾 <b>Auth log:</b> /var/log/auth.log
 💾 <b>Notify log:</b> $NOTIFY_LOG"
@@ -96,7 +90,7 @@ case "$SESSION" in
 esac
 
 # logging message
-echo "########## collected message - $DATE_MESSAGE ##########"
+echo "########## collected message - $(date '+%Y-%m-%d %H:%M:%S') ##########"
 echo "$MESSAGE"
 
 # send message

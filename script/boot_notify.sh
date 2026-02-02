@@ -8,30 +8,25 @@ PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export PATH
 
 # user check
-[[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the root user, exit"; exit 1; }
+[[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the telegram-gateway user, exit"; exit 1; }
 
 # wait for all service started
 sleep 200
 
-# enable logging, the directory should already be created, but let's check just in case
-readonly DATE_LOG="$(date +"%Y-%m-%d")"
-readonly LOG_DIR="/var/log/telegram"
-readonly NOTIFY_LOG="${LOG_DIR}/boot.${DATE_LOG}.log"
+# enable logging
+NOTIFY_LOG="/var/log/telegram/boot.$(date '+%Y-%m-%d').log"
 exec &>> "$NOTIFY_LOG" || { echo "❌ Error: cannot write to log '$NOTIFY_LOG', exit"; exit 1; }
 
 # start logging message
-readonly DATE_START="$(date "+%Y-%m-%d %H:%M:%S")"
-echo "########## boot notify started - $DATE_START ##########"
+echo "########## boot notify started - $(date '+%Y-%m-%d %H:%M:%S') ##########"
 
 # exit logging message function
 RC_M="1"
 on_exit() {
     if [[ "$RC_M" -eq "0" ]]; then
-        local date_end="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## boot notify ended - $date_end ##########"
+        echo "########## boot notify ended - $(date '+%Y-%m-%d %H:%M:%S') ##########"
     else
-        local date_fail="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## boot notify failed - $date_fail ##########"
+        echo "########## boot notify failed - $(date '+%Y-%m-%d %H:%M:%S') ##########"
     fi
 }
 
@@ -52,7 +47,7 @@ wait_internet() {
     for ((i=0; i<timeout; i++)); do
         ip route | grep 'default ' &> /dev/null || { sleep 2; continue; }
         getent ahosts api.telegram.org &> /dev/null || { sleep 2; continue; }
-        curl -fsS -m 5 "https://api.telegram.org/bot${BOT_TOKEN}/getMe" | grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' && return 0
+        curl -fsS -m 10 "https://api.telegram.org/bot${BOT_TOKEN}/getMe" | grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' && return 0
         sleep 2
     done
     return 1
@@ -76,9 +71,6 @@ systemctl is-active --quiet nginx.service && NGINX_STATUS="running" || NGINX_STA
 systemctl is-active --quiet xray.service && XRAY_STATUS="running" || XRAY_STATUS="fail"
 
 # start collecting message
-readonly HOSTNAME="$(hostname)"
-readonly DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
-
 # collecting title
 if [[  "$SSH_STATUS" ==  "running" && "$CRON_STATUS" == "running" && "$FAIL2BAN_STATUS" == "running" && "$NGINX_STATUS" == "running" && "$XRAY_STATUS" == "running" && "$SYSTEM_STATUS" == "running" ]]; then
 TITLE="✅ <b>Server up, all services are running</b>"
@@ -108,8 +100,8 @@ XRAY_STATUS="$(make_status "$XRAY_STATUS" "Status xray")"
 # collecting message body
 MESSAGE="$TITLE
 
-🖥️ <b>Host:</b> $HOSTNAME
-⌚ <b>Time:</b> $DATE_MESSAGE
+🖥️ <b>Host:</b> $(hostname)
+⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 $SYSTEM_STATUS
 $SSH_STATUS
 $CRON_STATUS
@@ -119,7 +111,7 @@ $XRAY_STATUS
 💾 <b>Notify log:</b> $NOTIFY_LOG"
 
 # logging message
-echo "########## collected message - $DATE_MESSAGE ##########"
+echo "########## collected message - $(date '+%Y-%m-%d %H:%M:%S') ##########"
 echo "$MESSAGE"
 
 # send message

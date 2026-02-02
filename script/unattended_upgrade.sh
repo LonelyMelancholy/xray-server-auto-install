@@ -17,8 +17,7 @@ readonly MAX_ATTEMPTS="3"
 readonly TODAY="$(date +%Y-%m-%d)"
 
 # enable logging, the directory should already be created, but let's check just in case
-readonly LOG_DIR="/var/log/service"
-readonly UPGRADE_LOG="${LOG_DIR}/unattended-upgrade.$(date '+%Y-%m-%d').log"
+readonly UPGRADE_LOG="/var/log/service/unattended-upgrade.$(date '+%Y-%m-%d').log"
 exec &>> "$UPGRADE_LOG" || { echo "❌ Error: cannot write to log '$UPGRADE_LOG', exit"; exit 1; }
 
 # start logging message
@@ -29,12 +28,10 @@ RC="1"
 REBOOT="0"
 on_exit() {
     if [[ "$RC" -eq "0" ]]; then
-        local date_end="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## unattended upgrade ended - $date_end ##########"
+        echo "########## unattended upgrade ended - $(date '+%Y-%m-%d %H:%M:%S') ##########"
         [[ "$REBOOT" -eq "1" ]] && reboot
     else
-        local date_fail="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## unattended upgrade failed - $date_fail ##########"
+        echo "########## unattended upgrade failed - $(date '+%Y-%m-%d %H:%M:%S') ##########"
     fi
 }
 
@@ -49,14 +46,13 @@ flock -n 99 || { echo "❌ Error: another instance is running, exit"; exit 1; }
 source "/usr/local/lib/service/telegram.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit"; exit 1; }
 
 # main logic start here
-DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
 MESSAGE="⚠️ <b>Scheduled security upgrade</b>
 
 🖥️ <b>Host:</b> $HOSTNAME
-⌚ <b>Time:</b> $DATE_MESSAGE
+⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 ☑️ <b>Action:</b> upgrade started"
 
-echo "########## collected message - $DATE_MESSAGE ##########"
+echo "########## collected message - $(date '+%Y-%m-%d %H:%M:%S') ##########"
 echo "$MESSAGE"
 
 telegram_message
@@ -91,17 +87,16 @@ update_and_upgrade() {
 #checking fail in update/upgrade step
 check_fail() {
     if [[ -n "${FAIL_STEP:-}" ]]; then
-        DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
         MESSAGE="❌ <b>Scheduled security updates</b>
 
 🖥️ <b>Host:</b> $HOSTNAME
-⌚ <b>Time:</b> $DATE_MESSAGE
+⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 ❌ <b>Action:</b> updgrade failed
 ❌ <b>Step:</b> ${FAIL_STEP}
 💾 <b>UN-UP log:</b> /var/log/unattended-upgrades/unattended-upgrades.log
 💾 <b>Upgrade log:</b> ${UPGRADE_LOG}
 💾 <b>Dpkg log:</b> /var/log/dpkg.log"
-        echo "########## collected message - $DATE_MESSAGE ##########"
+        echo "########## collected message - $(date '+%Y-%m-%d %H:%M:%S') ##########"
         echo "$MESSAGE"
         telegram_message
         exit $RC
@@ -141,18 +136,17 @@ $CHANGES"
 fi
 
 # start collecting final message
-DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
 MESSAGE="<b>✅ Scheduled security updates</b>
 
 🖥️ <b>Host:</b> $HOSTNAME
-⌚ <b>Time:</b> $DATE_MESSAGE
+⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 ☑️ <b>Action:</b> upgrade success
 $CHANGE_SUMMARY
 💾 <b>UN-UP log:</b> /var/log/unattended-upgrades/unattended-upgrades.log
 💾 <b>Upgrade log:</b> ${UPGRADE_LOG}
 💾 <b>Dpkg log:</b> /var/log/dpkg.log"
 
-echo "########## collected message - $DATE_MESSAGE ##########"
+echo "########## collected message - $(date '+%Y-%m-%d %H:%M:%S') ##########"
 echo "$MESSAGE"
 telegram_message
 
@@ -160,16 +154,15 @@ telegram_message
 if [[ -f /var/run/reboot-required ]]; then
     PKGS_REBOOT="$(cat /var/run/reboot-required.pkgs)"
     PKGS_REBOOT="$(printf '%s\n' "$PKGS_REBOOT" | sed 's/^/[→] /')"
-    DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
     MESSAGE="⚠️ <b>Scheduled security upgrade</b>
 
 🖥️ <b>Host:</b> $HOSTNAME
-⌚ <b>Time:</b> $DATE_MESSAGE
+⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 ☑️ <b>Action:</b> reboot after 1 min
 🔎 <b>Reboot request from packages:</b>
 ${PKGS_REBOOT}"
 
-echo "########## collected message - $DATE_MESSAGE ##########"
+echo "########## collected message - $(date '+%Y-%m-%d %H:%M:%S') ##########"
 echo "$MESSAGE"
 telegram_message
 

@@ -12,24 +12,19 @@ export PATH
 [[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the telegram-gateway user, exit"; exit 1; }
 
 # enable logging, the directory should already be created, but let's check just in case
-readonly DATE_LOG="$(date +"%Y-%m-%d")"
-readonly LOG_DIR="/var/log/service"
-readonly TIME_BLOCK_LOG="${LOG_DIR}/time_block.${DATE_LOG}.log"
+readonly TIME_BLOCK_LOG="/var/log/service/time_block.$(date '+%Y-%m-%d').log"
 exec &>> "$TIME_BLOCK_LOG" || { echo "❌ Error: cannot write to log '$TIME_BLOCK_LOG', exit"; exit 1; }
 
 # start logging message
-readonly DATE_START="$(date "+%Y-%m-%d %H:%M:%S")"
-echo "########## time block started - $DATE_START ##########"
+echo "########## time block started - $(date '+%Y-%m-%d %H:%M:%S') ##########"
 
 # exit logging message function
 RC="1"
 on_exit() {
     if [[ "$RC" -eq "0" ]]; then
-        local date_end="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## time block ended - $date_end ##########"
+        echo "########## time block ended - $(date '+%Y-%m-%d %H:%M:%S') ##########"
     else
-        local date_fail="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## time block failed - $date_fail ##########"
+        echo "########## time block failed - $(date '+%Y-%m-%d %H:%M:%S') ##########"
     fi
 }
 
@@ -59,12 +54,15 @@ fi
 source "/usr/local/lib/service/telegram.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit"; exit 1; }
 
 # helper func
-try() { "$@" || return 1; }
-
 run_and_check() {
     action="$1"
     shift 1
-    "$@" > /dev/null && echo "✅ Success: $action" || { echo "❌ Error: $action, exit"; exit 1; }
+    if "$@" > /dev/null; then
+        echo "✅ Success: $action"
+    else
+        echo "❌ Error: $action, exit"
+        exit 1
+    fi
 }
 
 
@@ -110,7 +108,7 @@ run_and_check "parse config for exp email" parse_conf
 new_conf() {
     # make tmp file
     TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
-    try chmod 600 "$TMP_XRAY_CONFIG"
+    chmod 600 "$TMP_XRAY_CONFIG" || return 1
 
     # set trap for tmp removing
     trap 'on_exit; rm -f "$TMP_XRAY_CONFIG";' EXIT
@@ -191,8 +189,6 @@ else
 fi
 
 # start collecting message
-readonly DATE_MESSAGE="$(date '+%Y-%m-%d %H:%M:%S')"
-
 if [[ $XR_ST == 0 ]]; then
     TITLE="⚠️<b> Scheduled time block</b>"
 else
@@ -202,7 +198,7 @@ fi
 MESSAGE="$TITLE
 
 🖥️ <b>Host:</b> $HOSTNAME
-⌚ <b>Time:</b> $DATE_MESSAGE
+⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 $XRAY_STATUS"
 
 if (( ${#expired_emails[@]} == 0 )); then
@@ -220,7 +216,7 @@ fi
 MESSAGE+=$'\n'"💾 <b>Time block log:</b> $TIME_BLOCK_LOG"
 
 # logging message
-echo "########## collected message - $DATE_MESSAGE ##########"
+echo "########## collected message - $(date '+%Y-%m-%d %H:%M:%S') ##########"
 echo "$MESSAGE"
 
 # send message

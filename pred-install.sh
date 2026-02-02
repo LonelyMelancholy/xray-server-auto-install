@@ -4,12 +4,7 @@
 echo "📢 Info: starting the procedure for preparing the system for installation"
 
 # root check
-if [[ "$EUID" -ne 0 ]]; then
-    echo "❌ Error: you are not root user, exit"
-    exit 1
-else
-    echo "✅ Success: you are root user, continue"
-fi
+[[ $EUID -ne 0 ]] && { echo "❌ Error: you are not the root user, exit"; exit 1; }
 
 # check os version
 [[ -r /etc/os-release ]] || { echo "❌ Error: '/etc/os-release' missing or you do not have read permissions, exit"; exit 1; }
@@ -17,8 +12,6 @@ source /etc/os-release
 if [[ "$ID" != "ubuntu" ]] || [[ "${VERSION_ID%%.*}" -lt 20 ]]; then
     echo "❌ Error: this script requires Ubuntu 20.04 or higher, exit"
     exit 1
-else
-    echo "📢 Info: system version '$PRETTY_NAME'"
 fi
 
 # check another instance of the script is not running
@@ -38,9 +31,9 @@ LOG_UPDATE_DIST="logs/update_dist.log"
 LOG_CLEANUP="logs/cleanup.log"
 
 # check configuration file
-CFG_CHECK="module/cfg_check.sh"
+CFG_CHECK="module/cfg_check.lib.sh"
 [[ -r "$CFG_CHECK" ]] || { echo "❌ Error: check '$CFG_CHECK' it's missing or you do not have read permissions, exit"; exit 1; }
-source "$CFG_CHECK"
+source "$CFG_CHECK" || { echo "❌ Error: failed to source '$CFG_CHECK', exit"; exit 1; }
 
 # hostname change
 if [[ $(hostname) != "$NEW_HOSTNAME" ]]; then

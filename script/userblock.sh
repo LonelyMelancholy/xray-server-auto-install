@@ -39,12 +39,15 @@ if [[ ! -r "$XRAY_CONFIG" || ! -w "$XRAY_CONFIG" ]]; then
 fi
 
 # helper func
-try() { "$@" || return 1; }
-
 run_and_check() {
     action="$1"
     shift 1
-    "$@" > /dev/null && echo "✅ Success: $action" || { echo "❌ Error: $action, exit"; exit 1; }
+    if "$@" > /dev/null; then
+        echo "✅ Success: $action"
+    else
+        echo "❌ Error: $action, exit"
+        exit 1
+    fi
 }
 
 # for block: find client emails in inbound Vless that match USERNAME or USERNAME|
@@ -121,7 +124,7 @@ case "$ACTION" in
         block_user() {
             # make tmp file
             TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
-            try chmod 600 "$TMP_XRAY_CONFIG"
+            chmod 600 "$TMP_XRAY_CONFIG" || return 1
 
             # set trap for tmp removing
             trap 'rm -f "$TMP_XRAY_CONFIG"' EXIT
@@ -164,7 +167,7 @@ case "$ACTION" in
         unblock_user() {
             # make tmp file
             TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
-            try chmod 600 "$TMP_XRAY_CONFIG"
+            chmod 600 "$TMP_XRAY_CONFIG" || return 1
 
             # set trap for tmp removing
             trap 'rm -f "$TMP_XRAY_CONFIG"' EXIT

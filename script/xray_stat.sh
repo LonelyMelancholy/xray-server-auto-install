@@ -42,12 +42,15 @@ source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to 
 tr_db_lock_retry
 
 # helper func
-try() { "$@" || return 1; }
-
 run_and_check() {
     action="$1"
     shift 1
-    "$@" > /dev/null && echo "✅ Success: $action" || { echo "❌ Error: $action, exit"; exit 1; }
+    if "$@" > /dev/null; then
+        echo "✅ Success: $action"
+    else
+        echo "❌ Error: $action, exit"
+        exit 1
+    fi
 }
 
 # main variable

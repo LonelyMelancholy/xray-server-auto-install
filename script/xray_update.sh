@@ -18,17 +18,14 @@ readonly UPDATE_LOG="${LOG_DIR}/xray_update.${DATE}.log"
 exec &>> "$UPDATE_LOG" || { echo "❌ Error: cannot write to log '$UPDATE_LOG', exit"; exit 1; }
 
 # start logging message
-readonly DATE_START="$(date "+%Y-%m-%d %H:%M:%S")"
-echo "   ########## xray update started - $DATE_START ##########   "
+echo "   ########## xray update started - $(date '+%Y-%m-%d %H:%M:%S') ##########   "
 
 # exit log message function
 on_exit() {
     if [[ "$RC" = "0" ]]; then
-        local date_end=$(date "+%Y-%m-%d %H:%M:%S")
-        echo "   ########## xray update ended - $date_end ##########   "
+        echo "   ########## xray update ended - $(date '+%Y-%m-%d %H:%M:%S') ##########   "
     else
-        local date_fail="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "   ########## xray update failed - $date_fail ##########   "
+        echo "   ########## xray update failed - $(date '+%Y-%m-%d %H:%M:%S') ##########   "
     fi
 }
 
@@ -103,19 +100,16 @@ cleanup_old_backups_and_logs() {
 
 # exit cleanup and log message function
 exit_cleanup() {
-    local date_del_start=$(date "+%Y-%m-%d %H:%M:%S")
-    echo "########## cleanup started - $date_del_start ##########"
+    echo "########## cleanup started - $(date '+%Y-%m-%d %H:%M:%S') ##########"
     if rm -rf "$TMP_DIR"; then
         echo "✅ Success: temporary directory $TMP_DIR was deleted"
-        local date_del_success=$(date "+%Y-%m-%d %H:%M:%S")
-        echo "########## cleanup ended - $date_del_success ##########"
+        echo "########## cleanup ended - $(date '+%Y-%m-%d %H:%M:%S') ##########"
     else
         echo "❌ Error: temporary directory $TMP_DIR was not deleted"
-        local date_del_error=$(date "+%Y-%m-%d %H:%M:%S")
-        echo "########## cleanup failed - $date_del_error ##########"
+        echo "########## cleanup failed - $(date '+%Y-%m-%d %H:%M:%S') ##########"
         MESSAGE="❌ <b>Scheduled cleanup after xray update</b>
 🖥️ <b>Host:</b> $HOSTNAME
-⌚ <b>Time error:</b> $date_del_error
+⌚ <b>Time error:</b> $(date '+%Y-%m-%d %H:%M:%S')
 ❌ <b>Error:</b> temporary directory $TMP_DIR for xray update was not deleted"
         telegram_message
         trap - EXIT

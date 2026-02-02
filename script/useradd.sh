@@ -25,12 +25,15 @@ readonly URI_BAK="${URI_PATH}.$(date +%Y%m%d_%H%M%S).bak"
 DAYS="$2"
 
 # helper func
-try() { "$@" || return 1; }
-
 run_and_check() {
     action="$1"
     shift 1
-    "$@" > /dev/null && echo "✅ Success: $action" || { echo "❌ Error: $action, exit"; exit 1; }
+    if "$@" > /dev/null; then
+        echo "✅ Success: $action"
+    else
+        echo "❌ Error: $action, exit"
+        exit 1
+    fi
 }
 
 # argument check
@@ -106,7 +109,7 @@ fi
 xray_useradd() {
     # make tmp file
     TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
-    try chmod 600 "$TMP_XRAY_CONFIG"
+    chmod 600 "$TMP_XRAY_CONFIG" || return 1
 
     # set trap for deleting tmp files
     trap 'rm -f "$TMP_XRAY_CONFIG"' EXIT
