@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # script for autoblock user who download traffic limit via cron every hour
-# all errors are logged, except the first three, for debugging, add a redirect to the debug log
+# all errors are logged in journald, see journalctl -t traffic_block
 # 10 * * * * telegram-gateway /usr/local/bin/service/traffic_block.sh &> /dev/null
 # exit codes work to tell Cron about success
 
@@ -8,39 +8,51 @@
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export PATH
 
-# user check
-[[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the telegram-gateway user, exit"; exit 1; }
-# enable logging, the directory should already be created, but let's check just in case
-readonly DATE_LOG="$(date +"%Y-%m-%d")"
-readonly LOG_DIR="/var/log/service"
-readonly TRAFFIC_BLOCK_LOG="${LOG_DIR}/traffic_block.${DATE_LOG}.log"
-exec &>> "$TRAFFIC_BLOCK_LOG" || { echo "❌ Error: cannot write to log '$TRAFFIC_BLOCK_LOG', exit"; exit 1; }
+# enable logging
+exec > >(systemd-cat -t traffic_block -p info) 2> >(systemd-cat -t traffic_block -p error)
 
 # start logging message
-readonly DATE_START="$(date "+%Y-%m-%d %H:%M:%S")"
-echo "########## traffic block started - $DATE_START ##########"
+echo "traffic block started - $(date '+%Y-%m-%d %H:%M:%S')"
 
 # exit logging message function
 RC="1"
 on_exit() {
     if [[ "$RC" -eq "0" ]]; then
-        local date_end="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## traffic block ended - $date_end ##########"
+        echo "traffic block ended - $(date '+%Y-%m-%d %H:%M:%S')"
     else
-        local date_fail="$(date "+%Y-%m-%d %H:%M:%S")"
-        echo "########## traffic block failed - $date_fail ##########"
+        echo "traffic block failed - $(date '+%Y-%m-%d %H:%M:%S')"
     fi
 }
 
 # trap for the end log message for the end log
 trap 'on_exit' EXIT
 
-source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
+# user check
+[[ "$(whoami)" != "telegram-gateway" ]] && { echo "Error: you are not the telegram-gateway user, exit" >&2; exit 1; }
+
+# main variable
+readonly XRAY_CONFIG="/usr/local/etc/xray/config.json"
+readonly XRAY_CONFIG_BACKUP="${XRAY_CONFIG}.bak.$(date '+%Y%m%d_%H%M%S')"
+readonly INBOUND_TAG="Vless"
+readonly TR_DB_M="/var/log/xray/TR_DB_M"
+readonly AUTO_BLOCK_TAG="autoblock-traffic-users"
+readonly MAX_TR=$((3000 * 1024 * 1024 * 1024)) # 3TB limits
+
+# source runlock function library
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit" >&2; exit 1; }
+
+# lock check
 xray_lock_retry
 tr_db_lock_retry
 
-source "/usr/local/lib/service/telegram.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit"; exit 1; }
+# read and write conf check
+read_and_write_check "$XRAY_CONFIG"
+read_check "$TR_DB_M"
 
+# source Telegram function library
+source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
+
+# help function
 run_and_check() {
     action="$1"
     shift 1
@@ -51,26 +63,6 @@ run_and_check() {
         exit 1
     fi
 }
-
-readonly XRAY_CONFIG="/usr/local/etc/xray/config.json"
-readonly XRAY_CONFIG_BACKUP="${XRAY_CONFIG}.bak.$(date +%Y%m%d_%H%M%S)"
-readonly INBOUND_TAG="Vless"
-readonly TR_DB_M="/var/log/xray/TR_DB_M"
-readonly AUTO_BLOCK_TAG="autoblock-traffic-users"
-# 3TB limit
-readonly MAX_TR=$((3000 * 1024 * 1024 * 1024))
-
-# check xray conf
-if [[ ! -r "$XRAY_CONFIG" ]]; then
-    echo "❌ Error: check $XRAY_CONFIG it's missing or you do not have read permissions, exit"
-    exit 1
-fi
-
-# check TR_DB
-if [[ ! -r "$TR_DB_M" ]]; then
-    echo "❌ Error: check $TR_DB_M it's missing or you do not have read permissions, exit"
-    exit 1
-fi
 
 # ====== СБОР ТРАФИКА ПО ИМЕНИ ДО '|' ======
 declare -A total_bytes_by_base
@@ -214,6 +206,7 @@ if (( changed == 1 )); then
   
   echo "Готово: добавлено в блокировку (${#blocked_now[@]}):"
   printf ' - %s\n' "${blocked_now[@]}"
+  restart_xray
 else
   echo "OK: превышений не найдено, конфиг не менялся."
 fi

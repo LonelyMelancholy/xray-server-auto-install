@@ -125,8 +125,8 @@ fi
 
 # sudo without password
 ensure_nopasswd_sudo_for_group() {
-    local sudoers_file="/etc/sudoers.d/90-${SSH_GROUP}-nopasswd"
-    local line="%${SSH_GROUP} ALL=(ALL:ALL) NOPASSWD: ALL"
+    local sudoers_file="/etc/sudoers.d/90-${SECOND_USER}-nopasswd"
+    local line="%${SECOND_USER} ALL=(ALL:ALL) NOPASSWD: ALL"
     local tmp
 
     tmp="$(mktemp)" || return 1
@@ -135,7 +135,7 @@ ensure_nopasswd_sudo_for_group() {
     install -m 0440 -o root -g root "$tmp" "$sudoers_file" || return 1
     rm -f "$tmp" || return 1
 }
-run_and_check "enabled passwordless sudo for group: $SSH_GROUP" ensure_nopasswd_sudo_for_group
+run_and_check "enabled passwordless sudo for user: $SECOND_USER" ensure_nopasswd_sudo_for_group
 
 
 # changing password for root and user
@@ -344,28 +344,26 @@ run_and_check "server boot notification script installation" install_scr_boot
 install_with_retry "install nginx and certbot package" apt-get install -y nginx certbot python3-certbot-nginx 
 
 conf_nginx() {
+
+    # delete default site
+    rm -rf /var/www/* || return 1
+    rm -rf /etc/nginx/sites-available/* || return 1
+    rm -rf /etc/nginx/sites-enabled/* || return 1
+
     mkdir -p "/var/www/${XRAY_HOST}/html" || return 1
-
-    install -m 644 -g root -o root "cfg/301.html" "/var/www/${XRAY_HOST}/html/301.html" || return 1
-    install -m 644 -g root -o root "cfg/400.html" "/var/www/${XRAY_HOST}/html/400.html" || return 1
-    install -m 644 -g root -o root "cfg/403.html" "/var/www/${XRAY_HOST}/html/403.html" || return 1
-
-    IFACE="$(ip route | awk '/^default/ {print $5; exit}')"
-    IP_4="$(ip -4 addr show dev "$IFACE" | awk '/inet / {print $2}' | cut -d/ -f1 | head -n1)"
 
     tee /etc/nginx/sites-available/${XRAY_HOST}.conf >/dev/null <<'EOF' || return 1
 server {
-    server_name __HOST__ __IP_4__;
+    listen 80;
+    server_name __HOST__;
 
     root /var/www/__HOST__/html;
 
     access_log /var/log/nginx/__HOST__.80.access.log;
     error_log  /var/log/nginx/__HOST__.80.error.log;
 
-    error_page 301 =301 /301.html;
-
     location ^~ /.well-known/acme-challenge/ {
-        try_files $uri @301;
+        try_files $uri =404;
         default_type "text/plain";
         allow all;
     }
@@ -374,25 +372,12 @@ server {
         return 301 https://__HOST__$request_uri;
     }
 
-    location @301 {
-        return 301 https://__HOST__$request_uri;
-    }
-
-    location = /301.html {
-        internal;
-    }
-
-    listen 80;
 }
 
 EOF
 
-    # delete default site
-    rm -r /etc/nginx/sites-enabled/default || return 1
-
     # change marker XRAY_HOST, IP_4 to variable value
     sed -i "s/__HOST__/${XRAY_HOST}/g" /etc/nginx/sites-available/${XRAY_HOST}.conf || return 1
-    sed -i "s/__IP_4__/${IP_4}/g" /etc/nginx/sites-available/${XRAY_HOST}.conf || return 1
 
     # turn on site
     ln -s /etc/nginx/sites-available/${XRAY_HOST}.conf /etc/nginx/sites-enabled/ || return 1
@@ -413,31 +398,18 @@ run_and_check "configure sertificates" conf_cert
 conf_nginx_sert() {
         tee -a /etc/nginx/sites-available/${XRAY_HOST}.conf >/dev/null <<'EOF' || return 1
 server {
-    server_name __HOST__ __IP_4__;
+    listen 127.0.0.1:8443 ssl http2 proxy_protocol;
+    server_name __HOST__;
 
     root /var/www/__HOST__/html;
 
     access_log /var/log/nginx/__HOST__.8443.access.log;
     error_log  /var/log/nginx/__HOST__.8443.error.log;
 
-    error_page 403 =403 /403.html;
-    error_page 400 =400 /400.html;
-
-    location / {
-        return 403;
-    }
-
-    location = /403.html {
-        internal;
-    }
-    location = /400.html {
-        internal;
-    }
+    return 403;
 
     set_real_ip_from 127.0.0.1;
     real_ip_header proxy_protocol;
-
-    listen 127.0.0.1:8443 ssl http2 proxy_protocol;
 
     ssl_protocols TLSv1.3;
     ssl_certificate /etc/letsencrypt/live/__HOST__/fullchain.pem;
@@ -446,7 +418,6 @@ server {
 EOF
 
     sed -i "s/__HOST__/${XRAY_HOST}/g" /etc/nginx/sites-available/${XRAY_HOST}.conf || return 1
-    sed -i "s/__IP_4__/${IP_4}/g" /etc/nginx/sites-available/${XRAY_HOST}.conf || return 1
     
     nginx -t  || return 1
     systemctl restart nginx  || return 1
@@ -833,7 +804,8 @@ if [[ -z "$PUBLIC_KEY" ]]; then
 fi
 
 # get server ip
-SERVER_HOST="$(curl -4 -s https://ifconfig.io || curl -4 -s https://ipinfo.io/ip || echo "")"
+SERVER_HOST="$(ip -4 route get 1.1.1.1 | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
+
 
 if [ -z "$SERVER_HOST" ]; then
     SERVER_HOST="SERVER_IP"  # плейсхолдер, если не смогли определить

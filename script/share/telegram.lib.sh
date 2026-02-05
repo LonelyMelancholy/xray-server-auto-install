@@ -36,13 +36,15 @@ _tg_m() {
 telegram_message() {
     local attempt=1
     local max_attempt=3
+    local wait_sec=60
     while true; do
         if ! _tg_m; then
             if [[ "$attempt" -ge "$max_attempt" ]]; then
                 echo "Error: failed to send Telegram message after $attempt attempts, exit" >&2
                 exit 1
             fi
-            sleep 60
+            echo "Info: failed to send Telegram message. Waiting ${wait_sec}s... (attempt $attempt/$max_attempt)"
+            sleep $wait_sec
             ((attempt++))
             continue
         else
@@ -67,13 +69,15 @@ _tg_f() {
 telegram_file() {
     local attempt=1
     local max_attempt=3
+    local wait_sec=60
     while true; do
         if ! _tg_f; then
             if [[ "$attempt" -ge "$max_attempt" ]]; then
                 echo "Error: failed to send Telegram file after $attempt attempt, exit" >&2
                 return 1
             fi
-            sleep 60
+            echo "Info: failed to send Telegram file. Waiting ${wait_sec}s... (attempt $attempt/$max_attempt)"
+            sleep $wait_sec
             ((attempt++))
             continue
         else

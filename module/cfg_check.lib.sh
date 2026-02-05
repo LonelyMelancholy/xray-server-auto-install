@@ -51,17 +51,17 @@ fi
 
 # check group ID
 READ_GROUP_ID=$(awk -F'"' '/^[[:space:]]*Telegram chat group ID/ {print $2}' "$CFG_FILE")
-if [[ -z "$READ_CHAT_ID" ]]; then
-    echo "❌ Error: 'Telegram chat group ID' is empty in '$CFG_FILE', exit"
+if [[ -z "$READ_GROUP_ID" ]]; then
+    echo "❌ Error: 'Telegram group ID' is empty in '$CFG_FILE', exit"
     exit 1
 else
-    echo "✅ Success: Telegram chat group ID accepted"
+    echo "✅ Success: Telegram group ID accepted"
 fi
 
 # check Ubuntu Pro token
 UBUNTU_PRO_TOKEN=$(awk -F'"' '/^[[:space:]]*Ubuntu Pro token/ {print $2}' "$CFG_FILE")
 if [[ -z "$UBUNTU_PRO_TOKEN" ]]; then
-    echo "⚠️  Non-critical error: 'Ubuntu Pro token' is empty in '$CFG_FILE', skip Ubuntu Pro section"
+    echo "📢 Info: 'Ubuntu Pro token' is empty in '$CFG_FILE', skip Ubuntu Pro section"
 else
     echo "✅ Success: Ubuntu Pro token accepted"
 fi
