@@ -1,48 +1,38 @@
 #!/usr/bin/env bash
-set -euo pipefail
 
-XRAY_CONFIG="${XRAY_CONFIG:-/usr/local/etc/xray/config.json}"
-AUTO_BLOCK_TAG="${AUTO_BLOCK_TAG:-autoblock-traffic-users}"
-TR_DB_M="${TR_DB_M:-/var/log/xray/TR_DB_M}"
+# export path just in case
+PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export PATH
 
 # user check
-[[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the telegram-gateway user, exit"; exit 1; }
+[[ "$(whoami)" != "telegram-gateway" ]] && { echo "Error: you are not the telegram-gateway user, exit"; exit 1; }
 
-source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
-xray_lock
-tr_db_lock
+# main variable
+XRAY_CONFIG="/usr/local/etc/xray/config.json"
+AUTO_BLOCK_TAG="autoblock-traffic-users"
+TR_DB_M="/var/log/xray/TR_DB_M"
 
-# check xray conf
-if [[ ! -r "$XRAY_CONFIG" ]]; then
-    echo "❌ Error: check $XRAY_CONFIG it's missing or you do not have read permissions, exit"
-    exit 1
-fi
+# source library for run_lock and file permission cheking
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
+run_lock_check xray
+run_lock_check tr_db
 
-# check TR_DB
-if [[ ! -r "$TR_DB_M" ]]; then
-    echo "❌ Error: check $TR_DB_M it's missing or you do not have read permissions, exit"
-    exit 1
-fi
-
+read_and_write_check "$XRAY_CONFIG"
+read_and_write_check "$TR_DB_M"
 
 if [[ $# -lt 1 ]]; then
   echo "Error: name for unblock"
   exit 1
 fi
 
-USERNAME="$1"  # на случай если передали full строку с метаданными
+USERNAME="$1"
 if [[ -z "${USERNAME}" ]]; then
-  echo "ERROR: empty username."
+  echo "Error: empty username."
   exit 1
 fi
 
 backup_file() {
-  local f="$1"
-  if [[ -f "$f" ]]; then
-    local ts
-    ts="$(date +%Y%m%d-%H%M%S)"
-    cp -a "$f" "${f}.bak.${ts}"
-  fi
+    cp -a "$1" "${1}.bak.$(date '+%Y-%m-%d_%H-%M-%S')"
 }
 
 safe_write_json() {
