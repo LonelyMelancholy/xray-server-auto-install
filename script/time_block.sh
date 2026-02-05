@@ -38,7 +38,6 @@ readonly BLOCK_OUTBOUND_TAG="blocked"
 readonly RULE_TAG="autoblock-expired-users"
 readonly TODAY="$(date +%F)"
 readonly TODAY_TS="$(date -d "$TODAY" +%s)"
-readonly HOSTNAME="$(hostname)"
 readonly XRAY_CONFIG_BACKUP="${XRAY_CONFIG}.bak.$(date +%Y%m%d_%H%M%S)"
 
 # check another instanсe of the script is not running (with retries)
@@ -197,7 +196,7 @@ fi
 
 MESSAGE="$TITLE
 
-🖥️ <b>Host:</b> $HOSTNAME
+🖥️ <b>Host:</b> $(hostname)
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 $XRAY_STATUS"
 

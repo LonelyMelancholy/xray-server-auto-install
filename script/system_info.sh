@@ -181,6 +181,9 @@ FAIL2BAN_STATUS="$(make_status "$FAIL2BAN_STATUS" "Status fail2ban")"
 NGINX_STATUS="$(make_status "$NGINX_STATUS" "Status nginx")"
 XRAY_STATUS="$(make_status "$XRAY_STATUS" "Status xray")"
 
+total_gib=$(df -B1 --output=size / | awk 'NR==2 { printf "%.2f", $1/1024/1024/1024 }')
+free_gib=$(df -B1 --output=avail / | awk 'NR==2 { printf "%.2f", $1/1024/1024/1024 }')
+
 # --- Output ---
 echo "🖥️ Hostname: $(hostname)"
 echo "🌐 IPv4 ${IP_4}"
@@ -198,6 +201,8 @@ echo "📈 Load average (1/5/15m): ${load1} ${load5} ${load15}"
 echo "🧠 Mem total: ${total_mb} MB"
 echo "🆓 Mem free: ${free_mb} MB"
 echo "🗂️ Mem buff+cache: ${bc_mb} MB"
+echo "📁 Storage total: ${total_gib} GB"
+echo "📂 Storage free: ${free_gib} GB"
 echo "🧮 Mem load: ${used_mb} MB (${used_pct}%)"
 echo "📅 Host annual traffic: $TFAFFIC_Y"
 echo "🗓️ Host monthly traffic: $TFAFFIC_M"

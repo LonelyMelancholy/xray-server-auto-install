@@ -2,15 +2,17 @@
 # script for notify ban/unban via ssh fail2ban action
 # arguments: <action> <ip> <bantime_sec>
 # exit 0 to avoid bothering fail2ban with an incorrect error code
-# all errors are still logged, except the first three for debugging, add a redirect to the debug log
+# all errors are logged in journald, see journalctl -t ssh_f2b_notify
 
 # export path just in case
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export PATH
 
-TARGET_USER="telegram-gateway"
+# enable logging
+exec > >(systemd-cat -t ssh_f2b_notify -p info) 2> >(systemd-cat -t ssh_f2b_notify -p error)
 
 # sends the script to the background from telegram-gateway, without delaying pam and send exit 0 to pam
+TARGET_USER="telegram-gateway"
 if [[ -z "${TG_BG:-}" ]]; then
     export TG_BG=1
     if [[ "$(whoami)" != "$TARGET_USER" ]]; then
@@ -27,34 +29,30 @@ if [[ -z "${TG_BG:-}" ]]; then
 fi
 
 # user check
-[[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the root user, exit"; exit 1; }
-
-# enable logging, the directory should already be created, but let's check just in case
-readonly NOTIFY_LOG="/var/log/telegram/ssh_f2b.$(date '+%Y-%m-%d').log"
-exec &>> "$NOTIFY_LOG" || { echo "❌ Error: cannot write to log '$NOTIFY_LOG', exit"; exit 1; }
+[[ "$(whoami)" != "telegram-gateway" ]] && { echo "Error: you are not the telegram-gateway user, exit" >&2; exit 1; }
 
 # start logging message
-echo "########## ssh fail2ban notify started - $(date '+%Y-%m-%d %H:%M:%S') ##########"
+echo "ssh fail2ban notify started - $(date '+%Y-%m-%d %H:%M:%S')"
+
+# main variables
+RC_M=1
+readonly ACTION="${1:-unknown}"
+readonly IP="${2:-unknown}"
+readonly BANTIME_SEC="${3:-0}"
 
 # exit logging message function
-RC_M="1"
 on_exit() {
     if [[ "$RC_M" -eq "0" ]]; then
-        echo "########## ssh fail2ban notify ended - $(date '+%Y-%m-%d %H:%M:%S') ##########"
+        echo "ssh fail2ban notify ended - $(date '+%Y-%m-%d %H:%M:%S')"
     else
-        echo "########## ssh fail2ban notify failed - $(date '+%Y-%m-%d %H:%M:%S') ##########"
+        echo "ssh fail2ban notify failed - $(date '+%Y-%m-%d %H:%M:%S')"
     fi
 }
 
 # trap for the end log message for the end log
 trap 'on_exit' EXIT
 
-source "/usr/local/lib/service/telegram.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit"; exit 1; }
-
-# main variables
-readonly ACTION="${1:-unknown}"
-readonly IP="${2:-unknown}"
-readonly BANTIME_SEC="${3:-0}"
+source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
 
 # function to calculate the ban time
 duration_human() {
@@ -90,7 +88,7 @@ MESSAGE="📢 <b>SSH fail2ban notify (ban)</b>
 💀 <b>Banned for:</b> $BAN_TIME in jail
 🏴‍☠️ <b>From:</b> $IP
 💾 <b>Fail2ban log:</b> /var/log/fail2ban.log
-💾 <b>Notify log:</b> $NOTIFY_LOG"
+💾 <b>Notify log:</b> journalctl -t ssh_f2b_notify"
     ;;
     unban)
 MESSAGE="📢 <b>SSH fail2ban notify (unban)</b>
@@ -100,7 +98,7 @@ MESSAGE="📢 <b>SSH fail2ban notify (unban)</b>
 💀 <b>Unbanned after:</b> $BAN_TIME in jail
 🏴‍☠️ <b>From:</b> $IP
 💾 <b>Fail2ban log:</b> /var/log/fail2ban.log
-💾 <b>Notify log:</b> $NOTIFY_LOG"
+💾 <b>Notify log:</b> journalctl -t ssh_f2b_notify"
     ;;
     *)
 MESSAGE="⚠️ <b>SSH fail2ban notify (unknown)</b>
@@ -109,12 +107,12 @@ MESSAGE="⚠️ <b>SSH fail2ban notify (unknown)</b>
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 ❌ <b>Error:</b> unknown fail2ban action, check settings
 💾 <b>Fail2ban log:</b> /var/log/fail2ban.log
-💾 <b>Notify log:</b> $NOTIFY_LOG"
+💾 <b>Notify log:</b> journalctl -t ssh_f2b_notify"
     ;;
 esac
 
 # logging message
-echo "########## collected message - $(date '+%Y-%m-%d %H:%M:%S') ##########"
+echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
 echo "$MESSAGE"
 
 # send message
