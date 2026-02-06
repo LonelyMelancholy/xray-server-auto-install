@@ -8,21 +8,45 @@ readonly LOCK_FILE="/run/lock/backup.lock"
 exec 99> "$LOCK_FILE" || { echo "❌ Error: cannot open lock file '$LOCK_FILE', exit"; exit 1; }
 flock -n 99 || { echo "❌ Error: another instance working on backup, exit"; exit 1; }
 
-source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
-xray_lock
-uri_db_lock
-tr_db_lock
-
+# main variables
 ARCHIVE="$1"
+URI_DB="/usr/local/etc/xray/URI_DB"
+TR_DB_M="/var/log/xray/TR_DB_M"
+TR_DB_Y="/var/log/xray/TR_DB_Y"
+XRAY_CONFIG="/usr/local/etc/xray/config.json"
 
-if [[ -z $ARCHIVE || $# -gt 1 ]]; then
-    echo "Use"
+# source library for run_lock and file permission cheking
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
+
+# lock check
+run_lock_check xray
+run_lock_check uri_db
+run_lock_check tr_db
+
+# read and write conf check
+read_and_write_check "$URI_DB" "console"
+read_and_write_check "$TR_DB_M" "console"
+read_and_write_check "$TR_DB_Y" "console"
+read_and_write_check "$XRAY_CONFIG" "console"
+
+# argument check
+if [[ -z $ARCHIVE || $# -ne 1 || "$ARCHIVE" == "--help" ]]; then
+    echo "Use for restore backup"
     echo "$0 archive_path"
-    exit 1
+    exit 0
 fi
 
+# make absolute path
+if [[ "$ARCHIVE" != /* ]]; then
+    ARCHIVE="$(realpath "$ARCHIVE")"
+fi
+
+# check path
+read_check "$ARCHIVE"
+
+# help function
 run_and_check() {
-    action="$1"
+    local action="$1"
     shift 1
     if "$@" > /dev/null; then
         echo "✅ Success: $action"
@@ -32,36 +56,29 @@ run_and_check() {
     fi
 }
 
-# make absolute path
-if [[ "$ARCHIVE" != /* ]]; then
-    ARCHIVE="$(pwd)/$ARCHIVE"
-fi
-
-# check path
-[[ -f "$ARCHIVE" ]] || { echo "❌ Error: file not found: $ARCHIVE, exit"; exit 1; }
-[[ -r "$ARCHIVE" ]] || { echo "❌ Error: you do not have read permissions: $ARCHIVE, exit"; exit 1; }
-
-# unpack
+# unpack function
 unpack_archive() {
     tar -xzf "$ARCHIVE" -C / || return 1
 }
-run_and_check "unpack archive" unpack_archive
 
-# set permission and owners
+# set permission and owners function
 chmod_out_file() {
-    chmod 600 "/usr/local/etc/xray/URI_DB" || return 1
-    chown telegram-gateway:telegram-gateway "/usr/local/etc/xray/URI_DB" || return 1
+    chmod 660 "$URI_DB" || return 1
+    chown root:telegram-gateway "$URI_DB" || return 1
 
-    chmod 600 "/var/log/xray/TR_DB_M" || return 1
-    chown telegram-gateway:telegram-gateway "/var/log/xray/TR_DB_M" || return 1
+    chmod 660 "$TR_DB_M" || return 1
+    chown root:telegram-gateway "$TR_DB_M" || return 1
 
-    chmod 600 "/var/log/xray/TR_DB_Y" || return 1
-    chown telegram-gateway:telegram-gateway "/var/log/xray/TR_DB_Y" || return 1
+    chmod 660 "$TR_DB_Y" || return 1
+    chown root:telegram-gateway "$TR_DB_Y" || return 1
 
-    chmod 660 "/usr/local/etc/xray/config.json" || return 1
-    chown xray:telegram-gateway "/usr/local/etc/xray/config.json" || return 1
+    chmod 660 "$XRAY_CONFIG" || return 1
+    chown root:xray_config_group "$XRAY_CONFIG" || return 1
 }
-run_and_check "set permissions on files" chmod_out_file
 
+# main logic start here
+run_and_check "unpack archive and copy files" unpack_archive
+run_and_check "set permissions to files" chmod_out_file
 echo "✅ Success: backup restored"
+
 exit 0

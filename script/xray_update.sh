@@ -81,7 +81,7 @@ cleanup_old_backups_and_logs() {
                 echo "✅ Success: stage ${STAGE}, old ${name} $f deleted"
                 STATUS_OLD_BACKUP_DEL+="☑️ old ${name} deletion success"$'\n'
             else
-                echo "⚠️  Non-critical error: stage ${STAGE}, failed to delete old ${name} $f"
+                echo "📢 Info: stage ${STAGE}, failed to delete old ${name} $f"
                 STATUS_OLD_BACKUP_DEL+="⚠️ old ${name} deletion failed"$'\n'
                 FAIL_TD=1
             fi

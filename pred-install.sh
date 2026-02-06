@@ -36,8 +36,8 @@ CFG_CHECK="module/cfg_check.lib.sh"
 source "$CFG_CHECK" || { echo "❌ Error: failed to source '$CFG_CHECK', exit"; exit 1; }
 
 # hostname change
-if [[ $(hostname) != "$NEW_HOSTNAME" ]]; then
-    if hostnamectl set-hostname "$NEW_HOSTNAME"; then
+if [[ $(hostname) != "$XRAY_HOSTNAME" ]]; then
+    if hostnamectl set-hostname "$XRAY_HOSTNAME"; then
         echo "✅ Success: set new hostname"
     else
         echo "❌ Error: set new hostname"

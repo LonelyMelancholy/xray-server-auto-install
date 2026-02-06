@@ -1,4 +1,4 @@
-# this file is intended to be connected via source, not run standalone
+# configuration file checking library
 
 # config file read check
 CFG_FILE="configuration.cfg"
@@ -8,17 +8,16 @@ if [[ ! -r "$CFG_FILE" ]]; then
 fi
 
 # hostname check
-XRAY_HOST=$(awk -F'"' '/^[[:space:]]*Server hostname/ {print $2}' "$CFG_FILE")
-NEW_HOSTNAME=$(awk -F'"' '/^[[:space:]]*Server hostname/ {print $2}' "$CFG_FILE")
-if [[ -z "$NEW_HOSTNAME" ]]; then
+XRAY_HOSTNAME=$(awk -F'"' '/^[[:space:]]*Server hostname/ {print $2}' "$CFG_FILE")
+if [[ -z "$XRAY_HOSTNAME" ]]; then
     echo "❌ Error: 'Server hostname' is empty in '$CFG_FILE', exit"
     exit 1
 fi
 
-if [[ $NEW_HOSTNAME =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,62}[A-Za-z0-9])?$ ]]; then
+if [[ $XRAY_HOSTNAME =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,62}[A-Za-z0-9])?$ ]]; then
     echo "✅ Success: server hostname accepted"
 else
-    echo "❌ Error: 'Server hostname' '$NEW_HOSTNAME' does not comply with Linux rules, exit"
+    echo "❌ Error: 'Server hostname' '$XRAY_HOSTNAME' does not comply with Linux rules, exit"
     exit 1
 fi
 
@@ -77,7 +76,7 @@ if [[ ! $OWNER_EMAIL =~ ^[A-Za-z0-9@.-]+$ ]]; then
     echo "❌ Error: 'Owner server email' for certificates can have only letters, numbers and .@- in name, exit"
     exit 1
 else
-    echo "✅ Success: email for xray accepted"
+    echo "✅ Success: email for certificates accepted"
 fi
 
 # check name

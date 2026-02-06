@@ -124,9 +124,9 @@ else
   done
 fi
 
-IFACE="$(ip route | awk '/^default/ {print $5; exit}')"
-IP_4="$(ip -4 addr show dev "$IFACE" | awk '/inet / {print $2}' | cut -d/ -f1 | head -n1)"
-IP_6="$(ip -6 addr show dev "$IFACE" scope global | awk '/inet6 / {print $2}' | cut -d/ -f1 | head -n1)"
+IP_4="$(ip -4 route get 1.1.1.1 | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
+IP_6="$(ip -6 route get 2606:4700:4700::1111 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
+
 [[ -z $IP_6 ]] && IP_6=none
 
 readonly RAW_M="$(cat "/var/log/xray/TR_DB_M")"

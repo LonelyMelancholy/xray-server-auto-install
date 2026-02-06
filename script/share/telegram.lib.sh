@@ -74,7 +74,7 @@ telegram_file() {
         if ! _tg_f; then
             if [[ "$attempt" -ge "$max_attempt" ]]; then
                 echo "Error: failed to send Telegram file after $attempt attempt, exit" >&2
-                return 1
+                exit 1
             fi
             echo "Info: failed to send Telegram file. Waiting ${wait_sec}s... (attempt $attempt/$max_attempt)"
             sleep $wait_sec

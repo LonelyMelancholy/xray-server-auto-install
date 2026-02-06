@@ -1,4 +1,4 @@
-# .local for start telegram notify script
+# .local f2b action for start telegram notify script
 [Definition]
 actionstart =
 actionstop =

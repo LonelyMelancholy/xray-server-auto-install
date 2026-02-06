@@ -16,13 +16,13 @@ RC_M=1
 # user check
 [[ "$(whoami)" != "telegram-gateway" ]] && { echo "Error: you are not the telegram-gateway user, exit" >&2; exit 1; }
 
+# start logging message
+echo "boot notify started - $(date '+%Y-%m-%d %H:%M:%S')"
+
 # check another instanсe of the script is not running
 readonly LOCK_FILE="/run/lock/boot_notify.lock"
 exec 99> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
 flock -n 99 || { echo "Error: another instance is running, exit" >&2; exit 1; }
-
-# start logging message
-echo "boot notify started - $(date '+%Y-%m-%d %H:%M:%S')"
 
 # function section
 # exit logging message function
@@ -35,14 +35,14 @@ on_exit() {
 }
 
 # trap for the end log message for the end log
-trap 'on_exit' EXIT
+trap on_exit EXIT
 
-# wait for internet access func
+# wait for internet access function
 wait_internet() {
     local timeout=60
     local i
     for ((i=0; i<timeout; i++)); do
-        ip route | grep 'default ' &> /dev/null || { sleep 2; continue; }
+        ip route  2> /dev/null | grep 'default ' &> /dev/null || { sleep 2; continue; }
         getent ahosts api.telegram.org &> /dev/null || { sleep 2; continue; }
         curl -fsS -m 10 "https://api.telegram.org/bot${BOT_TOKEN}/getMe" | grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' && return 0
         sleep 2
@@ -50,11 +50,11 @@ wait_internet() {
     return 1
 }
 
-# critical daemon status func
+# critical daemon status function
 daemon_status() {
     local service="$1"
     local name="$2"
-    if systemctl is-active --quiet "$service"; then
+    if systemctl is-active --quiet "$service" &> /dev/null; then
         echo "☑️ <b>Status $name:</b> running"
     else
         echo "❌ <b>Status $name:</b> fail"
@@ -65,12 +65,11 @@ daemon_status() {
 # source Telegram func library
 source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
 
-
 # main logic start here
-# wait for all service started
+# wait for all service started 3m
 sleep 180
 
-# internet check, exit if offline
+# internet check 2m, exit if offline
 if wait_internet; then
     echo "Success: internet is available"
 else
@@ -114,11 +113,12 @@ $CRON_STATUS
 $FAIL2BAN_STATUS
 $NGINX_STATUS
 $XRAY_STATUS
-💾 <b>Notify log:</b> $NOTIFY_LOG"
+💾 <b>Notify log:</b> journalctl -t boot_notify"
 
 # logging message
 echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
 echo "$MESSAGE"
+
 # send message
 telegram_message
 

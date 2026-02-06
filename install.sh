@@ -98,6 +98,13 @@ else
     echo "✅ Success: group $SSH_GROUP already exists"
 fi
 
+XRAY_CONFIG_GROUP="xray_config_group"
+if ! getent group "$XRAY_CONFIG_GROUP" &> /dev/null; then
+    run_and_check "creating XRAY_CONFIG group" addgroup "$XRAY_CONFIG_GROUP"
+else 
+    echo "✅ Success: group $XRAY_CONFIG_GROUP already exists"
+fi
+
 # create user and add in ssh and sudo group
 gen_service_user() {
     local prefix="service_user_"
@@ -350,9 +357,9 @@ conf_nginx() {
     rm -rf /etc/nginx/sites-available/* || return 1
     rm -rf /etc/nginx/sites-enabled/* || return 1
 
-    mkdir -p "/var/www/${XRAY_HOST}/html" || return 1
+    mkdir -p "/var/www/${XRAY_HOSTNAME}/html" || return 1
 
-    tee /etc/nginx/sites-available/${XRAY_HOST}.conf >/dev/null <<'EOF' || return 1
+    tee /etc/nginx/sites-available/${XRAY_HOSTNAME}.conf >/dev/null <<'EOF' || return 1
 server {
     listen 80;
     server_name __HOST__;
@@ -376,11 +383,11 @@ server {
 
 EOF
 
-    # change marker XRAY_HOST, IP_4 to variable value
-    sed -i "s/__HOST__/${XRAY_HOST}/g" /etc/nginx/sites-available/${XRAY_HOST}.conf || return 1
+    # change marker XRAY_HOSTNAME to variable value
+    sed -i "s/__HOST__/${XRAY_HOSTNAME}/g" /etc/nginx/sites-available/${XRAY_HOSTNAME}.conf || return 1
 
     # turn on site
-    ln -s /etc/nginx/sites-available/${XRAY_HOST}.conf /etc/nginx/sites-enabled/ || return 1
+    ln -s /etc/nginx/sites-available/${XRAY_HOSTNAME}.conf /etc/nginx/sites-enabled/ || return 1
 
     # turn on nginx
     nginx -t  || return 1
@@ -391,12 +398,12 @@ EOF
 run_and_check "configure nginx" conf_nginx
 
 conf_cert() {
-    certbot certonly --webroot -w "/var/www/${XRAY_HOST}/html" -d "${XRAY_HOST}" --agree-tos -m "$OWNER_EMAIL" --non-interactive || return 1
+    certbot certonly --webroot -w "/var/www/${XRAY_HOSTNAME}/html" -d "${XRAY_HOSTNAME}" --agree-tos -m "$OWNER_EMAIL" --non-interactive || return 1
 }
 run_and_check "configure sertificates" conf_cert
 
 conf_nginx_sert() {
-        tee -a /etc/nginx/sites-available/${XRAY_HOST}.conf >/dev/null <<'EOF' || return 1
+        tee -a /etc/nginx/sites-available/${XRAY_HOSTNAME}.conf >/dev/null <<'EOF' || return 1
 server {
     listen 127.0.0.1:8443 ssl http2 proxy_protocol;
     server_name __HOST__;
@@ -417,7 +424,7 @@ server {
 }
 EOF
 
-    sed -i "s/__HOST__/${XRAY_HOST}/g" /etc/nginx/sites-available/${XRAY_HOST}.conf || return 1
+    sed -i "s/__HOST__/${XRAY_HOSTNAME}/g" /etc/nginx/sites-available/${XRAY_HOSTNAME}.conf || return 1
     
     nginx -t  || return 1
     systemctl restart nginx  || return 1
@@ -449,6 +456,9 @@ if ! getent shadow xray &> /dev/null; then
 else 
     echo "✅ Success: user 'xray' already exists"
 fi
+
+run_and_check "added xray to xray config group" usermod -aG "$XRAY_CONFIG_GROUP" "xray"
+run_and_check "added telegram-gateway to xray config group" usermod -aG "$XRAY_CONFIG_GROUP" "telegram-gateway"
 
 install_xray_dir() {
     mkdir -p /usr/local/share/xray || return 1
@@ -705,13 +715,13 @@ conf_json_xray() {
     chmod 660 "$TMP_XRAY_CONFIG" || return 1
     chown root:xray "$TMP_XRAY_CONFIG" || return 1
     trap 'rm -rf "$TMP_XRAY_CONFIG" "$TMP_DIR"' EXIT
-    
+
 # update json
     jq --arg tag   "$INBOUND_TAG" \
     --arg email "$XRAY_EMAIL" \
     --arg id    "$UUID" \
     --arg dflow "$DEFAULT_FLOW" \
-    --arg sni   "$XRAY_HOST" \
+    --arg sni   "$XRAY_HOSTNAME" \
     --arg pk    "$privateKey" \
     --arg sid   "$shortId" '
     # Берём flow из первого клиента нужного inbound по tag (если нет — дефолт)
@@ -805,7 +815,6 @@ fi
 
 # get server ip
 SERVER_HOST="$(ip -4 route get 1.1.1.1 | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
-
 
 if [ -z "$SERVER_HOST" ]; then
     SERVER_HOST="SERVER_IP"  # плейсхолдер, если не смогли определить
