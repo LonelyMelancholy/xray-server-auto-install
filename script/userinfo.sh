@@ -1,11 +1,27 @@
 #!/bin/bash
 # script for show user info from xray config and URI_DB
 
-# export path just in case
-PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-export PATH
+# common variables source
+# shellcheck source=share/variables.lib.sh
+source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit"; exit 1; }
 
+# main variables
+# tags used for status detection
+readonly MANUAL_BLOCK_TAG="manual-block-users"
+readonly AUTO_BLOCK_EXPIRED_TAG="autoblock-expired-users"
+readonly AUTO_BLOCK_TRAFFIC_TAG="autoblock-traffic-users"
 USERNAME="$1"
+# reset user status and count device
+USER_ONLINE_STATUS="offline"
+USER_DEVICE_COUNT=0
+IP_USER=""
+
+# argument check
+if [[ $# -ne 1 || $USERNAME == "--help" ]]; then
+    echo "Use for show individual user info"
+    echo "run: $0 username"
+    exit 0
+fi
 
 if ! [[ $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
     echo "❌ Error: only letters, numbers and - in name, exit"
@@ -13,58 +29,40 @@ if ! [[ $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
 fi
 
 # user check
-[[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the telegram-gateway user, exit"; exit 1; }
+[[ "$(whoami)" != "telegram_gateway" ]] && { echo "❌ Error: you are not the telegram_gateway user, exit"; exit 1; }
 
-# check another instanсe of the script is not running
+# source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
-xray_lock
-tr_db_lock
-uri_db_lock
 
-readonly URI_PATH="/usr/local/etc/xray/URI_DB"
-readonly XRAY_CONFIG="/usr/local/etc/xray/config.json"
-readonly INBOUND_TAG="Vless"
-readonly TR_DB_M="/var/log/xray/TR_DB_M"
-readonly TR_DB_Y="/var/log/xray/TR_DB_Y"
+# lock check
+run_lock_check "xray" "console"
+run_lock_check "tr_db" "console"
+run_lock_check "uri_db" "console"
 
-# tags used for status detection
-readonly MANUAL_BLOCK_TAG="manual-block-users"
-readonly AUTO_BLOCK_EXPIRED_TAG="autoblock-expired-users"
-readonly AUTO_BLOCK_TRAFFIC_TAG="autoblock-traffic-users"
+# permission check
+read_check "$URI_DB" "console"
+read_check "$XRAY_CONFIG" "console"
+read_check "$TR_DB_M" "console"
+read_check "$TR_DB_Y" "console"
 
-# check xray conf
-if [[ ! -r "$XRAY_CONFIG" ]]; then
-    echo "❌ Error: check $XRAY_CONFIG it's missing or you do not have read permissions, exit"
-    exit 1
-fi
+# function for extract field value from FULL_EMAIL like "...|created=2026-01-15|days=10|exp=2026-01-25"
+extract_field() {
+    local key="$1" s="$2"
+    # Prints value or empty
+    sed -n "s/.*|${key}=\\([^|]*\\).*/\\1/p" <<<"$s" | head -n1
+}
 
-# check URI
-if [[ ! -r "$URI_PATH" ]]; then
-    echo "❌ Error: check $URI_PATH it's missing or you do not have read permissions, exit"
-    exit 1
-fi
-
-# check TR_DB
-if [[ ! -r "$TR_DB_M" ]]; then
-    echo "❌ Error: check $TR_DB_M it's missing or you do not have read permissions, exit"
-    exit 1
-fi
-
-# check TR_DB
-if [[ ! -r "$TR_DB_Y" ]]; then
-    echo "❌ Error: check $TR_DB_Y it's missing or you do not have read permissions, exit"
-    exit 1
-fi
-
+# main logic start here
 # Find full email string for the user in the specified inbound tag
+# print 1 match and exit
 FULL_EMAIL="$(
-  jq -r --arg itag "$INBOUND_TAG" --arg u "$USERNAME" '
-    (.inbounds // [])
-    | map(select(.tag == $itag))
-    | .[0].settings.clients // []
-    | map(select((.email // "" | split("|")[0]) == $u))
-    | .[0].email // ""
-  ' "$XRAY_CONFIG"
+    jq -r --arg itag "$INBOUND_TAG" --arg u "$USERNAME" '
+        (.inbounds // [])
+        | map(select(.tag == $itag))
+        | .[0].settings.clients // []
+        | map(select((.email // "" | split("|")[0]) == $u))
+        | .[0].email // ""
+    ' "$XRAY_CONFIG"
 )"
 
 # If user not found in inbound -> exit
@@ -73,30 +71,24 @@ if [[ -z "$FULL_EMAIL" ]]; then
     exit 1
 fi
 
-# Helper: extract field value from FULL_EMAIL like "...|created=2026-01-15|days=10|exp=2026-01-25"
-_extract_field() {
-  local key="$1" s="$2"
-  # Prints value or empty
-  sed -n "s/.*|${key}=\\([^|]*\\).*/\\1/p" <<<"$s" | head -n1
-}
+# extract field from $FULL_EMAIL
+CREATED="$(extract_field "created" "$FULL_EMAIL")"
+DAYS_BOUGHT="$(extract_field "days" "$FULL_EMAIL")"
+EXP="$(extract_field "exp" "$FULL_EMAIL")"
 
-CREATED="$(_extract_field "created" "$FULL_EMAIL" || true)"
-DAYS_BOUGHT="$(_extract_field "days" "$FULL_EMAIL" || true)"
-EXP="$(_extract_field "exp" "$FULL_EMAIL" || true)"
-
-# Normalize missing/non-usable values -> 0
-# created/exp: must look like YYYY-MM-DD, otherwise 0
+# Normalize missing/non-usable values -> unknown
+# created/exp: must look like YYYY-MM-DD, exp/days - never/infinity
 if [[ ! "$CREATED" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
-  CREATED="unknown"
+    CREATED="unknown"
 fi
 
 if ! [[ "$EXP" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ || "$EXP" == "never" ]]; then
-  EXP="unknown"
+    EXP="unknown"
 fi
 
 # days: must be integer
 if ! [[ "$DAYS_BOUGHT" =~ ^-?[0-9]+$  || "$DAYS_BOUGHT" == "infinity" ]]; then
-  DAYS_BOUGHT="unknown"
+    DAYS_BOUGHT="unknown"
 fi
 
 # Compute DAYS_LEFT (can be negative). If EXP=0 -> 0
@@ -105,51 +97,71 @@ if [[ "$EXP" == "never" ]]; then
     DAYS_LEFT="infinity"
 elif [[ $EXP =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
     exp_epoch="$(date -d "$EXP" +%s 2>/dev/null)"
-    today="$(date +%F)"
-    today_epoch="$(date -d "$today" +%s 2>/dev/null || echo 0)"
+    today_epoch="$(date -d "today 00:00" +%s 2>/dev/null)"
     DAYS_LEFT="$(( (exp_epoch - today_epoch) / 86400 ))"
 else
     DAYS_LEFT="unknown"
 fi
 
+# get ban or enable status
 STATUS="$(
-  jq -r \
-    --arg u "$FULL_EMAIL" \
-    --arg mb "$MANUAL_BLOCK_TAG" \
-    --arg ae "$AUTO_BLOCK_EXPIRED_TAG" \
-    --arg at "$AUTO_BLOCK_TRAFFIC_TAG" '
-      def has($tag):
-        any(.routing.rules[]?;
-          (.ruleTag? == $tag) and any(.user[]?; . == $u)
-        );
+    jq -r \
+        --arg u "$FULL_EMAIL" \
+        --arg mb "$MANUAL_BLOCK_TAG" \
+        --arg ae "$AUTO_BLOCK_EXPIRED_TAG" \
+        --arg at "$AUTO_BLOCK_TRAFFIC_TAG" '
+            def has($tag):
+                any(.routing.rules[]?;
+                (.ruleTag? == $tag) and any(.user[]?; . == $u)
+                );
 
-      if has($mb) then "blocked"
-      elif has($at) then "traffic ban"
-      elif has($ae) then "expired ban"
-      else "enable"
-      end
+            if has($mb) then "blocked manually"
+            elif has($at) then "traffic ban"
+            elif has($ae) then "expired ban"
+            else "enable"
+            end
     ' "$XRAY_CONFIG"
 )"
 
-json="$(xray api statsonline --email "$FULL_EMAIL" 2>/dev/null)"
-DEVICE_NUMBER="$(jq -r '.stat.value // 0' <<<"$json")"
-[[ ! $DEVICE_NUMBER =~ ^-?[0-9]+$ ]] && DEVICE_NUMBER=0
+# get all online user list in json
+# call "xray api statsgetallonlineusers" make reset online device to offline if he real offline
+XRAY_API_JSON="$(xray api statsgetallonlineusers)"
 
-if (( DEVICE_NUMBER >= 1 )); then
-  ONLINE="online"
-else
-  ONLINE="offline"
+# if not empty, (xray offline), or if not {} (no online users) try get user status and device count
+if ! [[ -z "$XRAY_API_JSON" || "$XRAY_API_JSON" == "{}" ]]; then
+    # collect full username massive from json
+    mapfile -t USERS_ONLINE_EMAIL_FULL < <(
+        jq -r '.users // []
+            | .[]
+            | sub("^user>>>";"")
+            | sub(">>>online$";"")
+            ' <<<"$XRAY_API_JSON" 2>/dev/null | awk 'NF'
+    )
+
+    # search username in online list if and if have in list make status online
+    for email in "${USERS_ONLINE_EMAIL_FULL[@]}"; do
+        if [[ "$email" == "$FULL_EMAIL" ]]; then
+            USER_ONLINE_STATUS="online"
+            break
+        fi
+    done
+
+    # get device number if error reset to 0
+    json="$(xray api statsonline --email "$FULL_EMAIL" 2>/dev/null)"
+    USER_DEVICE_COUNT="$(jq -r '.stat.value // 0' <<<"$json")"
+    [[ ! $USER_DEVICE_COUNT =~ ^-?[0-9]+$ ]] && USER_DEVICE_COUNT=0
 fi
 
-IP_USER=""
-if [[ $ONLINE == "online" ]]; then
+# get user ip if he online
+if [[ $USER_ONLINE_STATUS == "online" ]]; then
     json="$(xray api statsonlineiplist --email "$FULL_EMAIL" 2>/dev/null)"
     if [[ -n "$json" ]]; then
         IP_USER="$(jq -r '(.ips // {}) | keys | join(" ")' <<<"$json")"
     fi
 fi
 
-total_bytes_m="$(
+# get userstat from TR_DB_M for all username|
+TOTAL_M="$(
   jq -r --arg u "$USERNAME" '
     [ .stat[]?
       | select(.name? and (.name | startswith("user>>>")))
@@ -161,16 +173,15 @@ total_bytes_m="$(
   ' "$TR_DB_M" 2>/dev/null
 )"
 
-# если файла/JSON нет или значений нет
-[[ -z "$total_bytes_m" || "$total_bytes_m" == "null" ]] && total_bytes_m=0
-
-if [[ "$total_bytes_m" -eq 0 ]] 2>/dev/null; then
-  TOTAL_M=0
+# if JSON empty or null - reset, else - byte to human read
+if [[ -z "$TOTAL_M" || "$TOTAL_M" == "null" ]]; then
+    TOTAL_M=0
 else
-  TOTAL_M="$(numfmt --to=iec --suffix=B "$total_bytes_m")"
+    TOTAL_M="$(numfmt --to=iec --suffix=B "$TOTAL_M")"
 fi
 
-total_bytes_y="$(
+# get userstat from TR_DB_Y for all username|
+TOTAL_Y="$(
   jq -r --arg u "$USERNAME" '
     [ .stat[]?
       | select(.name? and (.name | startswith("user>>>")))
@@ -182,42 +193,40 @@ total_bytes_y="$(
   ' "$TR_DB_Y" 2>/dev/null
 )"
 
-# если файла/JSON нет или значений нет
-[[ -z "$total_bytes_y" || "$total_bytes_y" == "null" ]] && total_bytes_y=0
-
-if [[ "$total_bytes_y" -eq 0 ]] 2>/dev/null; then
+# if JSON empty or null - reset, else - byte to human read
+if [[ -z "$TOTAL_Y" || "$TOTAL_Y" == "null" ]]; then
   TOTAL_Y=0
 else
-  TOTAL_Y="$(numfmt --to=iec --suffix=B "$total_bytes_y")"
+  TOTAL_Y="$(numfmt --to=iec --suffix=B "$TOTAL_Y")"
 fi
 
-# Ищем строки вида:
+# search for
 # name: <username>, vless link: <link>
-# Выводим только "<link>" (целиком), для всех совпадений по name.
-matches="$(
-  awk -v user="$USERNAME" '
-    BEGIN { found=0 }
-    {
-      if (match($0, /^name:[[:space:]]*([^,]+),[[:space:]]*vless link:[[:space:]]*(.+)$/, m)) {
-        name = m[1]
-        link = m[2]
-        # Точное совпадение имени, без частичных матчей
-        if (name == user) {
-          print link
-          found=1
-        }
-      }
-    }
-    END { if (!found) exit 3 }
-  ' "$URI_PATH"
+# print "<link>", all matches
+USER_VLESS_LINKS="$(
+    awk -v user="$USERNAME" '
+        BEGIN { found=0 }
+            {
+                if (match($0, /^name:[[:space:]]*([^,]+),[[:space:]]*vless link:[[:space:]]*(.+)$/, m)) {
+                    name = m[1]
+                    link = m[2]
+                    # print 100% matches only
+                    if (name == user) {
+                        print link
+                        found=1
+                    }
+                }
+            }
+        END { if (!found) exit 3 }
+    ' "$URI_DB"
 )" || {
-  rc=$?
-  if [[ $rc -eq 3 ]]; then
-    echo "User '$USERNAME' in URI_DB not found"
-    exit 1
-  fi
-  echo "Error: failed to parse '$URI_PATH'"
-  exit 2
+    rc=$?
+    if [[ $rc -eq 3 ]]; then
+        echo "User '$USERNAME' in URI_DB not found"
+        exit 1
+    fi
+    echo "Error: failed to parse '$URI_DB'"
+    exit 2
 }
 
 echo "🧑🏿‍💻 Name: $USERNAME"
@@ -225,10 +234,12 @@ echo "📅 Created: $CREATED"
 echo "🗓 Bought days: $DAYS_BOUGHT"
 echo "🗓 Days left: $DAYS_LEFT"
 echo "📅 Expiration: $EXP"
-echo "🌐 Status: $ONLINE"
+echo "🌐 Status: $USER_ONLINE_STATUS"
 echo "🔏 Active: $STATUS"
-echo "📱 Device: $DEVICE_NUMBER"
+echo "📱 Devices: $USER_DEVICE_COUNT"
 echo "📊 Traffic monthly: $TOTAL_M"
 echo "📊 Traffic annual: $TOTAL_Y"
 echo "📝 IP: $IP_USER"
-echo "🛠 Vless link: $matches"
+echo "🛠 Vless link: $USER_VLESS_LINKS"
+
+exit 0

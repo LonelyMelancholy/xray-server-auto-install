@@ -1,132 +1,128 @@
 #!/bin/bash
 # auto install xray update and send notify via cron every first day month, 2:01 night time
-# all errors are logged, except the first three, for debugging, add a redirect to the debug log
-# 1 2 1 * * root /usr/local/bin/service/xray_update.sh &> /dev/null
+# all errors are logged in journald, see journalctl -t xray_update
+# 1 2 1 * * root /usr/local/bin/service/xray_update.sh
 # exit codes work to tell Cron about success
 
-# root checking
-[[ $EUID -ne 0 ]] && { echo "❌ Error: you are not the root user, exit"; exit 1; }
-
-# export path just in case
-PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-export PATH
-
-# enable logging, the directory should already be created, but let's check just in case
-readonly DATE="$(date +"%Y-%m-%d")"
-readonly LOG_DIR="/var/log/service"
-readonly UPDATE_LOG="${LOG_DIR}/xray_update.${DATE}.log"
-exec &>> "$UPDATE_LOG" || { echo "❌ Error: cannot write to log '$UPDATE_LOG', exit"; exit 1; }
-
-# start logging message
-echo "   ########## xray update started - $(date '+%Y-%m-%d %H:%M:%S') ##########   "
-
-# exit log message function
-on_exit() {
-    if [[ "$RC" = "0" ]]; then
-        echo "   ########## xray update ended - $(date '+%Y-%m-%d %H:%M:%S') ##########   "
-    else
-        echo "   ########## xray update failed - $(date '+%Y-%m-%d %H:%M:%S') ##########   "
-    fi
-}
-
-# error exit log message for end log
-trap 'on_exit' EXIT
-RC=1
-
-readonly MAX_ATTEMPTS=3
-
-readonly LOCK_FILE_5="/run/lock/xray_update.lock"
-exec 99> "$LOCK_FILE_5" || { echo "❌ Error: cannot open lock file '$LOCK_FILE_5', exit"; exit 1; }
-flock -n 99 || { echo "❌ Error: another instance working on backup, exit"; exit 1; }
-
-source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
-xray_lock_retry
-tr_db_lock_retry
-uri_db_lock_retry
-
-source "/usr/local/lib/service/telegram.lib" || { echo "❌ Error: failed to source '/usr/local/lib/service/telegram.lib', exit"; exit 1; }
-
 # main variables
+readonly DATE="$(date '+%F')"
+DATE_START=$(date +%Y-%m-%d %H:%M:%S)
+readonly LOCK_FILE="/run/lock/xray_update.lock"
 readonly ASSET_DIR="/usr/local/share/xray"
 readonly XRAY_DIR="/usr/local/bin"
 readonly GEOIP_URL="https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat"
 readonly GEOSITE_URL="https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat"
 readonly XRAY_URL="https://github.com/XTLS/xray-core/releases/latest/download/xray-linux-64.zip"
-readonly HOSTNAME="$(hostname)"
-readonly MAX_ATTEMPTS=3
-STAGE="0"
+STAGE=0
+FAIL_TD=0
+RC=1
 
-cleanup_old_backups_and_logs() {
-    FAIL_TD=0
-    cleanup_old() {
-        local dir="$1"
-        local pattern="$2"
-        local keep="$3"
-        local name="$4"
-        local has_old=0
-        local f
-        local glob="${dir}/${pattern}"
+# export path just in case
+PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export PATH
 
-        if ! compgen -G "$glob" > /dev/null; then
-            STATUS_OLD_BACKUP_DEL+="☑️ old ${name} missing, skipping deletion"$'\n'
-            return
-        fi
+# enable logging
+exec > >(systemd-cat -t xray_update -p info) 2> >(systemd-cat -t xray_update -p err) 5> >(systemd-cat -t xray_update -p notice)
 
-        for f in "$dir"/$pattern; do
-            [[ -n "$keep" && "$f" == "$keep" ]] && continue
+# start logging message
+echo "xray update started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 
-            has_old=1
-            echo "📢 Info: stage ${STAGE}, deleting old ${name} $f"
-            if rm -f -- "$f"; then
-                echo "✅ Success: stage ${STAGE}, old ${name} $f deleted"
-                STATUS_OLD_BACKUP_DEL+="☑️ old ${name} deletion success"$'\n'
-            else
-                echo "📢 Info: stage ${STAGE}, failed to delete old ${name} $f"
-                STATUS_OLD_BACKUP_DEL+="⚠️ old ${name} deletion failed"$'\n'
-                FAIL_TD=1
-            fi
-        done
+# root checking
+[[ $EUID -ne 0 ]] && { echo "Error: you are not the root user, exit" >&2; exit 1; }
 
-        if (( has_old == 0 )); then
-            STATUS_OLD_BACKUP_DEL+="☑️ old ${name} missing, skipping deletion"$'\n'
-        fi
-    }
+# create working directory
+TMP_DIR="$(mktemp -d)" || { echo "Error: failed to create temporary directory, exit" >&2; exit 1; }
+readonly TMP_DIR
 
-    cleanup_old "$XRAY_DIR"      "xray.*.bak"         "$XRAY_DIR/xray.${DATE}.bak"          "xray backup"
-    cleanup_old "$ASSET_DIR"     "geoip.dat.*.bak"    "$ASSET_DIR/geoip.dat.${DATE}.bak"    "geoip.dat backup"
-    cleanup_old "$ASSET_DIR"     "geosite.dat.*.bak"  "$ASSET_DIR/geosite.dat.${DATE}.bak"  "geosite.dat backup"
-    cleanup_old "$LOG_DIR"       "xray_update.*.log"  "$LOG_DIR/xray_update.${DATE}.log"    "xray update log backup"
-}
-
-# exit cleanup and log message function
-exit_cleanup() {
-    echo "########## cleanup started - $(date '+%Y-%m-%d %H:%M:%S') ##########"
-    if rm -rf "$TMP_DIR"; then
-        echo "✅ Success: temporary directory $TMP_DIR was deleted"
-        echo "########## cleanup ended - $(date '+%Y-%m-%d %H:%M:%S') ##########"
+# exit log message function
+# shellcheck disable=SC2329
+on_exit() {
+    if [[ "$RC" = "0" ]]; then
+        echo "xray update ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     else
-        echo "❌ Error: temporary directory $TMP_DIR was not deleted"
-        echo "########## cleanup failed - $(date '+%Y-%m-%d %H:%M:%S') ##########"
-        MESSAGE="❌ <b>Scheduled cleanup after xray update</b>
-🖥️ <b>Host:</b> $HOSTNAME
-⌚ <b>Time error:</b> $(date '+%Y-%m-%d %H:%M:%S')
-❌ <b>Error:</b> temporary directory $TMP_DIR for xray update was not deleted"
-        telegram_message
-        trap - EXIT
-        exit 1
+        echo "xray update failed - $(date '+%Y-%m-%d %H:%M:%S')" >&2
     fi
 }
 
-# create working directory
-TMP_DIR="$(mktemp -d)" || { echo "❌ Error: failed to create temporary directory, exit"; exit 1; }
-readonly TMP_DIR
+# exit cleanup and log message function
+# shellcheck disable=SC2329
+exit_cleanup() {
+    echo "cleanup started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
+    if rm -rf "$TMP_DIR"; then
+        echo "Success: temporary directory $TMP_DIR was deleted"
+        echo "cleanup ended - $(date '+%Y-%m-%d %H:%M:%S')"  >&5
+    else
+        echo "Error: temporary directory $TMP_DIR was not deleted" >&2
+        echo "cleanup failed - $(date '+%Y-%m-%d %H:%M:%S')" >&2
 
-# rewrite trap exit, now error exit log message for end log and cleanup temp directory
-trap 'on_exit; exit_cleanup' EXIT
+        # set error message for telegram
+        MESSAGE="❌ <b>Scheduled cleanup after xray update</b>
+🖥️ <b>Host:</b> $(hostname)
+⌚ <b>Time error:</b> $(date '+%Y-%m-%d %H:%M:%S')
+❌ <b>Error:</b> temporary directory $TMP_DIR for xray update was not deleted"
+        
+        # send message
+        telegram_message
+    fi
+}
+
+# error exit log message for end log
+trap 'on_exit; exit_cleanup;' EXIT
+
+# check another instanсe of the script is not running
+exec 99> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
+flock -n 99 || { echo "Error: another instance working on backup, exit" >&2; exit 1; }
+
+# source library for run_lock and file permission cheking
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit" >&2; exit 1; }
+
+# lock check
+run_lock_retry_check "xray"
+run_lock_retry_check "tr_db"
+run_lock_retry_check "uri_db"
+
+# source Telegram func library
+source "/usr/local/lib/service/telegram.lib" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib', exit" >&2; exit 1; }
+
+# cleanup old backup and log
+cleanup_old() {
+    local dir="$1"
+    local pattern="$2"
+    local keep="$3"
+    local name="$4"
+    local has_old=0
+    local f
+    local glob="${dir}/${pattern}"
+
+    if ! compgen -G "$glob" > /dev/null; then
+        STATUS_OLD_BACKUP_DEL+="☑️ old ${name} missing, skipping deletion"$'\n'
+        return
+    fi
+
+    for f in "$dir"/$pattern; do
+        [[ -n "$keep" && "$f" == "$keep" ]] && continue
+
+        has_old=1
+        echo "Info: stage ${STAGE}, deleting old ${name} $f"
+        if rm -f -- "$f"; then
+            echo "Success: stage ${STAGE}, old ${name} $f deleted"
+            STATUS_OLD_BACKUP_DEL+="☑️ old ${name} deletion success"$'\n'
+        else
+            echo "Error: stage ${STAGE}, failed to delete old ${name} $f" >&2
+            STATUS_OLD_BACKUP_DEL+="⚠️ old ${name} deletion failed"$'\n'
+            FAIL_TD=1
+        fi
+    done
+
+    if [[ $has_old == 0 ]]; then
+        STATUS_OLD_BACKUP_DEL+="☑️ old ${name} missing, skipping deletion"$'\n'
+    fi
+}
 
 # download function
 _dl() { curl -fsSL --max-time 60 "$1" -o "$2"; }
 
+# download with retry function
 _dl_with_retry() {
     local url="$1"
     local outfile="$2"
@@ -136,14 +132,14 @@ _dl_with_retry() {
     while true; do
         if ! _dl "$url" "$outfile"; then
             if [ "$attempt" -ge "$MAX_ATTEMPTS" ]; then
-                echo "❌ Error: stage ${STAGE}, failed to download ${label} after ${attempt} attempts, exit"
+                echo "Error: stage ${STAGE}, failed to download ${label} after ${attempt} attempts, exit" >&2
                 return 1
             fi
             sleep 60
             ((attempt++))
             continue
         else
-            echo "✅ Success: stage ${STAGE}, successful download ${label} after ${attempt} attempts"
+            echo "Success: stage ${STAGE}, successful download ${label} after ${attempt} attempts"
             return 0
         fi
     done
@@ -177,47 +173,47 @@ download_and_verify() {
         _dl_with_retry "${url}.sha256sum" "$sha256sum_file" "${name}.sha256sum" || return 1
     fi
 
-# increase stage count
+    # increase stage count
     STAGE=$((STAGE+1))
 
-# extract sha256sum from .dgst or .sha256sum depending on the name there are two ways
-# reset sha
+    # extract sha256sum from .dgst or .sha256sum depending on the name there are two ways
+    # reset sha
     expected_sha=""
-# extract sha256sum from .dgst if name xray
+        # extract sha256sum from .dgst if name xray
         if [ "$name" = "xray" ]; then
             expected_sha="$(awk '/^SHA2-256/ {print $2}' "$dgst_file")"
             if [ -z "$expected_sha" ]; then
-                echo "❌ Error: stage ${STAGE}, failed to parse SHA256 from ${dgst_file}, exit"
+                echo "Error: stage ${STAGE}, failed to parse SHA256 from ${dgst_file}, exit" >&2
                 return 1
             else
-                echo "✅ Success: stage ${STAGE}, successful parse SHA256 from ${dgst_file}"
+                echo "Success: stage ${STAGE}, successful parse SHA256 from ${dgst_file}"
             fi
-# extract sha256sum from .sha256sum if other name (geoip.dat, geosite.dat)
+        # extract sha256sum from .sha256sum if other name (geoip.dat, geosite.dat)
         else
             expected_sha="$(awk '{print $1}' "$sha256sum_file" 2>/dev/null)"
             if [ -z "$expected_sha" ]; then
-                echo "❌ Error: stage ${STAGE}, failed to parse SHA256 from ${sha256sum_file}, exit"
+                echo "Error: stage ${STAGE}, failed to parse SHA256 from ${sha256sum_file}, exit" >&2
                 return 1
             else
-                echo "✅ Success: stage ${STAGE}, successful parse SHA256 from ${sha256sum_file}"
+                echo "Success: stage ${STAGE}, successful parse SHA256 from ${sha256sum_file}"
             fi
         fi
 
-# increase stage count
+    # increase stage count
     STAGE=$((STAGE+1))
 
-# extract actual sha256sum from .zip or .dat
-# reset sha
-        actual_sha=""
-            actual_sha="$(sha256sum "$outfile" 2>/dev/null | awk '{print $1}')"
-            if [ -z "$actual_sha" ]; then
-                echo "❌ Error: stage ${STAGE}, failed to extract SHA256 from ${outfile}, exit"
-                return 1
-            else
-                echo "✅ Success: stage ${STAGE}, successful extraction SHA256 from ${outfile}"
-            fi
+    # extract actual sha256sum from .zip or .dat
+    # reset sha
+    actual_sha=""
+    actual_sha="$(sha256sum "$outfile" 2>/dev/null | awk '{print $1}')"
+        if [ -z "$actual_sha" ]; then
+            echo "Error: stage ${STAGE}, failed to extract SHA256 from ${outfile}, exit" >&2
+            return 1
+        else
+            echo "Success: stage ${STAGE}, successful extraction SHA256 from ${outfile}"
+        fi
 
-# increase stage count
+    # increase stage count
     STAGE=$((STAGE+1))
 
     local expected_label actual_label
@@ -233,39 +229,39 @@ download_and_verify() {
     fi
 
     if [ "$expected_sha" != "$actual_sha" ]; then
-        echo "📢 Info: stage ${STAGE}, expected SHA256 from ${expected_label}: $expected_sha"
-        echo "📢 Info: stage ${STAGE}, actual SHA256 from ${actual_label}: $actual_sha"
-        echo "❌ Error: stage ${STAGE}, failed to compare, actual and expected SHA256 do not match for ${name}, exit"
+        echo "Info: stage ${STAGE}, expected SHA256 from ${expected_label}: $expected_sha"
+        echo "Info: stage ${STAGE}, actual SHA256 from ${actual_label}: $actual_sha"
+        echo "Error: stage ${STAGE}, failed to compare, actual and expected SHA256 do not match for ${name}, exit" >&2
         return 1
     else
-        echo "📢 Info: stage ${STAGE}, expected SHA256 from ${expected_label}: $expected_sha"
-        echo "📢 Info: stage ${STAGE}, actual SHA256 from ${actual_label}: $actual_sha"
-        echo "✅ Success: stage ${STAGE}, actual and expected SHA256 match for ${name}"
+        echo "Info: stage ${STAGE}, expected SHA256 from ${expected_label}: $expected_sha"
+        echo "Info: stage ${STAGE}, actual SHA256 from ${actual_label}: $actual_sha"
+        echo "Success: stage ${STAGE}, actual and expected SHA256 match for ${name}"
     fi
 
-# unzip archive if name xray
+    # unzip archive if name xray
     if [ "$name" = "xray" ]; then
-# increase stage count
+        # increase stage count
         STAGE=$((STAGE+1))
-# unpack archive
+            # unpack archive
         if ! mkdir -p "$UNPACK_DIR"; then
-            echo "❌ Error: stage ${STAGE}, failed to create directory for unpacking ${outfile}, exit"
+            echo "Error: stage ${STAGE}, failed to create directory for unpacking ${outfile}, exit" >&2
             return 1
         else
-            echo "✅ Success: stage ${STAGE}, the directory for unpacking ${outfile} has been created"
+            echo "Success: stage ${STAGE}, the directory for unpacking ${outfile} has been created"
         fi
-        if ! unzip -o "$outfile" -d "$UNPACK_DIR" >/dev/null 2>&1; then
-            echo "❌ Error: stage ${STAGE}, failed to extract ${outfile}, exit"
+        if ! unzip -o "$outfile" -d "$UNPACK_DIR" &> /dev/null; then
+            echo "Error: stage ${STAGE}, failed to extract ${outfile}, exit" >&2
             return 1
         else
-            echo "✅ Success: stage ${STAGE}, ${outfile} successfully extracted"
+            echo "Success: stage ${STAGE}, ${outfile} successfully extracted"
         fi
-# check xray binary
+        # check xray binary
         if [ ! -f "$UNPACK_DIR/xray" ]; then
-            echo "❌ Error: stage ${STAGE}, xray binary is missing from folder after unpacking ${outfile}, exit"
+            echo "Error: stage ${STAGE}, xray binary is missing from folder after unpacking ${outfile}, exit" >&2
             return 1
         else
-            echo "✅ Success: stage ${STAGE}, xray binary exists in the folder after unpacking ${outfile}"
+            echo "Success: stage ${STAGE}, xray binary exists in the folder after unpacking ${outfile}"
         fi
     fi
 
@@ -274,56 +270,60 @@ download_and_verify() {
 
 # function for start xray and check status
 _xray_start_on_fail() {
-    if systemctl start xray.service > /dev/null 2>&1; then
-        echo "✅ Success: stage ${STAGE}, xray.service started, try updating again later, exit"
+    if systemctl start xray.service &> /dev/null; then
+        echo "Success: stage ${STAGE}, xray.service started, try updating again later, exit"
     else
-        echo "❌ Critical Error: stage ${STAGE}, xray.service does not start, exit"
+        echo "Critical Error: stage ${STAGE}, xray.service does not start, exit" >&2
     fi
 }
 
+# backup function
 _backup_old_file() {
     local backup_src="$1"
     local backup_dest="$2"
     local label="$3"
     if cp -p "$backup_src" "$backup_dest"; then
-        echo "✅ Success: stage ${STAGE}, ${label} backup completed"
+        echo "Success: stage ${STAGE}, ${label} backup completed"
     else
-        echo "❌ Error: stage ${STAGE}, ${label} backup failed, exit"
+        echo "Error: stage ${STAGE}, ${label} backup failed, exit" >&2
         return 1
     fi
 }
 
+# install function for install bin and dat files
 _install() {
     local install_mode="$1"
     local install_src="$2"
     local install_dest="$3"
     local name="$4"
 
-        if install -m "$install_mode" "$install_src" "$install_dest"; then
-            echo "✅ Success: stage ${STAGE}, $name installed"
+        if install -m "$install_mode" -g root -o root "$install_src" "$install_dest"; then
+            echo "Success: stage ${STAGE}, $name installed"
         else
-            echo "❌ Error: stage ${STAGE}, $name not installed, trying rollback"
+            echo "Error: stage ${STAGE}, $name not installed, trying rollback" >&2
             if ! cp -p "${install_dest}.${DATE}.bak" "$install_dest"; then
-                echo "❌ Error: stage ${STAGE}, $name rollback failed"
+                echo "Error: stage ${STAGE}, $name rollback failed" >&2
             else
-                echo "✅ Success: stage ${STAGE}, $name rolled back successfully"
+                echo "Success: stage ${STAGE}, $name rolled back successfully"
             fi
             _xray_start_on_fail
             return 1
         fi
 }
 
+# install all files function
 install_xray() {
     XRAY_NEW_VER=""
     XRAY_OLD_VER=""
 
-# increase stage count
+    # increase stage count
     STAGE=$((STAGE+1))
-# check xray version
+    
+    # check xray version
     if [ -x "$UNPACK_DIR/xray" ]; then
         XRAY_NEW_VER="$("$UNPACK_DIR/xray" -version | awk 'NR==1 {print $2; exit}')"
     else
-        echo "❌ Error: stage ${STAGE}, unknown new xray version, exit"
+        echo "Error: stage ${STAGE}, unknown new xray version, exit" >&2
         return 1
     fi
 
@@ -331,43 +331,46 @@ install_xray() {
         XRAY_OLD_VER="$("$XRAY_DIR/xray" -version | awk 'NR==1 {print $2; exit}')"
     else
         XRAY_OLD_VER=""
-        echo "❌ Error: stage ${STAGE}, unknown old xray version, exit"
+        echo "Error: stage ${STAGE}, unknown old xray version, exit" >&2
         return 1
     fi
 
     if [ -n "$XRAY_NEW_VER" ] && [ -n "$XRAY_OLD_VER" ] && [ "$XRAY_NEW_VER" = "$XRAY_OLD_VER" ]; then
-        echo "📢 Info: stage ${STAGE}, xray already up to date $XRAY_NEW_VER, skip xray update"
+        echo "Info: stage ${STAGE}, xray already up to date $XRAY_NEW_VER, skip xray update"
         XRAY_UP_TO_DATE=1
     else
-        echo "📢 Info: stage ${STAGE}, current xray version is $XRAY_OLD_VER, latest is $XRAY_NEW_VER, preparing to update"
+        echo "Info: stage ${STAGE}, current xray version is $XRAY_OLD_VER, latest is $XRAY_NEW_VER, preparing to update"
         XRAY_UP_TO_DATE=0
     fi
 
-# increase stage count
+    # increase stage count
     STAGE=$((STAGE+1))
-# old file backup
+    # old file backup
     if [ "$XRAY_UP_TO_DATE" = "0" ]; then
+        # backup
         _backup_old_file "$XRAY_DIR/xray" "$XRAY_DIR/xray.${DATE}.bak" "xray bin" || return 1
     else
-        echo "📢 Info: stage ${STAGE}, xray already up to date, backup not needed"
+        echo "Info: stage ${STAGE}, xray already up to date, backup not needed"
     fi
 
+    # backup
     _backup_old_file "$ASSET_DIR/geoip.dat"   "$ASSET_DIR/geoip.dat.${DATE}.bak"   "geoip.dat"   || return 1
     _backup_old_file "$ASSET_DIR/geosite.dat" "$ASSET_DIR/geosite.dat.${DATE}.bak" "geosite.dat" || return 1
 
-# increase stage count
+    # increase stage count
     STAGE=$((STAGE+1))
-# stop xray service
-    if systemctl stop xray.service > /dev/null 2>&1; then
-        echo "✅ Success: stage ${STAGE}, xray.service stopped, starting the update"
+    
+    # stop xray service
+    if systemctl stop xray.service &> /dev/null; then
+        echo "Success: stage ${STAGE}, xray.service stopped, starting the update"
     else
-        echo "❌ Error: stage ${STAGE}, failed to stop xray.service, cancelling update"
-        echo "📢 Info: stage ${STAGE}, checking status xray.service"
+        echo "Error: stage ${STAGE}, failed to stop xray.service, cancelling update" >&2
+        echo "Info: stage ${STAGE}, checking status xray.service"
         if systemctl is-active --quiet xray.service; then
-            echo "✅ Success: stage ${STAGE}, xray.service is running, try updating again later, exit"
+            echo "Success: stage ${STAGE}, xray.service is running, try updating again later, exit"
             return 1
         else
-            echo "❌ Error: stage ${STAGE}, xray.service is not running, trying to start"
+            echo "Error: stage ${STAGE}, xray.service is not running, trying to start" >&2
             _xray_start_on_fail
             return 1
         fi 
@@ -379,20 +382,19 @@ install_xray() {
     if [ "$XRAY_UP_TO_DATE" = "0" ]; then
         _install "755" "${UNPACK_DIR}/xray"      "${XRAY_DIR}/xray"         "xray binary" || return 1
     else
-        echo "📢 Info: stage ${STAGE}, xray binary installation skipped"
+        echo "Info: stage ${STAGE}, xray binary installation skipped"
     fi
 
     _install "644" "${TMP_DIR}/geoip.dat"    "${ASSET_DIR}/geoip.dat"    "geoip.dat" || return 1
     _install "644" "${TMP_DIR}/geosite.dat"  "${ASSET_DIR}/geosite.dat"  "geosite.dat" || return 1
 
-
     # increase stage count
     STAGE=$((STAGE+1))
     # start xray
     if systemctl start xray.service > /dev/null 2>&1; then
-        echo "✅ Success: stage ${STAGE}, xray.service updated and started"
+        echo "Success: stage ${STAGE}, xray.service updated and started"
     else
-        echo "❌ Critical Error: stage ${STAGE}, xray.service does not start"
+        echo "Critical Error: stage ${STAGE}, xray.service does not start" >&2
         return 1
     fi
 
@@ -401,7 +403,11 @@ install_xray() {
 
 # main logic start here
 # call the function to clear old logs before starting work
-cleanup_old_backups_and_logs
+cleanup_old "$XRAY_DIR"      "xray.*.bak"         "$XRAY_DIR/xray.${DATE}.bak"          "xray backup"
+cleanup_old "$ASSET_DIR"     "geoip.dat.*.bak"    "$ASSET_DIR/geoip.dat.${DATE}.bak"    "geoip.dat backup"
+cleanup_old "$ASSET_DIR"     "geosite.dat.*.bak"  "$ASSET_DIR/geosite.dat.${DATE}.bak"  "geosite.dat backup"
+
+
 # update xray
 if ! download_and_verify "$XRAY_URL" "$TMP_DIR/xray-linux-64.zip" "xray"; then
     XRAY_DOWNLOAD=0
@@ -466,8 +472,6 @@ else
     STATUS_XRAY="❌ Critical Error: xray.service does not start"
 fi
 
-DATE_END=$(date "+%Y-%m-%d %H:%M:%S")
-
 # select a title for the telegram message
 if [ "$XRAY_DOWNLOAD" = "1" ] && [ "$GEOIP_DOWNLOAD" = "1" ] && [ "$GEOSITE_DOWNLOAD" = "1" ] && [ "$XRAY_INSTALL" = "1" ]; then
     if [ "$FAIL_TD" = "0" ]; then
@@ -485,15 +489,15 @@ fi
 # collecting report for telegram message
 MESSAGE="$MESSAGE_TITLE
 
-🖥️ <b>Host:</b> $HOSTNAME
+🖥️ <b>Host:</b> $(hostname)
 ⌚ <b>Time start:</b> $DATE_START
-⌚ <b>Time end:</b> $DATE_END
+⌚ <b>Time end:</b> $(date +%Y-%m-%d %H:%M:%S)
 ${STATUS_OLD_BACKUP_DEL}${STATUS_XRAY_MESSAGE}
 ${STATUS_GEOIP_MESSAGE}
 ${STATUS_GEOSITE_MESSAGE}
 ${STATUS_INSTALL_MESSAGE}
 ${STATUS_XRAY}
-💾 <b>Update log:</b> ${UPDATE_LOG}"
+💾 <b>Update log:</b> journalctl -t xray_update"
 
 telegram_message
 

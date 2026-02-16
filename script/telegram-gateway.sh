@@ -1,31 +1,45 @@
 #!/bin/bash
 set -u
 
+# main variables
+readonly LOCK_FILE="/run/lock/telegram_gateway.lock"
+RC_M=1
+readonly API="https://api.telegram.org/bot${BOT_TOKEN}"
+readonly TIMEOUT=50
+readonly OFFSET=0
+readonly HOSTNAME="$(hostname)"
+
 # export path just in case
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export PATH
 
+# enable logging
+exec > >(systemd-cat -t telegram_gateway -p info) 2> >(systemd-cat -t telegram_gateway -p err) 5> >(systemd-cat -t telegram_gateway -p notice)
+
+# start logging message
+echo "boot notify started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
+
+on_exit() {
+    if [[ "$RC_M" -eq "0" ]]; then
+        echo "boot notify ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
+    else
+        echo "boot notify failed - $(date '+%Y-%m-%d %H:%M:%S')" >&2
+    fi
+}
+
+# trap for the end log message for the end log
+trap on_exit EXIT
+
 # user check
-[[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the telegram-gateway user, exit"; exit 1; }
+[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
 
-# check secret file, if the file have right permissions, we source it.
-readonly ENV_FILE="/usr/local/etc/telegram/secrets.env"
-if [[ ! -f "$ENV_FILE" ]] || [[ "$(stat -L -c '%U:%G:%a' "$ENV_FILE" 2> /dev/null)" != "root:telegram-gateway:640" ]]; then
-    echo "❌ Error: env file '$ENV_FILE' not found or has wrong permissions, exit"
-    exit 1
-fi
-source "$ENV_FILE" || { echo "❌ Error: failed to source '$ENV_FILE', exit"; exit 1; }
+# check another instanсe of the script is not running
+exec 99> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
+flock -n 99 || { echo "Error: another instance is running, exit" >&2; exit 1; }
 
-# check token from secret file
-[[ -z "$BOT_TOKEN" ]] && { echo "❌ Error: Telegram bot token is missing in '$ENV_FILE', exit"; exit 1; }
-
-# check group id from secret file
-[[ -z "$CHAT_ID" ]] && { echo "❌ Error: Telegram group ID is missing in '$ENV_FILE', exit"; exit 1; }
-
-API="https://api.telegram.org/bot${BOT_TOKEN}"
-TIMEOUT=50
-OFFSET=0
-readonly HOSTNAME="$(hostname)"
+# source Telegram func library
+# shellcheck source=share/telegram.lib.sh
+source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
 
 # Track bot messages so we can delete old output/menu and keep only the latest.
 # (Single admin chat assumed.)
@@ -34,6 +48,8 @@ declare -a BOT_MSG_IDS=()
 # Bot state (single admin only)
 STATE=""   # "", "WAIT_BLOCK", "WAIT_UNBLOCK", "WAIT_DELETE", "WAIT_ADD", "WAIT_EXP"
 # pending action is implied by STATE
+
+RC_M=0
 
 MAIN_KB_JSON='{
     "inline_keyboard":[

@@ -1,141 +1,208 @@
 #!/usr/bin/env bash
 
-# export path just in case
-PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-export PATH
-
-# user check
-[[ "$(whoami)" != "telegram-gateway" ]] && { echo "Error: you are not the telegram-gateway user, exit"; exit 1; }
+# common variables source
+# shellcheck source=share/variables.lib.sh
+source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit"; exit 1; }
 
 # main variable
-XRAY_CONFIG="/usr/local/etc/xray/config.json"
-AUTO_BLOCK_TAG="autoblock-traffic-users"
-TR_DB_M="/var/log/xray/TR_DB_M"
+USERNAME="$1"
+TS=$(date +%Y%m%d_%H%M%S)
+readonly BLOCK_RULE_TAG="autoblock-traffic-users"
+
+# user check
+[[ "$(whoami)" != "telegram_gateway" ]] && { echo "❌ Error: you are not the telegram_gateway user, exit"; exit 1; }
+
+# argument check
+if [[ "$#" -ne 1 || "$USERNAME" == "--help" ]]; then
+    echo "Use for reset traffic for user"
+    echo "run: $0 <username>"
+    exit 0
+fi
+
+if [[ ! $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
+    echo "❌ Error: only letters, numbers and - in name, exit"
+    exit 1
+fi
+
+# make tmp config and tr_db
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
+TMP_TR_DB_M="$(mktemp)"
+
+# exit rm tmp file function
+# shellcheck disable=SC2329
+rm_tmp_config() {
+    if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null && rm -f "$TMP_TR_DB_M" 2> /dev/null; then
+        echo "✅ Success: delete tmp config file"
+    else
+        echo "❌ Error: delete tmp config file"
+    fi
+}
+
+# set trap for tmp removing and exit message
+trap 'rm_tmp_config' EXIT
 
 # source library for run_lock and file permission cheking
-source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
-run_lock_check xray
-run_lock_check tr_db
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
 
-read_and_write_check "$XRAY_CONFIG"
-read_and_write_check "$TR_DB_M"
+# lock check
+run_lock_check "xray" "console"
+run_lock_check "tr_db" "console"
 
-if [[ $# -lt 1 ]]; then
-  echo "Error: name for unblock"
-  exit 1
-fi
+# read and write conf check
+read_and_write_check "$XRAY_CONFIG" "console"
+read_and_write_check "$TR_DB_M" "console"
 
-USERNAME="$1"
-if [[ -z "${USERNAME}" ]]; then
-  echo "Error: empty username."
-  exit 1
-fi
-
-backup_file() {
-    cp -a "$1" "${1}.bak.$(date '+%Y-%m-%d_%H-%M-%S')"
+# helper function
+run_and_check() {
+    local action="$1"
+    shift 1
+    if "$@" > /dev/null; then
+        echo "✅ Success: $action"
+    else
+        echo "❌ Error: $action, exit"
+        exit 1
+    fi
 }
 
-safe_write_json() {
-  # safe_write_json <srcfile> <jq_filter> <jq_args...>
-  local src="$1"; shift
-  local filter="$1"; shift
-
-  local dir tmp
-  dir="$(dirname "$src")"
-  tmp="$(mktemp "${dir}/.$(basename "$src").tmp.XXXXXX")"
-
-  jq --indent 2 "$@" "$filter" "$src" > "$tmp"
-
-  cat "$tmp" > "$src"
+# for block: find client emails in inbound Vless, match USERNAME|*
+get_client_emails() {
+    jq -r --arg tag "$INBOUND_TAG" --arg name "$USERNAME" '
+        .inbounds[]? | select(.tag == $tag)
+        | .settings.clients[]?
+        | select(((.email // "") | split("|")[0]) == $name)
+        | .email // empty
+    ' "$XRAY_CONFIG"
 }
 
-echo "Target user base: '${USERNAME}'"
+# for unblock: find all client only from OUR tagged managed rule, match USERNAME|*
+get_blocked_emails_from_rule() {
+    jq -r --arg tag "$INBOUND_TAG" --arg name "$USERNAME" --arg bot "$BLOCK_OUTBOUND_TAG" --arg brt "$BLOCK_RULE_TAG" '
+        def is_managed_rule:
+            (.type == "field")
+            and (.outboundTag == $bot)
+            and ((.inboundTag // []) | index($tag))
+            and ((.ruleTag // "") == $brt)
+            and has("user")
+            and ((keys - ["type","inboundTag","outboundTag","user","ruleTag"]) | length == 0);
 
-# --- 1) Правим XRAY_CONFIG ---
-if [[ -f "$XRAY_CONFIG" ]]; then
-  conf_matches="$(jq -r --arg tag "$AUTO_BLOCK_TAG" --arg uname "$USERNAME" '
-    [
-      .routing.rules[]? 
-      | select(.ruleTag? == $tag)
-      | (.user[]? | select((split("|")[0]) == $uname))
-    ] | length
-  ' "$XRAY_CONFIG" 2>/dev/null || echo "PARSE_ERROR")"
+            (.routing.rules[]? | select(is_managed_rule) | .user[]?)
+            | select((split("|")[0]) == $name) | select(length>0)
+    ' "$XRAY_CONFIG"
+}
 
-  if [[ "$conf_matches" == "PARSE_ERROR" ]]; then
-    echo "XRAY_CONFIG: ERROR: cannot parse JSON: $XRAY_CONFIG"
-  else
-    backup_file "$XRAY_CONFIG"
+# function for unblock email
+# shellcheck disable=SC2329
+unblock_emails_json() {
+    jq --arg tag "$INBOUND_TAG" \
+        --arg bot "$BLOCK_OUTBOUND_TAG" \
+        --arg rt "$BLOCK_RULE_TAG" \
+        --argjson emails "$EMAILS_JSON" '
+    .outbounds = (.outbounds // []) |
+    if any(.outbounds[]?; .tag == $bot) then .
+    else .outbounds += [{"tag": $bot, "protocol": "blackhole"}]
+    end |
 
-    safe_write_json "$XRAY_CONFIG" '
-      if (.routing? and .routing.rules? and (.routing.rules | type == "array")) then
-        .routing.rules |= (
-          map(
-            if (.ruleTag? == $tag) and (.user? | type == "array") then
-              .user |= map(select((split("|")[0]) != $uname))
-              | if ((.user | length) == 0) then empty else . end
-            else
-              .
-            end
-          )
+    .routing = (.routing // {}) |
+    .routing.rules = (.routing.rules // []) |
+
+    def is_managed_rule:
+        (.type == "field")
+        and (.outboundTag == $bot)
+        and ((.inboundTag // []) | index($tag))
+        and ((.ruleTag // "") == $rt)
+        and has("user")
+        and ((keys - ["type","inboundTag","outboundTag","user","ruleTag"]) | length == 0);
+
+    if any(.routing.rules[]?; is_managed_rule) then .
+    else .routing.rules |= ([{"type":"field","ruleTag":$rt,"inboundTag":[$tag],"outboundTag":$bot,"user":[]} ] + .)
+    end
+    | .routing.rules |= map(
+         if is_managed_rule then .user = ((.user // []) - $emails) else . end
         )
-      else
-        .
-      end
-    ' --arg tag "$AUTO_BLOCK_TAG" --arg uname "$USERNAME"
+    | del(.routing.rules[] | select(is_managed_rule and ((.user // []) | length == 0)))
+' "$XRAY_CONFIG" > "$TMP_XRAY_CONFIG"
+}
 
-    # проверим, осталось ли правило autoblock
-    remaining_rules="$(jq -r --arg tag "$AUTO_BLOCK_TAG" '
-      [.routing.rules[]? | select(.ruleTag? == $tag)] | length
-    ' "$XRAY_CONFIG" 2>/dev/null || echo "UNKNOWN")"
+# function for install config with save permission
+# shellcheck disable=SC2329
+install_new_conf() { cat "$1" > "$2" || return 1; }
 
-    echo "XRAY_CONFIG: removed ${conf_matches} user entry(ies) from tag '${AUTO_BLOCK_TAG}'. Remaining autoblock rules: ${remaining_rules}"
-  fi
-else
-  echo "XRAY_CONFIG: skipped (file not found): $XRAY_CONFIG"
-fi
+# function for reset traffic value to 0 in tr_db
+# shellcheck disable=SC2329
+reset_user_traffic() {
+  local user="$1"
 
-# --- 2) Правим TR_DB_M ---
-if [[ -f "$TR_DB_M" ]]; then
-  tr_matches="$(jq -r --arg uname "$USERNAME" '
-    [
-      .stat[]?
-      | select(.name? and (.name | type == "string"))
-      | select(.name | startswith("user>>>"))
-      | (.name | split(">>>")) as $p
-      | select(($p | length) > 1)
-      | select(($p[1] | split("|")[0]) == $uname)
+  jq --arg u "$user" '
+    (.stat[]
+      | select(.name? | startswith("user>>>" + $u + "|"))
       | select(has("value"))
-    ] | length
-  ' "$TR_DB_M" 2>/dev/null || echo "PARSE_ERROR")"
+      | .value
+    ) = 0
+  ' "$TR_DB_M" > "$TMP_TR_DB_M"
+}
 
-  if [[ "$tr_matches" == "PARSE_ERROR" ]]; then
-    echo "TR_DB_M: ERROR: cannot parse JSON: $TR_DB_M"
-  else
-    backup_file "$TR_DB_M"
-
-    safe_write_json "$TR_DB_M" '
-      if (.stat? and (.stat | type == "array")) then
-        .stat |= map(
-          if (.name? and (.name | type == "string") and (.name | startswith("user>>>"))) then
-            (.name | split(">>>")) as $p
-            | if (($p | length) > 1 and ($p[1] | split("|")[0]) == $uname) then
-                del(.value)
-              else
-                .
-              end
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    ' --arg uname "$USERNAME"
-
-    echo "TR_DB_M: cleared 'value' in ${tr_matches} stat record(s) for user base '${USERNAME}'."
-  fi
+# main logic start here
+# check client exist or not
+mapfile -t EMAILS < <(get_client_emails)
+if [[ ${#EMAILS[@]} -gt 1 ]]; then
+    echo "❌ Error: '$USERNAME' to many match in clients inbound '$INBOUND_TAG', edit config manually, exit"
+    exit 1
+elif [[ ${#EMAILS[@]} -eq 1 ]]; then
+    echo "✅ Success: found client with name '$USERNAME' in inbound tag '$INBOUND_TAG'"
 else
-  echo "TR_DB_M: skipped (file not found): $TR_DB_M"
+    echo "❌ Error: not found client with name '$USERNAME' in inbound tag '$INBOUND_TAG', exit"
+    exit 1
 fi
 
-echo "Done ✅ (Backups created as *.bak.YYYYmmdd-HHMMSS)"
+# check client only in our tagged rule
+mapfile -t EMAILS < <(get_blocked_emails_from_rule)
+if [[ ${#EMAILS[@]} -gt 1 ]]; then
+    echo "❌ Error: '$USERNAME' to many match in ruleTag '$BLOCK_RULE_TAG', edit config manually, exit"
+    exit 1
+elif [[ ${#EMAILS[@]} -eq 1 ]]; then
+    echo "✅ Success: found client for unblock name '$USERNAME' in ruleTag '$BLOCK_RULE_TAG'"
+else
+    echo "❌ Error: not found client for unblock name '$USERNAME' in ruleTag '$BLOCK_RULE_TAG', exit"
+    exit 1
+fi
+
+# convert email to json
+EMAILS_JSON="$(printf '%s\n' "${EMAILS[@]}" | jq -R . | jq -s .)"
+
+# run func for add user in block rule
+run_and_check "block user ${EMAILS[*]}, ruleTag '$BLOCK_RULE_TAG'" unblock_emails_json
+
+# checking new config
+run_and_check "new xray config checking" xray run -test -config "$TMP_XRAY_CONFIG"
+
+# backup
+run_and_check "backup old xray config to '$XRAY_CONFIG_BACKUP'" cp -a "$XRAY_CONFIG" "$XRAY_CONFIG_BACKUP"
+
+# install new file with save permission
+run_and_check "install new xray config" install_new_conf "$TMP_XRAY_CONFIG" "$XRAY_CONFIG"
+
+# restart xray
+run_and_check "restart xray service" systemctl restart xray.service
+
+echo "✅ Success: apply for '$USERNAME' from inbound tag '$INBOUND_TAG'"
+
+# reset user traffic to 0 in tmp file
+run_and_check "reset user traffic in TR_DB_M for '$USERNAME'" reset_user_traffic "$USERNAME"
+
+if jq -e empty "$TMP_TR_DB_M" &> /dev/null; then
+    echo "Success: reset traffic in TR_DB_M for username '${USERNAME}'"
+else
+    cp -f "$TMP_TR_DB_M" "${TR_DB_M}.bad_new_${TS}.json" 
+    echo "Error: cannot parse xray new TR_DB_M; saved raw to ${TR_DB_M}.bad_new_${TS}.json, exit"
+    exit 1
+fi
+
+# backup
+run_and_check "backup old TR_DB_M to '$TR_DB_M_BACKUP'" cp -a "$TR_DB_M" "$TR_DB_M_BACKUP"
+
+# install new
+run_and_check "install new TR_DB_M" install_new_conf "$TMP_TR_DB_M" "$TR_DB_M"
+
+echo "✅ Success: TR_DB_M updated for '${USERNAME}'"
+
+exit 0

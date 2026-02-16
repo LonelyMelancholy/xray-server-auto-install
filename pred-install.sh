@@ -1,10 +1,31 @@
 #!/bin/bash
 # pred install script
 
+# main variables
+LOG_UBUNTU_PRO="logs/ubuntu_pro.log"
+LOG_UPDATE_LIST="logs/update_list.log"
+LOG_INSTALL_UTILITIES="logs/install_utilities.log"
+LOG_UPDATE_DIST="logs/update_dist.log"
+LOG_CLEANUP="logs/cleanup.log"
+MISSING_PACKAGE_LIST=()
+CMD_LIST_UPDATE=(apt-get update)
+CMD_INSTALL_PACKAGE=(env DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confnew install)
+CMD_DIST_UPGRADE=(env DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confnew dist-upgrade)
+
+# cd intro script folder
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR" || exit 1
+
+# start logging in console
 echo "📢 Info: starting the procedure for preparing the system for installation"
 
 # root check
 [[ $EUID -ne 0 ]] && { echo "❌ Error: you are not the root user, exit"; exit 1; }
+
+# check another instance of the script is not running
+readonly LOCK_FILE="/var/run/vpn_pred-install.lock"
+exec 99> "$LOCK_FILE" || { echo "❌ Error: cannot open lock file '$LOCK_FILE', exit"; exit 1; }
+flock -n 99 || { echo "❌ Error: another instance is running, exit"; exit 1; }
 
 # check os version
 [[ -r /etc/os-release ]] || { echo "❌ Error: '/etc/os-release' missing or you do not have read permissions, exit"; exit 1; }
@@ -14,51 +35,18 @@ if [[ "$ID" != "ubuntu" ]] || [[ "${VERSION_ID%%.*}" -lt 20 ]]; then
     exit 1
 fi
 
-# check another instance of the script is not running
-readonly LOCK_FILE="/var/run/vpn_pred-install.lock"
-exec 9> "$LOCK_FILE" || { echo "❌ Error: cannot open lock file '$LOCK_FILE', exit"; exit 1; }
-flock -n 9 || { echo "❌ Error: another instance is running, exit"; exit 1; }
-
-# create log dir and check writable
-mkdir -p logs &> /dev/null || { echo "❌ Error: cannot create 'logs' directory, exit"; exit 1; }
-[[ -d logs && -w logs && -x logs ]] || { echo "❌ Error: logs directory is not writable, exit"; exit 1; }
-
-# all log files
-LOG_UBUNTU_PRO="logs/ubuntu_pro.log"
-LOG_UPDATE_LIST="logs/update_list.log"
-LOG_INSTALL_UTILITIES="logs/install_utilities.log"
-LOG_UPDATE_DIST="logs/update_dist.log"
-LOG_CLEANUP="logs/cleanup.log"
-
-# check configuration file
-CFG_CHECK="module/cfg_check.lib.sh"
-[[ -r "$CFG_CHECK" ]] || { echo "❌ Error: check '$CFG_CHECK' it's missing or you do not have read permissions, exit"; exit 1; }
-source "$CFG_CHECK" || { echo "❌ Error: failed to source '$CFG_CHECK', exit"; exit 1; }
-
-# hostname change
-if [[ $(hostname) != "$XRAY_HOSTNAME" ]]; then
-    if hostnamectl set-hostname "$XRAY_HOSTNAME"; then
-        echo "✅ Success: set new hostname"
+# helper function
+run_and_check() {
+    local action="$1"
+    local log="$2"
+    shift 2
+    if "$@" &> "$log"; then
+        echo "✅ Success: $action"
     else
-        echo "❌ Error: set new hostname"
+        echo "❌ Error: $action, exit"
+        exit 1
     fi
-else
-    echo "✅ Success: new hostname matches the old hostname, changes not needed"
-fi
-
-# update system
-if [[ -n "$UBUNTU_PRO_TOKEN" ]]; then
-    if command -v pro &> /dev/null; then
-        echo "📢 Info: try to activate Ubuntu Pro, please wait"
-        if pro attach "$UBUNTU_PRO_TOKEN" &>> "$LOG_UBUNTU_PRO"; then
-            echo "✅ Success: Ubuntu Pro activated"
-        else
-            echo "⚠️  Non-critical error: Ubuntu Pro activation error, check '$LOG_UBUNTU_PRO' for more info, continue"
-        fi
-    else
-        echo "⚠️  Non-critical error: 'pro' command not found, skipping Ubuntu Pro attach"
-    fi
-fi
+}
 
 # function for install utilities an update
 install_and_update() {
@@ -71,53 +59,23 @@ install_and_update() {
     while true; do
         echo "📢 Info: ${action}, attempt $attempt, please wait"
         # $@ passes all remaining arguments (after the first two)
-        if "$@" &>> "$log"; then
+        if "$@" &> "$log"; then
             echo "✅ Success: $action completed"
             return 0
         fi
         if [[ "$attempt" -lt "$max_attempt" ]]; then
             sleep 60
-            echo "⚠️  Non-critical error: $action failed, trying again"
+            echo "📢 Info: $action failed, trying again"
             ((attempt++))
             continue
         else
-            echo "❌ Error: $action failed, attempts ended, check '$log', exit"
+            echo "❌ Error: $action failed, after $attempt attempts, check '$log', exit"
             exit 1
         fi
     done
 }
 
-# utilities check
-missing_pkgs=()
-for utility in curl unzip jq openssl update-ca-certificates ifstat; do
-    if ! command -v "$utility" &> /dev/null; then
-        missing_pkgs+=("$utility")
-    fi
-done
-
-# set command for $@
-cmd_update=(apt-get update)
-cmd_install=(env DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confnew install)
-cmd_dist=(env DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confnew dist-upgrade)
-
-# start main logic
-install_and_update "update packages list" "$LOG_UPDATE_LIST" "${cmd_update[@]}"
-if [[ "${#missing_pkgs[@]}" -gt 0 ]]; then
-    echo "📢 Info: required utilities: '${missing_pkgs[*]}' not found, prepare for installation"
-    install_and_update "install required utilities: '${missing_pkgs[*]}'" "$LOG_INSTALL_UTILITIES" \
-        "${cmd_install[@]}" "${missing_pkgs[@]}"
-fi
-install_and_update "updating packages" "$LOG_UPDATE_DIST" "${cmd_dist[@]}"
-
-# clean apt cache
-echo "📢 Info: cleaning up package cache, please wait"
-if apt-get clean &>> "$LOG_CLEANUP"; then
-    echo "✅ Success: cleaned package cache"
-else
-    echo "⚠️  Non-critical error: failed to clean cache, check '$LOG_CLEANUP' for more info, continue"
-fi
-
-# countdown before reboot
+# function countdown before reboot
 countdown() {
     local sec=$1
     while [[ "$sec" -gt 0 ]]; do
@@ -127,6 +85,62 @@ countdown() {
     done
     printf "\r✅ Success: launch server reboot                                      \n"
 }
+
+# main logic start here
+# create log dir and check writable
+mkdir -p logs &> /dev/null || { echo "❌ Error: cannot create 'logs' directory, exit"; exit 1; }
+
+# check and source configuration file
+CFG_CHECK="module/cfg_check.lib.sh"
+[[ -r "$CFG_CHECK" ]] || { echo "❌ Error: check '$CFG_CHECK' it's missing or you do not have read permissions, exit"; exit 1; }
+source "$CFG_CHECK" || { echo "❌ Error: failed to source '$CFG_CHECK', exit"; exit 1; }
+
+# hostname change
+if [[ $(hostname) != "$XRAY_HOSTNAME" ]]; then
+    run_and_check "set new hostname" "/dev/null" hostnamectl set-hostname "$XRAY_HOSTNAME"
+else
+    echo "✅ Success: new hostname matches the old hostname, changes not needed"
+fi
+
+# update system
+if [[ -n "$UBUNTU_PRO_TOKEN" ]]; then
+    if command -v pro &> /dev/null; then
+        echo "📢 Info: try to activate Ubuntu Pro, please wait"
+        if pro attach "$UBUNTU_PRO_TOKEN" &> "$LOG_UBUNTU_PRO"; then
+            echo "✅ Success: Ubuntu Pro activated"
+        else
+            echo "📢 Info: Ubuntu Pro activation error, check '$LOG_UBUNTU_PRO' for more info, continue"
+        fi
+    else
+        echo "📢 Info: 'pro' command not found, skipping Ubuntu Pro attach"
+    fi
+fi
+
+# utilities check, if missing add to array
+for utility in curl unzip jq openssl update-ca-certificates ifstat; do
+    if ! command -v "$utility" &> /dev/null; then
+        MISSING_PACKAGE_LIST+=("$utility")
+    fi
+done
+
+# update list packages with logging
+install_and_update "update packages list" "$LOG_UPDATE_LIST" "${CMD_LIST_UPDATE[@]}"
+
+# install utilities if missing
+if [[ "${#MISSING_PACKAGE_LIST[@]}" -gt 0 ]]; then
+    echo "📢 Info: required utilities: '${MISSING_PACKAGE_LIST[*]}' not found, prepare for installation"
+    install_and_update "install required utilities: '${MISSING_PACKAGE_LIST[*]}'" "$LOG_INSTALL_UTILITIES" \
+        "${CMD_INSTALL_PACKAGE[@]}" "${MISSING_PACKAGE_LIST[@]}"
+fi
+
+# update packages
+install_and_update "updating packages" "$LOG_UPDATE_DIST" "${CMD_DIST_UPGRADE[@]}"
+
+# clean apt cache
+echo "📢 Info: cleaning up package cache, please wait"
+run_and_check "cleaning package cache" "$LOG_CLEANUP" apt-get clean
+
+# countdown before reboot
 countdown 10
 
 # reboot after pause

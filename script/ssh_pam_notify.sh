@@ -1,15 +1,20 @@
 #!/bin/bash
 # script for notify ssh login/unlogin via PAM
 # exit 0 to avoid bothering PAM with an incorrect error code
-# all errors are still logged, except the first three for debugging, add a redirect to the debug log
+# all errors are logged in journald, see journalctl -t ssh_pam_notify
+
+# main variables
+RC_M="1"
+readonly TARGET_USER="telegram_gateway"
+readonly IP="$PAM_RHOST"
+readonly USER="$PAM_USER"
+readonly SESSION="$PAM_TYPE"
 
 # export path just in case
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export PATH
 
-TARGET_USER="telegram-gateway"
-
-# sends the script to the background from telegram-gateway, without delaying pam and send exit 0 to pam
+# sends the script to the background from telegram_gateway, without delaying pam and send exit 0 to pam
 if [[ -z "${TG_BG:-}" ]]; then
     export TG_BG=1
     if [[ "$(whoami)" != "$TARGET_USER" ]]; then
@@ -25,75 +30,62 @@ if [[ -z "${TG_BG:-}" ]]; then
     exit 0
 fi
 
-# user check
-[[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the root user, exit"; exit 1; }
+# enable logging
+exec > >(systemd-cat -t ssh_pam_notify -p info) 2> >(systemd-cat -t ssh_pam_notify -p err) 5> >(systemd-cat -t ssh_pam_notify -p notice)
 
-# enable logging, the directory should already be created, but let's check just in case
-readonly NOTIFY_LOG="/var/log/telegram/ssh_pam.$(date '+%Y-%m-%d').log"
-exec &>> "$NOTIFY_LOG" || { echo "❌ Error: cannot write to log '$NOTIFY_LOG', exit"; exit 1; }
+# user check
+[[ "$(whoami)" != "$TARGET_USER" ]] && { echo "Error: you are not the $TARGET_USER user, exit" >&2; exit 1; }
 
 # start logging message
-echo "########## ssh pam notify started - $(date '+%Y-%m-%d %H:%M:%S') ##########"
+echo "ssh pam notify started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 
 # exit logging message function
-RC_M="1"
+# shellcheck disable=SC2329
 on_exit() {
     if [[ "$RC_M" -eq "0" ]]; then
-        echo "########## ssh pam notify ended - $(date '+%Y-%m-%d %H:%M:%S') ##########"
+        echo "ssh pam notify ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     else
-        echo "########## ssh pam notify failed - $(date '+%Y-%m-%d %H:%M:%S') ##########"
+        echo "ssh pam notify failed - $(date '+%Y-%m-%d %H:%M:%S')" >&2
     fi
 }
 
 # trap for the end log message for the end log
 trap 'on_exit' EXIT
 
-source "/usr/local/lib/service/telegram.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit"; exit 1; }
+# source Telegram func library
+source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
 
-# main variables
-readonly HOSTNAME="$(hostname)"
-readonly IP="$PAM_RHOST"
-readonly USER="$PAM_USER"
-readonly SESSION="$PAM_TYPE"
-
-# start collecting message
+# main logic start here
+# start collecting message parts
 case "$SESSION" in
     open_session)
-    MESSAGE="📢 <b>SSH PAM notify (login)</b>
-
-🖥️ <b>Host:</b> $HOSTNAME
-⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
-🧑🏿‍💻 <b>User:</b> $USER
-🏴 <b>From:</b> $IP
-💾 <b>Auth log:</b> /var/log/auth.log
-💾 <b>Notify log:</b> $NOTIFY_LOG"
+        MESSAGE_TITLE="📢 <b>SSH PAM notify (login)</b>"
+        MESSAGE_ACTION="🧑🏿‍💻 <b>User:</b> $USER"$'\n'"🏴 <b>From:</b> $IP"
     ;;
     close_session)
-    MESSAGE="📢 <b>SSH PAM notify (logout)</b>
-
-🖥️ <b>Host:</b> $HOSTNAME
-⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
-🧑🏿‍💻 <b>User:</b> $USER
-🏴 <b>From:</b> $IP
-💾 <b>Auth log:</b> /var/log/auth.log
-💾 <b>Notify log:</b> $NOTIFY_LOG"
+        MESSAGE_TITLE="📢 <b>SSH PAM notify (logout)</b>"
+        MESSAGE_ACTION="🧑🏿‍💻 <b>User:</b> $USER"$'\n'"🏴 <b>From:</b> $IP"
     ;;
     *)
-    MESSAGE="⚠️ <b>SSH PAM notify (unknown)</b>
-
-🖥️ <b>Host:</b> $HOSTNAME
-⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
-❌ Error: unknown PAM session type, check settings
-💾 <b>Auth log:</b> /var/log/auth.log
-💾 <b>Notify log:</b> $NOTIFY_LOG"
+        MESSAGE_TITLE="⚠️ <b>SSH PAM notify (unknown)</b>"
+        MESSAGE_ACTION="❌ Error: unknown PAM session type, check settings"
     ;;
 esac
 
+# collecting full message
+MESSAGE="${MESSAGE_TITLE}
+
+🖥️ <b>Host:</b> $(hostname)
+⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
+${MESSAGE_ACTION}
+💾 <b>Auth log:</b> /var/log/auth.log
+💾 <b>Notify log:</b> journalctl -t ssh_pam_notify"
+
 # logging message
-echo "########## collected message - $(date '+%Y-%m-%d %H:%M:%S') ##########"
+echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
 echo "$MESSAGE"
 
-# send message
+# sending message
 telegram_message
 
 exit $RC_M

@@ -2,7 +2,7 @@
 
 # config file read check
 CFG_FILE="configuration.cfg"
-if [[ ! -r "$CFG_FILE" ]]; then
+if [[ ! -r "$CFG_FILE" || ! -f "$CFG_FILE" ]]; then
     echo "❌ Error: check '$CFG_FILE' it's missing or you don't have permission to read it, exit"
     exit 1
 fi
@@ -12,13 +12,8 @@ XRAY_HOSTNAME=$(awk -F'"' '/^[[:space:]]*Server hostname/ {print $2}' "$CFG_FILE
 if [[ -z "$XRAY_HOSTNAME" ]]; then
     echo "❌ Error: 'Server hostname' is empty in '$CFG_FILE', exit"
     exit 1
-fi
-
-if [[ $XRAY_HOSTNAME =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,62}[A-Za-z0-9])?$ ]]; then
-    echo "✅ Success: server hostname accepted"
 else
-    echo "❌ Error: 'Server hostname' '$XRAY_HOSTNAME' does not comply with Linux rules, exit"
-    exit 1
+    echo "✅ Success: 'Server hostname' accepted"
 fi
 
 # password check
@@ -27,7 +22,7 @@ if [[ -z "$PASS" ]]; then
     echo "❌ Error: 'Password for root and new user' is empty in '$CFG_FILE', exit"
     exit 1
 else
-    echo "✅ Success: password accepted"
+    echo "✅ Success: 'Password for root and new user' accepted"
 fi
 
 # check token
@@ -36,7 +31,7 @@ if [[ -z "$READ_BOT_TOKEN" ]]; then
     echo "❌ Error: 'Telegram bot token' is empty in '$CFG_FILE', exit"
     exit 1
 else
-    echo "✅ Success: Telegram bot token accepted"
+    echo "✅ Success: 'Telegram bot token' accepted"
 fi
 
 # check ID
@@ -45,7 +40,7 @@ if [[ -z "$READ_CHAT_ID" ]]; then
     echo "❌ Error: 'Telegram chat ID' is empty in '$CFG_FILE', exit"
     exit 1
 else
-    echo "✅ Success: Telegram chat ID accepted"
+    echo "✅ Success: 'Telegram chat ID' accepted"
 fi
 
 # check group ID
@@ -54,7 +49,7 @@ if [[ -z "$READ_GROUP_ID" ]]; then
     echo "❌ Error: 'Telegram group ID' is empty in '$CFG_FILE', exit"
     exit 1
 else
-    echo "✅ Success: Telegram group ID accepted"
+    echo "✅ Success: 'Telegram group ID' accepted"
 fi
 
 # check Ubuntu Pro token
@@ -62,7 +57,7 @@ UBUNTU_PRO_TOKEN=$(awk -F'"' '/^[[:space:]]*Ubuntu Pro token/ {print $2}' "$CFG_
 if [[ -z "$UBUNTU_PRO_TOKEN" ]]; then
     echo "📢 Info: 'Ubuntu Pro token' is empty in '$CFG_FILE', skip Ubuntu Pro section"
 else
-    echo "✅ Success: Ubuntu Pro token accepted"
+    echo "✅ Success: 'Ubuntu Pro token' accepted"
 fi
 
 # check email
@@ -70,13 +65,8 @@ OWNER_EMAIL=$(awk -F'"' '/^[[:space:]]*Owner server email/ {print $2}' "$CFG_FIL
 if [[ -z "$OWNER_EMAIL" ]]; then
     echo "❌ Error: 'Owner server email' for certificates empty in '$CFG_FILE', exit"
     exit 1
-fi
-
-if [[ ! $OWNER_EMAIL =~ ^[A-Za-z0-9@.-]+$ ]]; then
-    echo "❌ Error: 'Owner server email' for certificates can have only letters, numbers and .@- in name, exit"
-    exit 1
 else
-    echo "✅ Success: email for certificates accepted"
+    echo "✅ Success: 'Owner server email' for certificates accepted"
 fi
 
 # check name
@@ -90,13 +80,13 @@ if [[ ! $XRAY_NAME =~ ^[A-Za-z0-9-]+$ ]]; then
     echo "❌ Error: 'Name' for xray can have only letters, numbers and - in name, exit"
     exit 1
 else
-    echo "✅ Success: name for xray accepted"
+    echo "✅ Success: 'Name' for xray accepted"
 fi
 
 # check days
 XRAY_DAYS=$(awk -F'"' '/^[[:space:]]*Days/ {print $2}' "$CFG_FILE")
 if [[ -z "$XRAY_DAYS" ]]; then
-    echo "❌ Error: 'Days' is empty in '$CFG_FILE', exit"
+    echo "❌ Error: 'Days' for xray is empty in '$CFG_FILE', exit"
     exit 1
 fi
 
@@ -104,5 +94,5 @@ if [[ ! $XRAY_DAYS =~ ^[0-9]+$ ]]; then
     echo "❌ Error: 'Days' for xray can have only numbers, exit"
     exit 1
 else
-    echo "✅ Success: days for xray accepted"
+    echo "✅ Success: 'Days' for xray accepted"
 fi

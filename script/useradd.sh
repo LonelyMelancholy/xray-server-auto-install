@@ -1,46 +1,21 @@
 #!/bin/bash
 # script for add user in xray config
 
-# export path just in case
-PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-export PATH
-
-# user check
-[[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the telegram-gateway user, exit"; exit 1; }
-
-# check another instanсe of the script is not running
-source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
-xray_lock
-uri_db_lock
+# common variables source
+# shellcheck source=share/variables.lib.sh
+source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit"; exit 1; }
 
 # main variables
-readonly URI_PATH="/usr/local/etc/xray/URI_DB"
-readonly XRAY_CONFIG="/usr/local/etc/xray/config.json"
-readonly BACKUP_PATH="${XRAY_CONFIG}.$(date +%Y%m%d_%H%M%S).bak"
-readonly XRAY_BIN="/usr/local/bin/xray"
-readonly INBOUND_TAG="Vless"
 readonly DEFAULT_FLOW="xtls-rprx-vision"
 readonly USERNAME="$1"
-readonly URI_BAK="${URI_PATH}.$(date +%Y%m%d_%H%M%S).bak"
 DAYS="$2"
-
-# helper func
-run_and_check() {
-    action="$1"
-    shift 1
-    if "$@" > /dev/null; then
-        echo "✅ Success: $action"
-    else
-        echo "❌ Error: $action, exit"
-        exit 1
-    fi
-}
+readonly CREATED="$(date +%F)"
 
 # argument check
-if [[ "$#" -ne 2 ]]; then
+if [[ "$#" -ne 2 || "$USERNAME" == "--help" ]]; then
     echo "Use for add user in xray config, run: $0 <username> <days>"
     echo "days 0 - infinity days"
-    exit 1
+    exit 0
 fi
 
 if ! [[ $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
@@ -53,67 +28,49 @@ if ! [[ "$DAYS" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 
-# counts client in config
-client_count="$(
-  jq -r --arg tag "$INBOUND_TAG" --arg name "$USERNAME" '
-    [
-      .inbounds[]? | select(.tag == $tag) |
-      .settings.clients[]? |
-      select(((.email // "") | split("|")[0]) == $name)
-    ] | length
-  ' "$XRAY_CONFIG"
-)"
+# user check
+[[ "$(whoami)" != "telegram_gateway" ]] && { echo "❌ Error: you are not the telegram_gateway user, exit"; exit 1; }
 
-if [[ $client_count -ge 1 ]]; then
-    echo "❌ Error: name already exist in xray config, exit"
-    exit 1
-fi
+# source library for run_lock and file permission cheking
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
 
-# config check
-if [[ ! -r "$XRAY_CONFIG" || ! -w "$XRAY_CONFIG" ]]; then
-    echo "❌ Error: check $XRAY_CONFIG it's missing or you do not have read permissions, exit"
-    exit 1
-fi
+# lock check
+run_lock_check "xray" "console"
+run_lock_check "uri_db" "console"
 
-# calculate exp and created date
-readonly CREATED="$(date +%F)"
+# read and write conf check
+read_and_write_check "$XRAY_CONFIG" "console"
+read_and_write_check "$URI_DB" "console"
 
-# write variable
-if [[ "$DAYS" == "0" ]]; then
-    XRAY_EMAIL="${USERNAME}|created=${CREATED}|days=infinity|exp=never"
-    DAYS="infinity"
-    EXP="never"
-else
-    EXP="$(date -d "$CREATED + $DAYS days" +%F)"
-    XRAY_EMAIL="${USERNAME}|created=${CREATED}|days=${DAYS}|exp=${EXP}"
-fi
+# make tmp file
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
 
-# check inbound
-readonly HAS_INBOUND="$(jq --arg tag "$INBOUND_TAG" '
-  any(.inbounds[]?; .tag == $tag and .protocol == "vless")
-' "$XRAY_CONFIG")"
+# exit rm tmp file function
+# shellcheck disable=SC2329
+rm_tmp_config() {
+    if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null; then
+        echo "✅ Success: delete tmp config file"
+    else
+        echo "❌ Error: delete tmp config file"
+    fi
+}
 
-if [[ "$HAS_INBOUND" != "true" ]]; then
-  echo "❌ Error: config not have vless-inbound, tag=\"$INBOUND_TAG\", exit"
-  exit 1
-fi
+# set trap for tmp removing and exit message
+trap 'rm_tmp_config' EXIT
 
-# uuid generation
-if [[ -x "$XRAY_BIN" ]]; then
-    readonly UUID="$("$XRAY_BIN" uuid)"
-else
-    echo "❌ Error: not found $XRAY_BIN, for UUID generation, exit"
-    exit 1
-fi
+# helper func
+run_and_check() {
+    local action="$1"
+    shift 1
+    if "$@" > /dev/null; then
+        echo "✅ Success: $action"
+    else
+        echo "❌ Error: $action, exit"
+        exit 1
+    fi
+}
 
-xray_useradd() {
-    # make tmp file
-    TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
-    chmod 600 "$TMP_XRAY_CONFIG" || return 1
-
-    # set trap for deleting tmp files
-    trap 'rm -f "$TMP_XRAY_CONFIG"' EXIT
-    
+make_new_config() {
     # add user
     jq --arg tag "$INBOUND_TAG" \
         --arg email "$XRAY_EMAIL" \
@@ -133,18 +90,83 @@ xray_useradd() {
     ' "$XRAY_CONFIG" > "$TMP_XRAY_CONFIG"
 }
 
-# add user, check config, install if config valid and delete tmp files
-run_and_check "add xray user in config" xray_useradd
-run_and_check "new xray config checking" xray run -test -config "$TMP_XRAY_CONFIG"
-run_and_check "backup xray config" cp -a "$XRAY_CONFIG" "$BACKUP_PATH"
-install_new_conf() {
-    cat "$TMP_XRAY_CONFIG" > "$XRAY_CONFIG"
-}
-run_and_check "install new xray config" install_new_conf
-run_and_check "delete temporary xray files " rm -f "$TMP_XRAY_CONFIG"
+install_new_conf() { cat "$TMP_XRAY_CONFIG" > "$XRAY_CONFIG"; }
 
-# unset trap, tmp already deleted
-trap - EXIT
+# function for checking variables in json config
+check_var() {
+    local name="$1"
+    local value="$2"
+    if [ -z "$value" ]; then
+        echo "❌ Error: $name not found in realitySettings inbound, exit"
+        exit 1
+    fi
+}
+
+# make uri link function
+uri_encode() { printf '%s' "$1" | jq -sRr @uri; }
+
+# function for update URI_DB
+install_new_uri_db() {
+    tee -a "$URI_DB" >/dev/null <<EOF
+name: $USERNAME, vless link: $VLESS_URI
+
+EOF
+}
+
+# main logic start here
+# counts client in config
+USERNAME_COUNT="$(
+    jq -r --arg tag "$INBOUND_TAG" --arg name "$USERNAME" '
+        [
+            .inbounds[]? | select(.tag == $tag) |
+            .settings.clients[]? |
+            select(((.email // "") | split("|")[0]) == $name)
+        ] | length
+    ' "$XRAY_CONFIG"
+)"
+
+# if client exist, exit
+if [[ $USERNAME_COUNT -ge 1 ]]; then
+    echo "❌ Error: name already exist in xray config, exit"
+    exit 1
+fi
+
+# calculate exp and created date
+# write variable
+if [[ "$DAYS" == "0" ]]; then
+    XRAY_EMAIL="${USERNAME}|created=${CREATED}|days=infinity|exp=never"
+    DAYS="infinity"
+    EXP="never"
+else
+    EXP="$(date -d "$CREATED + $DAYS days" +%F)"
+    XRAY_EMAIL="${USERNAME}|created=${CREATED}|days=${DAYS}|exp=${EXP}"
+fi
+
+# check inbound
+readonly HAS_INBOUND="$(jq --arg tag "$INBOUND_TAG" '
+    any(.inbounds[]?; .tag == $tag and .protocol == "vless")
+' "$XRAY_CONFIG")"
+
+# if not have inbound, exit
+if [[ "$HAS_INBOUND" != "true" ]]; then
+    echo "❌ Error: config not have vless-inbound, tag='$INBOUND_TAG', exit"
+    exit 1
+fi
+
+# uuid generation
+readonly UUID="$(xray uuid)"
+
+# add user
+run_and_check "add xray user and make new config" make_new_config
+
+# check config
+run_and_check "checking new xray config" xray run -test -config "$TMP_XRAY_CONFIG"
+
+# backup config
+run_and_check "backup old xray config '$XRAY_CONFIG_BACKUP'" cp -a "$XRAY_CONFIG" "$XRAY_CONFIG_BACKUP"
+
+# install if config valid
+run_and_check "install new xray config" install_new_conf
 
 # restart xray for enable user
 run_and_check "restart xray service" systemctl restart xray.service
@@ -170,60 +192,44 @@ readonly FLOW="$(jq -r --arg tag "$INBOUND_TAG" '
   .inbounds[] | select(.tag==$tag) | .settings.clients[0].flow // ""
 ' "$XRAY_CONFIG")"
 
-check_var() {
-    local name="$1"
-    local value="${!name}"
-    if [ -z "$value" ]; then
-        echo "❌ Error: $name not found in realitySettings inbound"
-        exit 1
-    fi
-}
-
-check_var PORT
-check_var REALITY_SNI
-check_var PRIVATE_KEY
-check_var SHORT_ID
-check_var FLOW
+# checking empty variable or not
+check_var "PORT" "$PORT"
+check_var "REALITY_SNI" "$REALITY_SNI"
+check_var "PRIVATE_KEY" "$PRIVATE_KEY"
+check_var "SHORT_ID" "$SHORT_ID"
+check_var "FLOW" "$FLOW"
 
 # generate public key from privat key
-readonly XRAY_X25519_OUT="$("$XRAY_BIN" x25519 -i "$PRIVATE_KEY")"
-
+readonly XRAY_X25519_OUT="$(xray x25519 -i "$PRIVATE_KEY")"
 readonly PUBLIC_KEY="$(printf '%s\n' "$XRAY_X25519_OUT" | awk -F': ' '/Password:/ {print $2}')"
 
+# checking pubkey not empty
 if [[ -z "$PUBLIC_KEY" ]]; then
   echo "❌ Error: empty publicKey/password, exit"
   exit 1
 fi
 
 # get server ip
-SERVER_HOST="$(curl -4 -s https://ifconfig.io || curl -4 -s https://ipinfo.io/ip || echo "")"
+SERVER_HOST="$(ip -4 route get 1.1.1.1 | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
 
+# if not get ip set host as hostname
 if [ -z "$SERVER_HOST" ]; then
-    SERVER_HOST="SERVER_IP"  # плейсхолдер, если не смогли определить
+    SERVER_HOST="$(hostname)"
 fi
 
-# make uri link
-uri_encode() {
-    printf '%s' "$1" | jq -sRr @uri
-}
+# get link
+readonly VLESS_URI="vless://${UUID}@${SERVER_HOST}:${PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
+security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
+$(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$USERNAME")"
 
-QUERY="encryption=none"
-QUERY="${QUERY}&flow=$(uri_encode "$FLOW")"
-QUERY="${QUERY}&security=reality"
-QUERY="${QUERY}&type=tcp"
-QUERY="${QUERY}&sni=$(uri_encode "$REALITY_SNI")"
-QUERY="${QUERY}&fp=$(uri_encode "chrome")"
-QUERY="${QUERY}&pbk=$(uri_encode "$PUBLIC_KEY")"
-QUERY="${QUERY}&sid=$(uri_encode "$SHORT_ID")"
-readonly NAME_ENC="$(uri_encode "$USERNAME")"
-readonly VLESS_URI="vless://${UUID}@${SERVER_HOST}:${PORT}/?${QUERY}#${NAME_ENC}"
+# backup old uri_db
+run_and_check "backup old URI_DB '$URI_DB_BACKUP'" cp -a "$URI_DB" "$URI_DB_BACKUP"
+echo "✅ Success: Backup saved $URI_DB_BACKUP"
+
+# update URI_DB
+run_and_check "add user in URI_DB" install_new_uri_db
 
 # print result
-cp -a "$URI_PATH" "$URI_BAK"
-echo "✅ Success: Backup saved $URI_BAK"
 echo "✅ Success: name $USERNAME, added"
 echo "✅ Success: created: $CREATED, days: $DAYS, expiration: $EXP"
-tee -a "$URI_PATH" <<EOF
-name: $USERNAME, vless link: $VLESS_URI
-
-EOF
+echo "name: $USERNAME, vless link: $VLESS_URI"

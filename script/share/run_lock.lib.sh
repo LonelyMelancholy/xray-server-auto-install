@@ -11,8 +11,8 @@
 
 read_check() {
     local file="$1"
-    local error
     local output_variant="$2"
+    local error
 
     case "$output_variant" in
         console) error="❌ Error" ;;
@@ -25,8 +25,8 @@ read_check() {
 
 read_and_write_check() {
     local file="$1"
-    local error
     local output_variant="$2"
+    local error
 
     case "$output_variant" in
         console) error="❌ Error" ;;
@@ -38,8 +38,10 @@ read_and_write_check() {
 }
 
 run_lock_check() {
-    local lock_file="/run/lock/${1}.lock"
+    local lock="$1"
     local output_variant="$2"
+    local lock_file="/run/lock/${lock}.lock"
+    local error
 
     case "$output_variant" in
         console) error="❌ Error" ;;
@@ -47,29 +49,33 @@ run_lock_check() {
     esac
 
     exec 8> "$lock_file" || { echo "$error: cannot open lock file '$lock_file', exit" >&2; exit 1; }
-    flock -n 8 || { echo "$error: another instance working on xray config, exit" >&2; exit 1; }
+    flock -n 8 || { echo "$error: another instance working on '$lock', exit" >&2; exit 1; }
 }
 
 run_lock_retry_check() {
+    local lock="$1"
+    local output_variant="$2"
+    local lock_file="/run/lock/${lock}.lock"
+    local error info
     local wait_sec="$(shuf -i "10-60" -n 1)"
+    local attempt
     local max_attempt=3
-    local lock_file="/run/lock/${1}.lock"
 
     case "$output_variant" in
         console) error="❌ Error"; info="📢 Info" ;;
               *) error="Error"; info="Info" ;;
     esac
 
-    exec 8> "$lock_file" || { echo "Error: cannot open lock file '$lock_file', exit" >&2; exit 1; }
+    exec 8> "$lock_file" || { echo "$error: cannot open lock file '$lock_file', exit" >&2; exit 1; }
     for ((attempt=1; attempt<=max_attempt; attempt++)); do
         if flock -n 8; then
             break
         fi
         if [ "$attempt" -lt "$max_attempt" ]; then
-            echo "$info: Lock busy ($lock_file). Waiting ${wait_sec}s... (attempt $attempt/$max_attempt)"
+            echo "$info: Lock busy '$lock'. Waiting ${wait_sec}s... attempt ${attempt}/${max_attempt}"
             sleep "$wait_sec"
         else
-            echo "$error: lock ($lock_file) is still busy after $max_attempt attempts, exit" >&2
+            echo "$error: lock '$lock' is still busy after $max_attempt attempts, exit" >&2
             exit 1
         fi
     done

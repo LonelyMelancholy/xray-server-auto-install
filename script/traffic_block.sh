@@ -1,49 +1,71 @@
 #!/usr/bin/env bash
 # script for autoblock user who download traffic limit via cron every hour
 # all errors are logged in journald, see journalctl -t traffic_block
-# 10 * * * * telegram-gateway /usr/local/bin/service/traffic_block.sh &> /dev/null
+# 10 * * * * telegram_gateway /usr/local/bin/service/traffic_block.sh
 # exit codes work to tell Cron about success
 
-# export path just in case
-PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-export PATH
+# common variables source
+# shellcheck source=share/variables.lib.sh
+source "/usr/local/lib/service/variables.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit" >&2; exit 1; }
+
+# main variables
+RC=1
+readonly BLOCK_RULE_TAG="autoblock-traffic-users"
+readonly MAX_TR=$((3000 * 1024 * 1024 * 1024)) # 3TB limits
+readonly LOCK_FILE="/run/lock/traffic_block.lock"
+declare -A TOTAL_BYTES_BY_USERS
+declare -a FULL_EMAILS=()
+declare -a FULL_EMAILS_TO_BLOCK=()
+declare -a USERNAME_TO_BLOCK=()
 
 # enable logging
-exec > >(systemd-cat -t traffic_block -p info) 2> >(systemd-cat -t traffic_block -p error)
+exec > >(systemd-cat -t traffic_block -p info) 2> >(systemd-cat -t traffic_block -p err) 5> >(systemd-cat -t traffic_block -p notice)
 
 # start logging message
-echo "traffic block started - $(date '+%Y-%m-%d %H:%M:%S')"
+echo "traffic block started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
+
+# user check
+[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
+
+# check another instanсe of the script is not running
+exec 99> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
+flock -n 99 || { echo "Error: another instance is running, exit" >&2; exit 1; }
+
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
 
 # exit logging message function
-RC="1"
+# shellcheck disable=SC2329
 on_exit() {
     if [[ "$RC" -eq "0" ]]; then
-        echo "traffic block ended - $(date '+%Y-%m-%d %H:%M:%S')"
+        echo "traffic block ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     else
-        echo "traffic block failed - $(date '+%Y-%m-%d %H:%M:%S')"
+        echo "traffic block failed - $(date '+%Y-%m-%d %H:%M:%S')" >&2
     fi
 }
 
-# trap for the end log message for the end log
-trap 'on_exit' EXIT
+# exit rm tmp file function
+# shellcheck disable=SC2329
+rm_tmp_config() {
+    echo "cleaning start - $(date '+%Y-%m-%d %H:%M:%S')" >&5
+    if rm -f "$TMP_XRAY_CONFIG" > /dev/null; then
+        echo "Success: delete tmp config file"
+        echo "cleaning ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
+    else
+        echo "Error: delete tmp config file" >&2
+        echo "cleaning failed - $(date '+%Y-%m-%d %H:%M:%S')" >&2
+    fi
+}
 
-# user check
-[[ "$(whoami)" != "telegram-gateway" ]] && { echo "Error: you are not the telegram-gateway user, exit" >&2; exit 1; }
+# set trap for tmp removing and exit message
+trap 'end_log; rm_tmp_config;' EXIT
 
-# main variable
-readonly XRAY_CONFIG="/usr/local/etc/xray/config.json"
-readonly XRAY_CONFIG_BACKUP="${XRAY_CONFIG}.bak.$(date '+%Y%m%d_%H%M%S')"
-readonly INBOUND_TAG="Vless"
-readonly TR_DB_M="/var/log/xray/TR_DB_M"
-readonly AUTO_BLOCK_TAG="autoblock-traffic-users"
-readonly MAX_TR=$((3000 * 1024 * 1024 * 1024)) # 3TB limits
 
-# source runlock function library
+# source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit" >&2; exit 1; }
 
 # lock check
-xray_lock_retry
-tr_db_lock_retry
+run_lock_retry_check "xray"
+run_lock_retry_check "tr_db"
 
 # read and write conf check
 read_and_write_check "$XRAY_CONFIG"
@@ -52,163 +74,242 @@ read_check "$TR_DB_M"
 # source Telegram function library
 source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
 
-# help function
+# helper function
 run_and_check() {
-    action="$1"
+    local action="$1"
     shift 1
     if "$@" > /dev/null; then
-        echo "✅ Success: $action"
+        echo "Success: $action"
     else
-        echo "❌ Error: $action, exit"
+        echo "Error: $action, exit" >&2
         exit 1
     fi
 }
 
-# ====== СБОР ТРАФИКА ПО ИМЕНИ ДО '|' ======
-declare -A total_bytes_by_base
+# function for find email still in config or not and print all matches
+find_full_email_in_config() {
+    local username="$1"
+    local found
+    # find all match username|*
+    found="$(jq -r --arg inb "$INBOUND_TAG" --arg username "$username" '
+        .inbounds[]?
+        | select(.tag? == $inb)
+        | .settings.clients[]?
+        | select(.email? and (.email | startswith($username + "|")))
+        | .email
+    ' "$XRAY_CONFIG")"
 
-# Берем только user>>>...>>>traffic>>>up/downlink у которых есть value
-# name пример: user>>>black|created=...>>>traffic>>>downlink
-while IFS=$'\t' read -r name value; do
-  # вытащить кусок между user>>> и >>>traffic
-  user_full="${name#user>>>}"
-  user_full="${user_full%%>>>traffic*}"
+    # if we found clients, print
+    [[ -n "$found" ]] && printf '%s\n' "$found"
+}
 
-  # базовое имя до |
-  base="${user_full%%|*}"
+# function for make new tmp config
+# shellcheck disable=SC2329
+make_new_tmp_config() {
+    jq \
+    --arg inbound "$INBOUND_TAG" \
+    --arg out "blocked" \
+    --arg ruleTag "$BLOCK_RULE_TAG" \
+    --argjson users "$TRAFFIC_END_USERS_JSON" '
+        .routing = (.routing // {})
+        | .routing.domainStrategy = (.routing.domainStrategy // "IPOnDemand")
+        | .routing.rules = (.routing.rules // [])
 
-  # value может быть большим, используем bash integer
-  total_bytes_by_base["$base"]=$(( ${total_bytes_by_base["$base"]:-0} + value ))
-done < <(
-  jq -r '
+        # outbounds обязаны быть массивом
+        | (if (.outbounds | type) != "array" then
+                error("Error: outbounds not found, cant add blackhole")
+            else
+                .
+            end)
+
+        # гарантируем наличие blackhole-outbound с tag == $out
+        | .outbounds |= (
+            if any(.[]; .tag == $out) then .
+            else . + [{"tag": $out, "protocol": "blackhole"}]
+            end
+            )
+
+        # индекс первого правила с ruleTag (чтобы сохранить позицию "на месте")
+        | (.routing.rules | map(.ruleTag? == $ruleTag) | index(true)) as $idx
+
+        # удалить все правила с этим ruleTag (чтобы не было дублей)
+        | .routing.rules |= map(select(.ruleTag? != $ruleTag))
+
+        # если users пуст — правило не возвращаем (оно будет удалено)
+            | if ($users | length) > 0 then
+                .routing.rules |= (
+                    if $idx == null then
+                        # правила не было — добавляем в конец
+                        . + [{
+                            "type": "field",
+                            "ruleTag": $ruleTag,
+                            "inboundTag": [$inbound],
+                            "user": $users,
+                            "outboundTag": $out
+                        }]
+                    else
+                        # правило было — вставляем на место первого найденного
+                        .[0:$idx] + [{
+                            "type": "field",
+                            "ruleTag": $ruleTag,
+                            "inboundTag": [$inbound],
+                            "user": $users,
+                            "outboundTag": $out
+                        }] + .[$idx:]
+                    end
+                )
+            else
+                .
+            end
+    ' "$XRAY_CONFIG" > "$TMP_XRAY_CONFIG"
+}
+
+# function for install new conf with save original permission
+# shellcheck disable=SC2329
+install_new_conf() {
+    cat "$TMP_XRAY_CONFIG" > "$XRAY_CONFIG" || return 1
+}
+
+# main logic start here
+# collect data from tr_db
+# user>>>........>>>traffic>>>downlink	value
+USERS_TRAFFIC_TOTAL=$(jq -r '
     .stat[]
     | select(.name? and (.name | startswith("user>>>")))
     | select(.value? != null)
     | select(.name | test(">>>traffic>>>(up|down)link$"))
     | [.name, (.value|tostring)]
     | @tsv
-  ' "$TR_DB_M"
-)
+' "$TR_DB_M")
 
-if (( ${#total_bytes_by_base[@]} == 0 )); then
-  echo "OK: в $TR_DB_M не найдено user>>>...>>>traffic>>>uplink/downlink со значениями."
-  exit 0
+# get named array [username|] - [in+out traffic]
+while IFS=$'\t' read -r name value; do
+    # cut user>>>
+    user_full="${name#user>>>}"
+    # cut >>>traffic*
+    user_full="${user_full%%>>>traffic*}"
+    # get username|
+    username="${user_full%%|*}"
+    # add value to array
+    TOTAL_BYTES_BY_USERS["$username"]=$(( ${TOTAL_BYTES_BY_USERS["$username"]} + value ))
+done <<< "$USERS_TRAFFIC_TOTAL"
+
+# check traffic in array, if empty value - exit
+if (( ${#TOTAL_BYTES_BY_USERS[@]} == 0 )); then
+    echo "Success: in $TR_DB_M not found user>>>...>>>traffic>>>uplink/downlink with value, exit"
+    exit 0
 fi
 
-# Найти актуальный полный email в inbound Vless по base (до |)
-find_full_email_in_config() {
-  local base="$1"
-  # 1) сначала ищем email начинающийся с "base|"
-  local found
-  found="$(jq -r --arg inb "$INBOUND_TAG" --arg base "$base" '
-    .inbounds[]?
-    | select(.tag? == $inb)
-    | .settings.clients[]?
-    | select(.email? and (.email | startswith($base + "|")))
-    | .email
-  ' "$XRAY_CONFIG" | head -n1)"
+# per user, check traffic limit, ifexceeded add to array to block
+for username in "${!TOTAL_BYTES_BY_USERS[@]}"; do
+    # get traffic and * 2 for username|
+    sum=$(( TOTAL_BYTES_BY_USERS["$username"] ))
+    used=$(( sum * 2 ))
 
-  [[ -n "$found" ]] && printf '%s\n' "$found"
-}
+    # if used to much traffic then block part, if not - continue to next user
+    if [[ $used -ge $MAX_TR ]]; then
+        echo "Success: $username exceeded the limit, try to find full email"
+        
+        # get all email who match to username|
+        mapfile -t FULL_EMAILS < <(find_full_email_in_config "$username")
 
-is_already_blocked() {
-  local email="$1"
-  jq -e --arg tag "$AUTO_BLOCK_TAG" --arg email "$email" '
-    (.routing.rules // [])
-    | any(.ruleTag? == $tag and ((.user // []) | index($email)))
-  ' "$XRAY_CONFIG" >/dev/null 2>&1
-}
+        # if not found actual full email, user already deleted, countinue to next user
+        if [[ ${#FULL_EMAILS[@]} -eq 0 ]]; then
+            echo "Error: username '$username' exceeded the limit, but the current Vless client email was not found in the config, continue"
+            continue
+        fi
 
-add_block_rule_user() {
-  local email="$1"
-
-  # Пишем во временный файл и заменяем атомарно
-  local tmp
-  tmp="$(mktemp)"
-
-  jq --arg tag "$AUTO_BLOCK_TAG" \
-     --arg inb "$INBOUND_TAG" \
-     --arg email "$email" '
-    .routing = (.routing // {})
-    | .routing.domainStrategy = (.routing.domainStrategy // "IPOnDemand")
-    | .routing.rules = (.routing.rules // [])
-    | ( .routing.rules | any(.ruleTag? == $tag) ) as $has
-    | if $has then
-        .routing.rules = (
-          .routing.rules
-          | map(
-              if .ruleTag? == $tag then
-                .type = "field"
-                | .inboundTag = (.inboundTag // [$inb])
-                | .outboundTag = "blocked"
-                | .user = ((.user // []) + [$email] | unique)
-              else .
-              end
-            )
-        )
-      else
-        .routing.rules += [{
-          "type": "field",
-          "ruleTag": $tag,
-          "inboundTag": [$inb],
-          "outboundTag": "blocked",
-          "user": [$email]
-        }]
-      end
-  ' "$XRAY_CONFIG" > "$tmp"
-
-  # минимальная валидация JSON
-  jq -e . "$tmp" >/dev/null
-
-  cat "$tmp" > "$XRAY_CONFIG"
-}
-
-restart_xray() {
-    systemctl restart xray.service 2>/dev/null || return 1
-}
-
-# ====== ОСНОВНОЙ ЦИКЛ ======
-changed=0
-declare -a blocked_now=()
-
-for base in "${!total_bytes_by_base[@]}"; do
-  sum=$(( total_bytes_by_base["$base"] ))
-  used=$(( sum * 2 ))
-
-  if (( used > MAX_TR )); then
-    full_email="$(find_full_email_in_config "$base" || true)"
-
-    if [[ -z "${full_email:-}" ]]; then
-      echo "WARN: base='$base' превысил лимит, но в конфиге не найден актуальный email клиента Vless."
-      continue
+        # add all email from full emails array to array to block
+        for full_email in "${FULL_EMAILS[@]}"; do
+            FULL_EMAILS_TO_BLOCK+=("$full_email")
+        done
+        
+        # add username to report array
+        USERNAME_TO_BLOCK+=("$username")
+        echo "Success: username '$username', found full email and prepared to block"
     fi
-
-    if is_already_blocked "$full_email"; then
-      echo "OK: уже заблокирован: $full_email (base='$base')"
-      continue
-    fi
-
-    if (( changed == 0 )); then
-        # backup config
-        run_and_check "backup old xray config" cp -a "$XRAY_CONFIG" "$XRAY_CONFIG_BACKUP"
-    fi
-
-    add_block_rule_user "$full_email"
-    changed=1
-    blocked_now+=("$full_email")
-    echo "BLOCK: $full_email (base='$base'), used=$used bytes, MAX_TR=$MAX_TR"
-  fi
 done
 
-if (( changed == 1 )); then
-    # backup and install new config
-    run_and_check "backup old xray config" cp -a "$XRAY_CONFIG" "$XRAY_CONFIG_BACKUP"
-  
-  echo "Готово: добавлено в блокировку (${#blocked_now[@]}):"
-  printf ' - %s\n' "${blocked_now[@]}"
-  restart_xray
-else
-  echo "OK: превышений не найдено, конфиг не менялся."
+# get json array full emails for block
+TRAFFIC_END_USERS_JSON="$(printf '%s\n' "${FULL_EMAILS_TO_BLOCK[@]}" \
+    | jq -R . \
+    | jq -s .)"
+
+# make new tmp config
+run_and_check "make new xray tmp config" make_new_tmp_config
+
+# if conf not change, exit
+if cmp -s "$XRAY_CONFIG" "$TMP_XRAY_CONFIG"; then
+    echo "Success: users exceeded the limit not found, exit"
+    RC=0
+    exit $RC
 fi
 
-RC=0
+# check new conf
+run_and_check "checking new xray tmp config" xray run -test -config "$TMP_XRAY_CONFIG"
+
+# backup config
+run_and_check "backup old xray config $XRAY_CONFIG_BACKUP" cp -a "$XRAY_CONFIG" "$XRAY_CONFIG_BACKUP"
+
+# install new config (original permission saved)
+run_and_check "install new xray config" install_new_conf
+
+# if not found exceeded the limit email but we have blocked email, config changed make_new_tmp_config func, blocked email deleted
+# if email empty, rule $BLOCK_RULE_TAG deleted
+if (( ${#FULL_EMAILS_TO_BLOCK[@]} == 0 )); then
+    echo "Success: exceeded the limit not found, cleanup old ruleTag '$BLOCK_RULE_TAG'"
+else
+    echo "Success: exceeded the limit found and blocked, ruleTag '$BLOCK_RULE_TAG', exceeded the limit=${#FULL_EMAILS_TO_BLOCK[@]}"
+fi
+
+# restart xray and make xray status message
+if systemctl restart xray.service; then
+    XRAY_STATUS="☑️ <b>Xray status:</b> running"
+    XR_ST=0
+    RC=0
+    echo "Success: restart xray"
+else
+    XRAY_STATUS="❌ <b>Xray status:</b> fail"
+    XR_ST=1
+    RC=1
+    echo "Error: restart xray" >&2
+fi
+
+# start collecting message
+# make title
+if [[ $XR_ST == 0 ]]; then
+    TITLE="⚠️<b> Scheduled traffic block</b>"
+else
+    TITLE="❌<b> Scheduled traffic block</b>"
+fi
+
+# make upper message body
+MESSAGE="$TITLE
+
+🖥️ <b>Host:</b> $(hostname)
+⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
+$XRAY_STATUS"
+
+# make exp email section
+if (( ${#USERNAME_TO_BLOCK[@]} == 0 )); then
+    MESSAGE+=$'\n'"⚠️ <b>Exceeded the limit users:</b> not found"
+    MESSAGE+=$'\n'"⚠️ <b>Action:</b> cleanup old traffic block rule"
+else
+    MESSAGE+=$'\n'"❌ <b>Exceeded the limit users blocked:</b>"
+    while IFS= read -r username; do
+        [[ -z "$username" ]] && continue
+        MESSAGE+=$'\n'"❌ $username"
+    done < <(printf '%s\n' "${USERNAME_TO_BLOCK[@]}")
+fi
+
+# add log section
+MESSAGE+=$'\n'"💾 <b>Time block log:</b> journalctl -t time_block"
+
+# logging message
+echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
+echo "$MESSAGE"
+
+# sending message
+telegram_message
+
+exit $RC

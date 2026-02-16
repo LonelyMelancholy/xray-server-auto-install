@@ -5,24 +5,21 @@
 # root checking
 [[ $EUID -ne 0 ]] && { echo "❌ Error: you are not the root user, exit"; exit 1; }
 
+# cd intro script folder
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR" || exit 1
 
 # check another instanse of the script is not running
 readonly LOCK_FILE="/run/lock/vpn_install.lock"
-exec 9> "$LOCK_FILE" || { echo "❌ Error: cannot open lock file '$LOCK_FILE', exit"; exit 1; }
-flock -n 9 || { echo "❌ Error: another instance is running, exit"; exit 1; }
+exec 99> "$LOCK_FILE" || { echo "❌ Error: cannot open lock file '$LOCK_FILE', exit"; exit 1; }
+flock -n 99 || { echo "❌ Error: another instance is running, exit"; exit 1; }
 
 
 # main variables
 MAX_ATTEMPTS=3
 export NEEDRESTART_SUSPEND=1
 
-# helping functions
-has_cmd() {
-    command -v "$1" &> /dev/null
-}
-
+# install helping function
 install_with_retry() {
     local action="$1"
     local attempt=1
@@ -45,9 +42,9 @@ install_with_retry() {
     done
 }
 
-
+# run helping function
 run_and_check() {
-    action="$1"
+    local action="$1"
     shift 1
     if "$@" > /dev/null; then
         echo "✅ Success: $action"
@@ -69,11 +66,11 @@ source "$CFG_CHECK" || { echo "❌ Error: failed to source '$CFG_CHECK', exit"; 
 ENV_PATH="/usr/local/etc/telegram/"
 ENV_FILE="/usr/local/etc/telegram/secrets.env"
 
-# create user for telegram-gateway script
-if ! getent shadow telegram-gateway &> /dev/null; then
-    run_and_check "create user for the Telegram gateway" useradd -r -M -d /nonexistent -s /usr/sbin/nologin telegram-gateway
+# create user for telegram_gateway script
+if ! getent shadow telegram_gateway &> /dev/null; then
+    run_and_check "create user for the Telegram gateway" useradd -r -M -d /nonexistent -s /usr/sbin/nologin telegram_gateway
 else
-    echo "✅ Success: user 'telegram-gateway' already exists"
+    echo "✅ Success: user 'telegram_gateway' already exists"
 fi
 
 install_tg_secret() {
@@ -83,7 +80,7 @@ BOT_TOKEN="$READ_BOT_TOKEN"
 CHAT_ID="$READ_CHAT_ID"
 GROUP_ID="$READ_GROUP_ID"
 EOF
-    chown root:telegram-gateway "$ENV_FILE" || return 1
+    chown root:telegram_gateway "$ENV_FILE" || return 1
     chmod 640 "$ENV_FILE" || return 1
 }
 run_and_check "install secret file with token and ID for Telegram scripts" install_tg_secret
@@ -93,14 +90,15 @@ run_and_check "install secret file with token and ID for Telegram scripts" insta
 # create ssh group for login
 SSH_GROUP="ssh-users"
 if ! getent group "$SSH_GROUP" &> /dev/null; then
-    run_and_check "creating SSH group" addgroup "$SSH_GROUP"
+    run_and_check "creating '$SSH_GROUP' group" addgroup "$SSH_GROUP"
 else 
     echo "✅ Success: group $SSH_GROUP already exists"
 fi
 
+# create group for access config files
 XRAY_CONFIG_GROUP="xray_config_group"
 if ! getent group "$XRAY_CONFIG_GROUP" &> /dev/null; then
-    run_and_check "creating XRAY_CONFIG group" addgroup "$XRAY_CONFIG_GROUP"
+    run_and_check "creating '$XRAY_CONFIG_GROUP' group" addgroup "$XRAY_CONFIG_GROUP"
 else 
     echo "✅ Success: group $XRAY_CONFIG_GROUP already exists"
 fi
@@ -147,9 +145,8 @@ run_and_check "enabled passwordless sudo for user: $SECOND_USER" ensure_nopasswd
 
 # changing password for root and user
 conf_pswd() {
-    printf 'root:%s\n%s:%s\n' "$PASS" "$SECOND_USER" "$PASS" | chpasswd
+    printf 'root:%s\n%s:%s\n' "$PASS" "$SECOND_USER" "$PASS" | chpasswd || return 1
 }
-
 run_and_check "changing root and $SECOND_USER passwords" conf_pswd
 
 
@@ -171,7 +168,7 @@ fi
 # creating a new sshd configuration
 install_sshd() {
     install -m 644 -o root -g root "$SSH_CONF_SOURCE" "$SSH_CONF_DEST" || return 1
-    tee /etc/ssh/sshd_config > /dev/null <<EOF
+    tee /etc/ssh/sshd_config > /dev/null <<EOF || return 1
 Include /etc/ssh/sshd_config.d/*.conf
 EOF
     sed -i "s/{PORT}/$SSH_PORT/g" "$SSH_CONF_DEST" || return 1
@@ -212,21 +209,16 @@ run_and_check "restart sshd" systemctl restart ssh.socket
 # Install ssh login/logout notify and disable MOTD
 # install log directory
 install_tg_dir() {
-    mkdir -p /var/log/telegram || return 1
-    chmod 755 /var/log/telegram || return 1
-    chown telegram-gateway:telegram-gateway "/var/log/telegram"
-    mkdir -p /var/log/service || return 1
-    chmod 755 /var/log/service || return 1
-    chown telegram-gateway:telegram-gateway "/var/log/service" || return 1
     mkdir -p /usr/local/bin/telegram || return 1
     mkdir -p /usr/local/bin/service || return 1
+    mkdir -p /usr/local/lib/service || return 1
 }
-
-run_and_check "creating directory for all telegram script and log" install_tg_dir
+run_and_check "creating directory for all telegram script" install_tg_dir
 
 # install ssh pam script and enable script in PAM
 SSH_PAM_NOTIFY_SCRIPT_SOURCE=script/ssh_pam_notify.sh
 SSH_PAM_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/ssh_pam_notify.sh"
+
 install_scr_ssh_pam() {
     install -m 755 -o root -g root "$SSH_PAM_NOTIFY_SCRIPT_SOURCE" "$SSH_PAM_NOTIFY_SCRIPT_DEST" || return 1
     if ! grep -q "ssh-pam-telegram-notify" "/etc/pam.d/sshd"; then
@@ -251,6 +243,7 @@ F2B_CONF_SOURCE="cfg/jail.local"
 F2B_CONF_DEST="/etc/fail2ban/jail.local"
 TG_LOCAL_SOURCE="cfg/ssh_telegram.local"
 TG_LOCAL_DEST="/etc/fail2ban/action.d/ssh_telegram.local"
+
 conf_f2b() {
     install -m 644 -o root -g root "$F2B_CONF_SOURCE" "$F2B_CONF_DEST" || return 1
     sed -i "s/{PORT}/$SSH_PORT/g" "$F2B_CONF_DEST" || return 1
@@ -262,6 +255,7 @@ run_and_check "install fail2ban configuration" conf_f2b
 SSH_F2B_NOTIFY_SCRIPT_SOURCE="script/ssh_f2b_notify.sh"
 SSH_F2B_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/ssh_f2b_notify.sh"
 run_and_check "ssh f2b notification script installation" install -m 755 -o root -g root "$SSH_F2B_NOTIFY_SCRIPT_SOURCE" "$SSH_F2B_NOTIFY_SCRIPT_DEST"
+
 # Start fail2ban
 start_f2b() {
     systemctl -q enable --now fail2ban.service || return 1
@@ -271,7 +265,7 @@ run_and_check "enable and start fail2ban service" start_f2b
 
 
 # make BBR appear in "available" list (if it's a module)
-modprobe tcp_bbr &>/dev/null || true
+modprobe tcp_bbr &>/dev/null
 
 bbr_on() {
     tee /etc/sysctl.d/99-bbr.conf > /dev/null <<'EOF' || return 1
@@ -285,13 +279,13 @@ EOF
 }
 
 # check availability
-BBR_AVAILABLE="$(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null || true)"
+BBR_AVAILABLE="$(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null)"
 if ! grep -qw bbr <<<"$BBR_AVAILABLE"; then
-    echo "⚠️  Non-critical error: BBR not available (net.ipv4.tcp_available_congestion_control = '${BBR_AVAILABLE}')"
+    echo "📢 Info: BBR not available (net.ipv4.tcp_available_congestion_control = '${BBR_AVAILABLE}')"
 else
     run_and_check "enable BBR" bbr_on
-    
 fi
+
 
 # unattended upgrade and reboot script
 install_with_retry "install unattended upgrades package" apt-get install -y unattended-upgrades
@@ -311,7 +305,7 @@ un_up_scr() {
     install -m 755 -o root -g root "$UNATTENDED_UPGRADE_SCRIPT_SOURCE" "$UNATTENDED_UPGRADE_SCRIPT_DEST" || return 1
     tee /etc/cron.d/unattended-upgrade > /dev/null <<EOF || return 1
 SHELL=/bin/bash
-1 3 1 * * root "$UNATTENDED_UPGRADE_SCRIPT_DEST" &> /dev/null
+1 3 1 * * root "$UNATTENDED_UPGRADE_SCRIPT_DEST"
 EOF
     chmod 644 "/etc/cron.d/unattended-upgrade" || return 1
 }
@@ -331,8 +325,8 @@ Wants=network-online.target
 After=network-online.target
 
 [Service]
-User=telegram-gateway
-Group=telegram-gateway
+User=telegram_gateway
+Group=telegram_gateway
 Type=oneshot
 Restart=no
 ExecStart=$BOOT_SCRIPT_DEST
@@ -347,19 +341,18 @@ EOF
 run_and_check "server boot notification script installation" install_scr_boot
 
 
-# nginx+sert install (test, need re write)
+# nginx+sert install
 install_with_retry "install nginx and certbot package" apt-get install -y nginx certbot python3-certbot-nginx 
 
 conf_nginx() {
-
     # delete default site
-    rm -rf /var/www/* || return 1
-    rm -rf /etc/nginx/sites-available/* || return 1
-    rm -rf /etc/nginx/sites-enabled/* || return 1
+    rm -rf "/var/www/*" || return 1
+    rm -rf "/etc/nginx/sites-available/*" || return 1
+    rm -rf "/etc/nginx/sites-enabled/*" || return 1
 
     mkdir -p "/var/www/${XRAY_HOSTNAME}/html" || return 1
 
-    tee /etc/nginx/sites-available/${XRAY_HOSTNAME}.conf >/dev/null <<'EOF' || return 1
+    tee "/etc/nginx/sites-available/${XRAY_HOSTNAME}.conf" >/dev/null <<'EOF' || return 1
 server {
     listen 80;
     server_name __HOST__;
@@ -376,7 +369,7 @@ server {
     }
 
     location / {
-        return 301 https://__HOST__$request_uri;
+        return 301 https://$host$request_uri;
     }
 
 }
@@ -384,16 +377,15 @@ server {
 EOF
 
     # change marker XRAY_HOSTNAME to variable value
-    sed -i "s/__HOST__/${XRAY_HOSTNAME}/g" /etc/nginx/sites-available/${XRAY_HOSTNAME}.conf || return 1
+    sed -i "s/__HOST__/${XRAY_HOSTNAME}/g" "/etc/nginx/sites-available/${XRAY_HOSTNAME}.conf" || return 1
 
     # turn on site
-    ln -s /etc/nginx/sites-available/${XRAY_HOSTNAME}.conf /etc/nginx/sites-enabled/ || return 1
+    ln -s "/etc/nginx/sites-available/${XRAY_HOSTNAME}.conf" /etc/nginx/sites-enabled/ || return 1
 
     # turn on nginx
     nginx -t  || return 1
     systemctl enable --now nginx  || return 1
     systemctl restart nginx  || return 1
-
 }
 run_and_check "configure nginx" conf_nginx
 
@@ -403,7 +395,7 @@ conf_cert() {
 run_and_check "configure sertificates" conf_cert
 
 conf_nginx_sert() {
-        tee -a /etc/nginx/sites-available/${XRAY_HOSTNAME}.conf >/dev/null <<'EOF' || return 1
+        tee -a "/etc/nginx/sites-available/${XRAY_HOSTNAME}.conf" >/dev/null <<'EOF' || return 1
 server {
     listen 127.0.0.1:8443 ssl http2 proxy_protocol;
     server_name __HOST__;
@@ -413,7 +405,9 @@ server {
     access_log /var/log/nginx/__HOST__.8443.access.log;
     error_log  /var/log/nginx/__HOST__.8443.error.log;
 
-    return 403;
+    location / {
+        return 403;
+    }
 
     set_real_ip_from 127.0.0.1;
     real_ip_header proxy_protocol;
@@ -424,7 +418,7 @@ server {
 }
 EOF
 
-    sed -i "s/__HOST__/${XRAY_HOSTNAME}/g" /etc/nginx/sites-available/${XRAY_HOSTNAME}.conf || return 1
+    sed -i "s/__HOST__/${XRAY_HOSTNAME}/g" "/etc/nginx/sites-available/${XRAY_HOSTNAME}.conf" || return 1
     
     nginx -t  || return 1
     systemctl restart nginx  || return 1
@@ -457,38 +451,62 @@ else
     echo "✅ Success: user 'xray' already exists"
 fi
 
-run_and_check "added xray to xray config group" usermod -aG "$XRAY_CONFIG_GROUP" "xray"
-run_and_check "added telegram-gateway to xray config group" usermod -aG "$XRAY_CONFIG_GROUP" "telegram-gateway"
+run_and_check "added xray user to '$XRAY_CONFIG_GROUP' config group" usermod -aG "$XRAY_CONFIG_GROUP" "xray"
+run_and_check "added telegram_gateway user to '$XRAY_CONFIG_GROUP' group" usermod -aG "$XRAY_CONFIG_GROUP" "telegram_gateway"
+
+readonly URI_DB="/usr/local/etc/xray/URI_DB"
 
 install_xray_dir() {
-    mkdir -p /usr/local/share/xray || return 1
-    chmod 755 /usr/local/share/xray || return 1
-    mkdir -p /usr/local/etc/xray || return 1
-    chmod 770 /usr/local/etc/xray || return 1
-    chown xray:telegram-gateway /usr/local/etc/xray || return 1
+    # create log dir, xray group can read, step in, write exist file but not create new and not get upper permission
     mkdir -p /var/log/xray || return 1
-    chmod 770 /var/log/xray || return 1
-    chown xray:telegram-gateway /var/log/xray || return 1
-    TMP_DIR="$(mktemp -d)"
-    readonly TMP_DIR
-    touch "/var/log/xray/TR_DB_M" || return 1
-    chmod 600 "/var/log/xray/TR_DB_M" || return 1
-    chown telegram-gateway:telegram-gateway "/var/log/xray/TR_DB_M" || return 1
-    touch "/var/log/xray/TR_DB_Y" || return 1
-    chmod 600 "/var/log/xray/TR_DB_Y" || return 1
-    chown telegram-gateway:telegram-gateway "/var/log/xray/TR_DB_Y" || return 1
+    chmod 750 /var/log/xray || return 1
+    chown root:xray /var/log/xray || return 1
     touch /var/log/xray/error.log || return 1
     chmod 660 /var/log/xray/error.log || return 1
-    chown xray:telegram-gateway /var/log/xray/error.log || return 1
+    chown root:xray /var/log/xray/error.log || return 1
     touch /var/log/xray/access.log || return 1
     chmod 660 /var/log/xray/access.log || return 1
-    chown xray:telegram-gateway /var/log/xray/access.log || return 1
+    chown root:xray /var/log/xray/access.log || return 1
+    # reset logs
+    echo > /var/log/xray/error.log
+    echo > /var/log/xray/access.log
+    
+    # create data dir, xray group and others only can read and step in
+    mkdir -p /usr/local/share/xray || return 1
+    chmod 755 /usr/local/share/xray || return 1
+
+    # create /etc, $XRAY_CONFIG_GROUP can write, read, step in and create new file
+    mkdir -p /usr/local/etc/xray || return 1
+    chmod 770 /usr/local/etc/xray || return 1
+    chown root:${XRAY_CONFIG_GROUP} "/usr/local/etc/xray" || return 1
+
+    # create TR_DB file, $XRAY_CONFIG_GROUP can read, write, but not get upper permission to file
+    touch "/usr/local/etc/xray/TR_DB_M" || return 1
+    chmod 660 "/usr/local/etc/xray/TR_DB_M" || return 1
+    chown root:${XRAY_CONFIG_GROUP} "/var/log/xray/TR_DB_M" || return 1
+    touch "/usr/local/etc/xray/TR_DB_Y" || return 1
+    chmod 660 "/usr/local/etc/xray/TR_DB_Y" || return 1
+    chown root:${XRAY_CONFIG_GROUP} "/var/log/xray/TR_DB_Y" || return 1
+    #reset TR_DB
+    echo > /usr/local/etc/xray/TR_DB_M
+    echo > /usr/local/etc/xray/TR_DB_Y
+
+    # create URI_DB, $XRAY_CONFIG_GROUP can read, write, but not get upper permission to file
+    touch "$URI_DB"
+    chmod 660 "$URI_DB"
+    chown root:${XRAY_CONFIG_GROUP} "$URI_DB"
+    #reset URI_DB
+    echo > "$URI_DB"
+
+    TMP_DIR=$(mktemp -d) || return 1
+    readonly TMP_DIR
 }
 run_and_check "create directory for the xray service" install_xray_dir
 
 # download function
 _dl() { curl -fsSL -m 60 "$1" -o "$2"; }
 
+# download with retry
 _dl_with_retry() {
     local url="$1"
     local outfile="$2"
@@ -503,7 +521,7 @@ _dl_with_retry() {
                 return 1
             fi
             sleep 60
-            (($attempt++))
+            ((attempt++))
             continue
         else
             echo "✅ Success: download ${label} after ${attempt} attempts"
@@ -638,7 +656,7 @@ XRAY_CONFIG_DEST="/usr/local/etc/xray/config.json"
 conf_xray() {
     tee /etc/systemd/system/xray.service > /dev/null <<EOF || return 1
 [Unit]
-Description=Xray-core VLESS server
+Description=Xray-core server
 After=network-online.target
 Wants=network-online.target
 
@@ -648,12 +666,14 @@ Group=xray
 ExecStart=/usr/local/bin/xray run -config $XRAY_CONFIG_DEST
 Restart=on-failure
 RestartPreventExitStatus=23
-RestartSec=5
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-NoNewPrivileges=true
+RestartSec=10
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=yes
 LimitNPROC=10000
 LimitNOFILE=1000000
+RuntimeDirectory=xray
+RuntimeDirectoryMode=0755
 
 [Install]
 WantedBy=multi-user.target
@@ -679,22 +699,16 @@ readonly DEFAULT_FLOW="xtls-rprx-vision"
 
 # check inbound
 readonly HAS_INBOUND="$(jq --arg tag "$INBOUND_TAG" '
-  any(.inbounds[]?; .tag == $tag and .protocol == "vless")
+    any(.inbounds[]?; .tag == $tag and .protocol == "vless")
 ' "$XRAY_CONFIG_SRC")"
 
 if [[ "$HAS_INBOUND" != "true" ]]; then
-  echo "❌ Error: config not have vless-inbound, tag=\"$INBOUND_TAG\", exit"
-  exit 1
-fi
-
-readonly XRAY_BIN="/usr/local/bin/xray"
-# uuid generation
-if [[ -x "$XRAY_BIN" ]]; then
-    readonly UUID="$("$XRAY_BIN" uuid)"
-else
-    echo "❌ Error: not found $XRAY_BIN, for UUID generation, exit"
+    echo "❌ Error: config not have vless-inbound, tag='$INBOUND_TAG', exit"
     exit 1
 fi
+
+# uuid generation
+readonly UUID="$(xray uuid)"
 
 # configure json 
 conf_json_xray() {
@@ -704,19 +718,15 @@ conf_json_xray() {
     # key generation
     keys="$(xray x25519)"
     privateKey="$(awk -F': ' '/PrivateKey/ {print $2}' <<<"$keys")"
-    publicKey="$(awk -F': ' '/Password/ {print $2}' <<<"$keys")"
 
     # shortId generation
     shortId="$(openssl rand -hex 8)"
 
-
     # make tmp file
     TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
-    chmod 660 "$TMP_XRAY_CONFIG" || return 1
-    chown root:xray "$TMP_XRAY_CONFIG" || return 1
     trap 'rm -rf "$TMP_XRAY_CONFIG" "$TMP_DIR"' EXIT
 
-# update json
+    # update json
     jq --arg tag   "$INBOUND_TAG" \
     --arg email "$XRAY_EMAIL" \
     --arg id    "$UUID" \
@@ -756,8 +766,8 @@ conf_json_xray() {
 }
 
 run_and_check "generate new config" conf_json_xray
-run_and_check "new xray config checking" sudo -u xray xray run -test -config "$TMP_XRAY_CONFIG"
-run_and_check "install new xray config" install -m 660 -o xray -g telegram-gateway "$TMP_XRAY_CONFIG" "$XRAY_CONFIG_DEST"
+run_and_check "new xray config checking" xray run -test -config "$TMP_XRAY_CONFIG"
+run_and_check "install new xray config" install -m 660 -o root -g "${XRAY_CONFIG_GROUP}" "$TMP_XRAY_CONFIG" "$XRAY_CONFIG_DEST"
 run_and_check "delete temporary xray files " rm -rf "$TMP_XRAY_CONFIG" "$TMP_DIR"
 trap - EXIT
 
@@ -788,23 +798,25 @@ readonly FLOW="$(jq -r --arg tag "$INBOUND_TAG" '
   .inbounds[] | select(.tag==$tag) | .settings.clients[0].flow // ""
 ' "$XRAY_CONFIG_DEST")"
 
+# function for checking variables in json config
 check_var() {
     local name="$1"
-    local value="${!name}"
+    local value="$2"
     if [ -z "$value" ]; then
-        echo "❌ Error: $name not found in realitySettings inbound"
+        echo "❌ Error: $name not found in realitySettings inbound, exit"
         exit 1
     fi
 }
 
-check_var XRAY_PORT
-check_var REALITY_SNI
-check_var PRIVATE_KEY
-check_var SHORT_ID
-check_var FLOW
+# checking empty variable or not
+check_var "PORT" "$XRAY_PORT"
+check_var "REALITY_SNI" "$REALITY_SNI"
+check_var "PRIVATE_KEY" "$PRIVATE_KEY"
+check_var "SHORT_ID" "$SHORT_ID"
+check_var "FLOW" "$FLOW"
 
 # generate public key from privat key
-readonly XRAY_X25519_OUT="$("$XRAY_BIN" x25519 -i "$PRIVATE_KEY")"
+readonly XRAY_X25519_OUT="$(xray x25519 -i "$PRIVATE_KEY")"
 
 readonly PUBLIC_KEY="$(printf '%s\n' "$XRAY_X25519_OUT" | awk -F': ' '/Password:/ {print $2}')"
 
@@ -816,32 +828,21 @@ fi
 # get server ip
 SERVER_HOST="$(ip -4 route get 1.1.1.1 | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
 
+# if not get ip set host as hostname
 if [ -z "$SERVER_HOST" ]; then
-    SERVER_HOST="SERVER_IP"  # плейсхолдер, если не смогли определить
+    SERVER_HOST="$(hostname)"
 fi
 
 # make uri link
-uri_encode() {
-    printf '%s' "$1" | jq -sRr @uri
-}
+uri_encode() { printf '%s' "$1" | jq -sRr @uri; }
 
-QUERY="encryption=none"
-QUERY="${QUERY}&flow=$(uri_encode "$FLOW")"
-QUERY="${QUERY}&security=reality"
-QUERY="${QUERY}&type=tcp"
-QUERY="${QUERY}&sni=$(uri_encode "$REALITY_SNI")"
-QUERY="${QUERY}&fp=$(uri_encode "chrome")"
-QUERY="${QUERY}&pbk=$(uri_encode "$PUBLIC_KEY")"
-QUERY="${QUERY}&sid=$(uri_encode "$SHORT_ID")"
-readonly NAME_ENC="$(uri_encode "$XRAY_NAME")"
-readonly VLESS_URI="vless://${UUID}@${SERVER_HOST}:${XRAY_PORT}/?${QUERY}#${NAME_ENC}"
-readonly URI_PATH="/usr/local/etc/xray/URI_DB"
+# get link
+readonly VLESS_URI="vless://${UUID}@${SERVER_HOST}:${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
+security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
+$(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$USERNAME")"
 
-# print result
-touch "$URI_PATH"
-chmod 600 "$URI_PATH"
-chown telegram-gateway:telegram-gateway "$URI_PATH"
-tee "$URI_PATH" > /dev/null <<EOF
+# print result to URI_DB
+tee "$URI_DB" > /dev/null <<EOF
 name: $XRAY_NAME, vless link: $VLESS_URI
 
 EOF
@@ -854,7 +855,7 @@ install_scr_xr_up() {
     install -m 755 -o root -g root "$XRAY_SCRIPT_SOURCE" "$XRAY_SCRIPT_DEST" || return 1
     tee /etc/cron.d/xray_update > /dev/null <<EOF || return 1
 SHELL=/bin/bash
-1 2 1 * * root "$XRAY_SCRIPT_DEST" &> /dev/null
+1 2 1 * * root "$XRAY_SCRIPT_DEST"
 EOF
     chmod 644 "/etc/cron.d/xray_update" || return 1
 }
@@ -869,7 +870,7 @@ install_scr_xray_stat() {
     install -m 755 -o root -g root "$XRAY_STAT_SCRIPT_SRC" "$XRAY_STAT_SCRIPT_DEST" || return 1
     tee /etc/cron.d/xray_stat > /dev/null <<EOF || return 1
 SHELL=/bin/bash
-0 * * * * telegram-gateway "$XRAY_STAT_SCRIPT_DEST" &> /dev/null
+0 * * * * telegram_gateway "$XRAY_STAT_SCRIPT_DEST"
 EOF
     chmod 644 "/etc/cron.d/xray_stat" || return 1
 }
@@ -884,7 +885,7 @@ install_scr_traffic_block() {
     install -m 755 -o root -g root "$TRAFFIC_BLOCK_SCRIPT_SRC" "$TRAFFIC_BLOCK_SCRIPT_DEST" || return 1
     tee /etc/cron.d/traffic_block > /dev/null <<EOF || return 1
 SHELL=/bin/bash
-10 * * * * telegram-gateway "$TRAFFIC_BLOCK_SCRIPT_DEST" &> /dev/null
+10 * * * * telegram_gateway "$TRAFFIC_BLOCK_SCRIPT_DEST"
 EOF
     chmod 644 "/etc/cron.d/traffic_block" || return 1
 }
@@ -898,7 +899,7 @@ install_scr_user() {
     install -m 755 -o root -g root "$USER_NOTIFY_SCRIPT_SOURCE" "$USER_NOTIFY_SCRIPT_DEST" || return 1
     tee /etc/cron.d/user_notify > /dev/null <<EOF || return 1
 SHELL=/bin/bash
-1 1 * * * telegram-gateway "$USER_NOTIFY_SCRIPT_DEST" &> /dev/null
+1 1 * * * telegram_gateway "$USER_NOTIFY_SCRIPT_DEST"
 EOF
     chmod 644 "/etc/cron.d/user_notify" || return 1
 }
@@ -912,7 +913,7 @@ install_scr_time_block() {
     install -m 755 -o root -g root "$TIME_BLOCK_SCRIPT_SOURCE" "$TIME_BLOCK_SCRIPT_DEST" || return 1
     tee /etc/cron.d/time_block > /dev/null <<EOF || return 1
 SHELL=/bin/bash
-1 0 * * * telegram-gateway "$TIME_BLOCK_SCRIPT_DEST" &> /dev/null
+1 0 * * * telegram_gateway "$TIME_BLOCK_SCRIPT_DEST"
 EOF
     chmod 644 "/etc/cron.d/time_block" || return 1
 }
@@ -926,7 +927,7 @@ install_scr_xray_backup() {
     install -m 755 -o root -g root "$XRAY_BACKUP_SCRIPT_SOURCE" "$XRAY_BACKUP_SCRIPT_DEST" || return 1
     tee /etc/cron.d/xray_backup > /dev/null <<'EOF' || return 1
 SHELL=/bin/bash
-0 23 28-31 * * telegram-gateway [ "$(date -d tomorrow +\%d)" = "01" ] && "/usr/local/bin/service/xray_backup.sh" &> /dev/null
+0 23 28-31 * * telegram_gateway [ "$(date -d tomorrow +\%d)" = "01" ] && "/usr/local/bin/service/xray_backup.sh"
 EOF
     chmod 644 "/etc/cron.d/xray_backup" || return 1
 }
@@ -959,7 +960,7 @@ install_scr_service() {
     mkdir -p /usr/local/lib/service
     install -m 644 -o root -g root "script/share/telegram.lib.sh" "/usr/local/lib/service/telegram.lib.sh" || return 1
     install -m 644 -o root -g root "script/share/run_lock.lib.sh" "/usr/local/lib/service/run_lock.lib.sh" || return 1
-
+    install -m 644 -o root -g root "script/share/variables.lib.sh" "/usr/local/lib/service/variables.lib.sh" || return 1
     install -m 755 -o root -g root "$USERADD_SCRIPT_SRC" "$USERADD_SCRIPT_DEST" || return 1
     install -m 755 -o root -g root "$USERDEL_SCRIPT_SRC" "$USERDEL_SCRIPT_DEST" || return 1
     install -m 755 -o root -g root "$TIME_UNBLOCK_SCRIPT_SRC" "$TIME_UNBLOCK_SCRIPT_DEST" || return 1
@@ -986,27 +987,28 @@ run_and_check "install service script and create link in home directory" install
 
 
 # Telegram gateway script
-TG_GATEWAY_SCRIPT_SRC="script/telegram-gateway.sh"
-TG_GATEWAY_SCRIPT_DEST="/usr/local/bin/service/telegram-gateway.sh"
+TG_GATEWAY_SCRIPT_SRC="script/telegram_gateway.sh"
+TG_GATEWAY_SCRIPT_DEST="/usr/local/bin/service/telegram_gateway.sh"
 
-# /etc/systemd/system/telegram-gateway.service
+# /etc/systemd/system/telegram_gateway.service
 conf_tg_gateway() {
     install -m 755 -o root -g root "$TG_GATEWAY_SCRIPT_SRC" "$TG_GATEWAY_SCRIPT_DEST" || return 1
-    tee /etc/systemd/system/telegram-gateway.service > /dev/null <<EOF || return 1
+    tee /etc/systemd/system/telegram_gateway.service > /dev/null <<EOF || return 1
 [Unit]
 Description=Telegram gateway bot
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-User=telegram-gateway
-Group=telegram-gateway
+User=telegram_gateway
+Group=telegram_gateway
 
 ExecStart=$TG_GATEWAY_SCRIPT_DEST
 Restart=always
-RestartSec=5
+RestartSec=10
 
 NoNewPrivileges=yes
+ProtectSystem=strict
 PrivateTmp=yes
 ProtectHome=yes
 ProtectKernelTunables=yes
@@ -1022,18 +1024,18 @@ SystemCallArchitectures=native
 WantedBy=multi-user.target
 EOF
 
-    tee /etc/polkit-1/rules.d/50-telegram-gateway.rules > /dev/null <<'EOF' || return 1
+    tee /etc/polkit-1/rules.d/50-telegram_gateway.rules > /dev/null <<'EOF' || return 1
 polkit.addRule(function(action, subject) {
-  // Разрешаем пользователю telegram-gateway только restart для xray.service
-    if (subject.user === "telegram-gateway" &&
+  // Разрешаем пользователю telegram_gateway только restart для xray.service
+    if (subject.user === "telegram_gateway" &&
         action.id === "org.freedesktop.systemd1.manage-units" &&
         action.lookup("unit") === "xray.service" &&
         action.lookup("verb") === "restart") {
     return polkit.Result.YES;
     }
 
-  // Разрешаем пользователю telegram-gateway reboot
-    if (subject.user === "telegram-gateway" &&
+  // Разрешаем пользователю telegram_gateway reboot
+    if (subject.user === "telegram_gateway" &&
         (action.id === "org.freedesktop.login1.reboot" ||
         action.id === "org.freedesktop.login1.reboot-multiple-sessions")) {
     return polkit.Result.YES;
@@ -1045,8 +1047,8 @@ EOF
 # start Telegram gateway
 run_and_check "create Telegram gateway service" conf_tg_gateway
 run_and_check "reload systemd" systemctl daemon-reload
-run_and_check "enable autostart Telegram gateway service" systemctl -q enable telegram-gateway.service
-run_and_check "start Telegram gateway service" systemctl start telegram-gateway.service
+run_and_check "enable autostart Telegram gateway service" systemctl -q enable telegram_gateway.service
+run_and_check "start Telegram gateway service" systemctl start telegram_gateway.service
 
 
 # final output
@@ -1064,6 +1066,6 @@ cat "$PUB_KEY_PATH"
 echo ""
 echo "#################[ VLESS LINK ]##################"
 echo ""
-cat "$URI_PATH"
+cat "$URI_DB"
 echo ""
 echo "#################################################"

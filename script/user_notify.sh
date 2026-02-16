@@ -1,119 +1,121 @@
 #!/bin/bash
 # script for notify xray traffic and user exp date via cron every day 1:01 night time
-# all errors are logged, except the first three, for debugging, add a redirect to the debug log
-# 1 1 * * * telegram-gateway /usr/local/bin/telegram/user_notify.sh &> /dev/null
+# all errors are logged in journald, see journalctl -t user_notify
+# 1 1 * * * telegram_gateway /usr/local/bin/telegram/user_notify.sh
 # exit codes work to tell Cron about success
 
-# export path just in case
-PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-export PATH
+# common variables source
+# shellcheck source=share/variables.lib.sh
+source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit"; exit 1; }
 
-# user check
-[[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the telegram-gateway user, exit"; exit 1; }
+# main variable
+RC_M="1"
+readonly TODAY_EPOCH="$(date -d "today 00:00" +%s)"
 
-# enable logging, the directory should already be created, but let's check just in case
-readonly DATE_LOG="$(date +"%Y-%m-%d")"
-readonly LOG_DIR="/var/log/telegram"
-readonly NOTIFY_LOG="${LOG_DIR}/user.${DATE_LOG}.log"
-exec &>> "$NOTIFY_LOG" || { echo "❌ Error: cannot write to log '$NOTIFY_LOG', exit"; exit 1; }
+# enable logging
+exec > >(systemd-cat -t user_notify -p info) 2> >(systemd-cat -t user_notify -p err) 5> >(systemd-cat -t user_notify -p notice)
 
 # start logging message
-echo "########## user notify started - $(date '+%Y-%m-%d %H:%M:%S') ##########"
+echo "user notify started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
+
+# user check
+[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
 
 # exit logging message function
-RC_M="1"
+# shellcheck disable=SC2329
 on_exit() {
     if [[ "$RC_M" -eq "0" ]]; then
-        echo "########## user notify ended - $(date '+%Y-%m-%d %H:%M:%S') ##########"
+        echo "user notify ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     else
-        echo "########## user notify failed - $(date '+%Y-%m-%d %H:%M:%S') ##########"
+        echo "user notify failed - $(date '+%Y-%m-%d %H:%M:%S')">&2
     fi
 }
 
 # trap for the end log message for the end log
 trap 'on_exit' EXIT
 
-# main variables
-readonly XRAY_CONFIG="/usr/local/etc/xray/config.json"
-readonly TR_DB_M="/var/log/xray/TR_DB_M"
-readonly TR_DB_Y="/var/log/xray/TR_DB_Y"
-readonly INBOUND_TAG="Vless"
+# function for parse json to name:name:number
+stat_lines() {
+    local json="$1"
+    jq -r '
+        .stat[]
+        | (.name | split(">>>")) as $p
+        | "\($p[0]):\($p[1]):\(.value // 0)"
+    ' <<<"$json"
+}
 
-# check xray conf
-if [[ ! -r "$XRAY_CONFIG" ]]; then
-    echo "❌ Error: check $XRAY_CONFIG it's missing or you do not have read permissions, exit"
-    exit 1
-fi
+# function for calculate total server traffic (inbound+outbound)
+sum_server() {
+    local lines="$1"
+    awk -F: '
+        $1=="inbound" || $1=="outbound" { s += ($3+0) }
+        END { print s+0 }
+    ' <<<"$lines"
+}
 
-source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
-xray_lock_retry
-tr_db_lock_retry
+# function for calculate total traffic each user and cut | info
+sum_users() {
+    local lines="$1"
+    awk -F: '
+        $1=="user" {
+            split($2, a, "|")
+            u[a[1]] += ($3+0)
+        }
+        END { for (k in u) printf "%s %d\n", k, u[k] }
+     ' <<<"$lines" | LC_ALL=C sort
+}
 
-source "/usr/local/lib/service/telegram.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit"; exit 1; }
+# formatting bytes function
+byte_to_human(){ numfmt --to=iec --suffix=B "$1"; }
 
-# reset traffic 1 day of month and year
+# source library for run_lock and file permission cheking
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit" >&2; exit 1; }
+
+# lock check
+run_lock_retry_check xray
+run_lock_retry_check tr_db
+
+# permission check
+read_check "$XRAY_CONFIG"
+read_and_write_check "$TR_DB_M"
+read_and_write_check "$TR_DB_Y"
+
+# source Telegram func library
+source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
+
+# main logic start here
+# get traffic data from json and parse
+DATA="$(stat_lines "$(cat "$TR_DB_M")")"
+
+# get server traffic
+SERVER_TOTAL="$(sum_server "$DATA")"
+
+# get user traffic with format - user date
+USERS_TOTAL="$(sum_users "$DATA")"
+
+# set reset flag traffic if 1 day of month
 RESET_ARG_M="0"
 [[ "$(date +%d)" = "01" ]] && RESET_ARG_M="1"
 
+# set reset flag traffic if 1 day of year
 RESET_ARG_Y="0"
 [[ "$(date +%j)" = "001" ]] && RESET_ARG_Y="1"
 
-# get stat json
-readonly RAW="$(cat "$TR_DB_M")"
-
 # reset traffic 1 day of month
 if [[ $RESET_ARG_M == "1" ]]; then
-    rm -f "$TR_DB_M"
+    echo > "$TR_DB_M"
 fi
 
 # reset traffic 1 day of year
 if [[ $RESET_ARG_Y == "1" ]]; then
-    rm -f "$TR_DB_Y"
+    echo > "$TR_DB_Y"
 fi
 
-# parse json to name:name:number
-stat_lines() {
-  local json="$1"
-  jq -r '
-    .stat[]
-    | (.name | split(">>>")) as $p
-    | "\($p[0]):\($p[1]):\(.value // 0)"
-  ' <<<"$json"
-}
-DATA="$(stat_lines "$RAW")"
-
-# calculate total server traffic
-sum_server() {
-  local lines="$1"
-  awk -F: '
-    $1=="inbound" || $1=="outbound" { s += ($3+0) }
-    END { print s+0 }
-  ' <<<"$lines"
-}
-SERVER_TOTAL="$(sum_server "$DATA")"
-
-# calculate total traffic each user and cut | info
-sum_users() {
-  local lines="$1"
-  awk -F: '
-    $1=="user" {
-      split($2, a, "|")
-      u[a[1]] += ($3+0)
-    }
-    END { for (k in u) printf "%s %d\n", k, u[k] }
-  ' <<<"$lines" | LC_ALL=C sort
-}
-USERS_TOTAL="$(sum_users "$DATA")"
-
-# formatting bytes
-fmt(){ numfmt --to=iec --suffix=B "$1"; }
-
-# calculate sec since 1970 and parse email
-readonly TODAY_EPOCH="$(date -d "today 00:00" +%s)"
-readonly EMAILS="$(jq -r --arg tag "$INBOUND_TAG" '.inbounds[]? | select(.tag? == $tag) | .settings? | .clients?[]? | .email? // empty' "$XRAY_CONFIG")"
+# parse config for full users email
+readonly USERS_EMAILS_FULL="$(jq -r --arg tag "$INBOUND_TAG" '.inbounds[]? | select(.tag? == $tag) | .settings? | .clients?[]? | .email? // empty' "$XRAY_CONFIG")"
 
 # parse and print email - exp days
-USERS_LEFT=""
+USERS_WITH_DAYS=""
 while IFS= read -r email; do
     [[ -z "$email" ]] && continue
 
@@ -125,9 +127,8 @@ while IFS= read -r email; do
     exp_epoch="$(date -d "$exp_date" +%s)"
     days_left=$(( (exp_epoch - TODAY_EPOCH) / 86400 ))
 
-
-    USERS_LEFT+="$(printf '%s %s' "$username" "$days_left")"$'\n'
-done <<< "$EMAILS"
+    USERS_WITH_DAYS+="$(printf '%s %s' "$username" "$days_left")"$'\n'
+done <<< "$USERS_EMAILS_FULL"
 
 # start collecting message
 MESSAGE="📢<b> Daily user report</b> 
@@ -135,33 +136,35 @@ MESSAGE="📢<b> Daily user report</b>
 🖥️ <b>Host:</b> $(hostname)
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 🔛 <b>Traffic:</b>
-🔛 <b>Host traffic:</b> $(fmt "$SERVER_TOTAL")"
+🔛 <b>Host traffic:</b> $(byte_to_human "$SERVER_TOTAL")"
 
+# collecting traffic section
 while IFS=$' ' read -r EMAIL TRAFF; do
     [[ -z "$EMAIL" ]] && continue
     TRAFFx2=$(( TRAFF * 2 ))
-    MESSAGE+=$'\n'"🔛 <b>User traffic:</b> $EMAIL - $(fmt "$TRAFFx2")"
+    MESSAGE+=$'\n'"🔛 <b>User traffic:</b> $EMAIL - $(byte_to_human "$TRAFFx2")"
 done <<< "$USERS_TOTAL"
 
+# collecting time section
 MESSAGE+=$'\n'"🔚 <b>Time:</b>"
-
 while IFS=$' ' read -r EMAIL DAYS; do
     [[ -z "$EMAIL" ]] && continue
-    if [[ $DAYS -le 0 ]]; then
+    if [[ $DAYS -lt 0 ]]; then
         MESSAGE+=$'\n'"❌ <b>User time:</b> $EMAIL - $DAYS days left"
     elif [[ $DAYS -le 10 ]]; then
         MESSAGE+=$'\n'"⚠️ <b>User time:</b> $EMAIL - $DAYS days left"
     else
         MESSAGE+=$'\n'"🔚 <b>User time:</b> $EMAIL - $DAYS days left"
     fi
-done <<< "$USERS_LEFT"
+done <<< "$USERS_WITH_DAYS"
 
+# collecting log section
 MESSAGE+=$'\n'"💾 <b>Xray error log:</b> /var/log/xray/error.log
 💾 <b>Xray access log:</b> /var/log/xray/access.log
-💾 <b>Notify log:</b> $NOTIFY_LOG"
+💾 <b>Notify log:</b> journalctl -t user_notify"
 
 # logging message
-echo "########## collected message - $(date '+%Y-%m-%d %H:%M:%S') ##########"
+echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
 echo "$MESSAGE"
 
 # send message

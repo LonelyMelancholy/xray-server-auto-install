@@ -1,34 +1,35 @@
 #!/bin/bash
 # script for notify after server up, via systemctl timer
 # all errors are logged in journald, see journalctl -t boot_notify
-# exit codes work to tell systemd about success
+# exit codes work to tell systemd about success sending message
+
+# main variables
+RC_M=1
+readonly LOCK_FILE="/run/lock/boot_notify.lock"
 
 # export path just in case
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export PATH
 
 # enable logging
-exec > >(systemd-cat -t boot_notify -p info) 2> >(systemd-cat -t boot_notify -p error)
-
-# main variables
-RC_M=1
-
-# user check
-[[ "$(whoami)" != "telegram-gateway" ]] && { echo "Error: you are not the telegram-gateway user, exit" >&2; exit 1; }
+exec > >(systemd-cat -t boot_notify -p info) 2> >(systemd-cat -t boot_notify -p err) 5> >(systemd-cat -t boot_notify -p notice)
 
 # start logging message
-echo "boot notify started - $(date '+%Y-%m-%d %H:%M:%S')"
+echo "boot notify started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
+
+# user check
+[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
 
 # check another instanсe of the script is not running
-readonly LOCK_FILE="/run/lock/boot_notify.lock"
 exec 99> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
 flock -n 99 || { echo "Error: another instance is running, exit" >&2; exit 1; }
 
 # function section
 # exit logging message function
+# shellcheck disable=SC2329
 on_exit() {
     if [[ "$RC_M" -eq "0" ]]; then
-        echo "boot notify ended - $(date '+%Y-%m-%d %H:%M:%S')"
+        echo "boot notify ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     else
         echo "boot notify failed - $(date '+%Y-%m-%d %H:%M:%S')" >&2
     fi
@@ -90,20 +91,20 @@ FAIL2BAN_STATUS="$(daemon_status fail2ban.service fail2ban)"
 NGINX_STATUS="$(daemon_status nginx.service nginx)"
 XRAY_STATUS="$(daemon_status xray.service xray)"
 
-# start collecting message
+# start collecting message parts
 if [[  $COMMON_STATUS == 0 && "$SYSTEM_STATUS" == "running" ]]; then
-    TITLE="✅ <b>Server up, all services are running</b>"
+    MESSAGE_TITLE="✅ <b>Server up, all services are running</b>"
     SYSTEM_STATUS="☑️ <b>Init system:</b> $SYSTEM_STATUS"
 elif [[ $COMMON_STATUS == 0 ]]; then
-    TITLE="⚠️ <b>Server up, non-critical service down</b>"
+    MESSAGE_TITLE="⚠️ <b>Server up, non-critical service down</b>"
     SYSTEM_STATUS="⚠️ <b>Init system:</b> $SYSTEM_STATUS"
 else 
-    TITLE="❌ <b>Server up, critical service down</b>"
+    MESSAGE_TITLE="❌ <b>Server up, critical service down</b>"
     SYSTEM_STATUS="❌ <b>Init system:</b> $SYSTEM_STATUS"
 fi
 
-# collecting message body
-MESSAGE="$TITLE
+# collecting full message
+MESSAGE="$MESSAGE_TITLE
 
 🖥️ <b>Host:</b> $(hostname)
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
@@ -119,7 +120,7 @@ $XRAY_STATUS
 echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
 echo "$MESSAGE"
 
-# send message
+# sending message
 telegram_message
 
 exit $RC_M

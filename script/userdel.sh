@@ -1,53 +1,55 @@
 #!/bin/bash
 # script for del user in xray config
 
-# export path just in case
-PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-export PATH
-
-# user check
-[[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the telegram-gateway user, exit"; exit 1; }
-
-# check another instanсe of the script is not running
-source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
-xray_lock
-uri_db_lock
-
-# argument check
-if [[ "$#" -ne 1 ]]; then
-    echo "Use for del user in xray config, run: $0 <username>"
-    exit 1
-fi
+# common variables source
+# shellcheck source=share/variables.lib.sh
+source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit"; exit 1; }
 
 # main variables
-readonly XRAY_CONFIG="/usr/local/etc/xray/config.json"
-readonly INBOUND_TAG="Vless"
-readonly ARG_RAW="$1"
-readonly USERNAME="${ARG_RAW%%|*}"
-readonly URI_PATH="/usr/local/etc/xray/URI_DB"
-readonly BACKUP_PATH="${XRAY_CONFIG}.$(date +%Y%m%d_%H%M%S).bak"
-readonly URI_BAK="${URI_PATH}.$(date +%Y%m%d_%H%M%S).bak"
+readonly USERNAME="$1"
 
-# config check
-if [[ ! -r "$XRAY_CONFIG" || ! -w "$XRAY_CONFIG" ]]; then
-    echo "❌ Error: check $XRAY_CONFIG it's missing or you do not have read permissions, exit"
-    exit 1
+# argument check
+if [[ "$#" -ne 1 || "$USERNAME" == "--help" ]]; then
+    echo "Use for del user in xray config, run: $0 <username>"
+    exit 0
 fi
 
-# username check after parsing
-if [[ -z "$USERNAME" ]]; then
-    echo "❌ Error: empty username after parsing input, exit"
-    exit 1
-fi
+[[ $USERNAME =~ ^[A-Za-z0-9-]+$ ]] || { echo "❌ Error: only letters, numbers and - in name, exit"; exit 1; }
 
-if [[ ! $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
-    echo "❌ Error: only letters, numbers and - in name, exit"
-    exit 1
-fi
+# user check
+[[ "$(whoami)" != "telegram_gateway" ]] && { echo "❌ Error: you are not the telegram_gateway user, exit"; exit 1; }
+
+# source library for run_lock and file permission cheking
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
+
+# lock check
+run_lock_check "xray" "console"
+run_lock_check "uri_db" "console"
+
+# read and write conf check
+read_and_write_check "$XRAY_CONFIG" "console"
+read_and_write_check "$URI_DB" "console"
+
+# make tmp file for uri and config
+readonly TMP_URI_DB="$(mktemp)"
+readonly TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
+
+# exit rm tmp file function
+# shellcheck disable=SC2329
+rm_tmp_config() {
+    if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null && rm -f "$TMP_URI_DB" 2> /dev/null; then
+        echo "✅ Success: delete tmp config file"
+    else
+        echo "❌ Error: delete tmp config file"
+    fi
+}
+
+# set trap for tmp removing and exit message
+trap 'rm_tmp_config' EXIT
 
 # helper func
 run_and_check() {
-    action="$1"
+    local action="$1"
     shift 1
     if "$@" > /dev/null; then
         echo "✅ Success: $action"
@@ -57,42 +59,9 @@ run_and_check() {
     fi
 }
 
-# count clients var for jd
-readonly COUNT_FILTER='[
-  .inbounds[]
-  | select(.tag == $tag)
-  | .settings.clients[]?
-  | select((.email | split("|")[0]) == $t)
-] | length'
-
-# count blocked records in routing rules (only these 3 ruleTag)
-readonly BLOCK_COUNT_FILTER='[
-  .routing.rules[]?
-  | select(.ruleTag == "autoblock-expired-users" or .ruleTag == "manual-block-users" or .ruleTag == "autoblock-traffic-users")
-  | .user[]?
-  | select((split("|")[0]) == $t)
-] | length'
-readonly BLOCK_BEFORE="$(jq -r --arg t "$USERNAME" "$BLOCK_COUNT_FILTER" "$XRAY_CONFIG")"
-
-# count numbers match users before
-readonly BEFORE="$(jq -r --arg t "$USERNAME" --arg tag "$INBOUND_TAG" "$COUNT_FILTER" "$XRAY_CONFIG")"
-
-if [[ "$BEFORE" -eq 0 ]]; then
-    echo "❌ Error: no matches found for: '$USERNAME' in inbound tag \"Vless\". Nothing to do."
-    exit 1
-fi
-
-xray_userdel() {
-    # backup
-    cp -a "$XRAY_CONFIG" "$BACKUP_PATH" || return 1
-    
-    # make tmp file
-    readonly TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
-    chmod 600 "$TMP_XRAY_CONFIG" || return 1
-    
-    # set trap for tmp file
-    trap 'rm -f "$TMP_XRAY_CONFIG" "$TMP_URI"' EXIT
-
+# function for make new conf and delete user from inbound and blocked rules
+# shellcheck disable=SC2329
+make_new_conf() {
     # delete user and add to tmp conf (also clear from block rules)
     jq --arg t "$USERNAME" --arg tag "$INBOUND_TAG" '
         def base: split("|")[0];
@@ -147,58 +116,91 @@ xray_userdel() {
     BLOCK_REMOVED=$((BLOCK_BEFORE - BLOCK_AFTER))
 }
 
-# del user, check config, install if config valid and delete tmp files, restart xray
-run_and_check "delete xray user" xray_userdel
-run_and_check "xray config checking" xray run -test -config "$TMP_XRAY_CONFIG"
-install_new_conf() {
-    cat "$TMP_XRAY_CONFIG" > "$XRAY_CONFIG"
+# function for delete username from uri_db
+# shellcheck disable=SC2329
+make_new_uri() {
+    # paste in tmp file string without name: username,
+    # and skip empty string after name block
+    awk -v u="$USERNAME" '
+        $0 ~ ("^name:[[:space:]]*" u "([^[:alnum:]-]|$)") { skip_blank=1; next }
+        skip_blank && $0 ~ /^[[:space:]]*$/ { skip_blank=0; next }
+        { skip_blank=0; print }
+    ' "$URI_DB" > "$TMP_URI_DB" || return 1
 }
-run_and_check "install new xray config" install_new_conf
+
+# function for install new conf with save file permission 
+# shellcheck disable=SC2329
+install_new_conf() { cat "$1" > "$2"; }
+
+# main logic start here
+# count clients var for jd
+# shellcheck disable=SC2016
+readonly COUNT_FILTER='[
+  .inbounds[]
+  | select(.tag == $tag)
+  | .settings.clients[]?
+  | select((.email | split("|")[0]) == $t)
+] | length'
+
+# count blocked records in routing rules (only these 3 ruleTag)
+# shellcheck disable=SC2016
+readonly BLOCK_COUNT_FILTER='[
+  .routing.rules[]?
+  | select(.ruleTag == "autoblock-expired-users" or .ruleTag == "autoblock-traffic-users" or .ruleTag == "manual-block-users")
+  | .user[]?
+  | select((split("|")[0]) == $t)
+] | length'
+
+# count numbers match users before delete in block rules
+BLOCK_BEFORE="$(jq -r --arg t "$USERNAME" "$BLOCK_COUNT_FILTER" "$XRAY_CONFIG")"
+
+# count numbers match users before delete in inbound
+BEFORE="$(jq -r --arg t "$USERNAME" --arg tag "$INBOUND_TAG" "$COUNT_FILTER" "$XRAY_CONFIG")"
+
+if [[ "$BEFORE" -eq 0 && $BLOCK_BEFORE -eq 0 ]]; then
+    echo "❌ Error: no matches found for: '$USERNAME'. Nothing to delete, exit"
+    exit 1
+fi
+
+# del user, check config, install if config valid and delete tmp files, restart xray
+run_and_check "delete xray user and make new xray config" make_new_conf
+
+# config checking
+run_and_check "checking new xray config" xray run -test -config "$TMP_XRAY_CONFIG"
+
+# backup old conf
+run_and_check "backup old xray config '$XRAY_CONFIG_BACKUP'" cp -a "$XRAY_CONFIG" "$XRAY_CONFIG_BACKUP"
+
+# install new config
+run_and_check "install new xray config" install_new_conf "$TMP_XRAY_CONFIG" "$XRAY_CONFIG"
+
+# restart xray
 run_and_check "restart xray service" systemctl restart xray.service
 
 # echo result
-echo "✅ Success: removed $REMOVED client(s) for '$USERNAME' from inbound tag '$INBOUND_TAG'"
-echo "✅ Success: Backup saved $BACKUP_PATH"
+echo "✅ Success: removed '$REMOVED' client(s) for '$USERNAME' from inbound tag '$INBOUND_TAG'"
+echo "✅ Success: Backup saved '$XRAY_CONFIG_BACKUP'"
+
 if [[ "$BLOCK_REMOVED" -gt 0 ]]; then
-    echo "✅ Success: removed $BLOCK_REMOVED block record(s) for '$USERNAME' from routing rules (autoblock-expired-users/manual-block-users/autoblock-traffic-users)"
+    echo "✅ Success: removed '$BLOCK_REMOVED' block record(s) for '$USERNAME' from routing rules (autoblock-expired-users/manual-block-users/autoblock-traffic-users)"
 else
     echo "✅ Success: block record for '$USERNAME' from routing rules (autoblock-expired-users/manual-block-users/autoblock-traffic-users) not found"
 fi
 
 # if user removed need to remove user from uri file
-if [[ "$REMOVED" -gt 0 && -f "$URI_PATH" ]]; then
-    uri_userdel() {
-        # backup
-        cp -a "$URI_PATH" "$URI_BAK" || return 1
+if [[ "$REMOVED" -gt 0 && -f "$URI_DB" ]]; then
+    # clear username from uri_db
+    run_and_check "delete xray user and make new URI_DB" make_new_uri
 
-        # create tmp file
-        readonly TMP_URI="$(mktemp)"
+    # backup old conf
+    run_and_check "backup old URI_DB '$URI_DB_BACKUP'" cp -a "$URI_DB" "$URI_DB_BACKUP"
 
-        # set trap for tmp file
-        trap 'rm -f "$TMP_XRAY_CONFIG" "$TMP_URI"' EXIT
+    # write from tmp to uri
+    run_and_check "install new URI_DB" install_new_conf "$TMP_URI_DB" "$URI_DB"
 
-        # paste in tmp file without username
-        awk -v t="$USERNAME" '
-            BEGIN { skipping=0 }
-            $0 ~ ("^name:[ \t]*" t "([ \t,].*|$)") {
-                skipping=1
-                next
-            }
-            skipping==1 {
-                if ($0 ~ /^[ \t]*$/) { skipping=0; next }
-                next
-            }
-            { print }
-        ' "$URI_PATH" > "$TMP_URI" || return 1
-
-        # write from tmp to uri
-        cat "$TMP_URI" > "$URI_PATH" || return 1
-    }
-
-    run_and_check "clear user from URI database" uri_userdel
-
+    # echo result
     echo "✅ Success: removed $REMOVED client(s) for '$USERNAME' from URI database"
-    echo "✅ Success: Backup saved $URI_BAK"
+    echo "✅ Success: Backup saved $URI_DB_BACKUP"
 fi
 
 exit 0

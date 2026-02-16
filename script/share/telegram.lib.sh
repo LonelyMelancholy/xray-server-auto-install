@@ -5,11 +5,11 @@
 # if sending failed, RC_F not changed, if sending success RC_F=0
 # RC_F - file sender return code
 # external variable - $MESSAGE, $FILE_PATH, $FILE_NAME, $RC_M, $RC_F.
-# external file /usr/local/etc/telegram/secrets.env [root:telegram-gateway 640] with $BOT_TOKEN and $GROUP_ID
+# external file /usr/local/etc/telegram/secrets.env [root:telegram_gateway 640] with $BOT_TOKEN and $GROUP_ID
 
 # check secret file, if the file have right permissions, we source it.
 readonly ENV_FILE="/usr/local/etc/telegram/secrets.env"
-if [[ ! -f "$ENV_FILE" ]] || [[ "$(stat -L -c '%U:%G:%a' "$ENV_FILE" 2> /dev/null)" != "root:telegram-gateway:640" ]]; then
+if [[ ! -f "$ENV_FILE" ]] || [[ "$(stat -L -c '%U:%G:%a' "$ENV_FILE" 2> /dev/null)" != "root:telegram_gateway:640" ]]; then
     echo "Error: env file '$ENV_FILE' not found or has wrong permissions, exit" >&2
     exit 1
 fi
@@ -43,7 +43,7 @@ telegram_message() {
                 echo "Error: failed to send Telegram message after $attempt attempts, exit" >&2
                 exit 1
             fi
-            echo "Info: failed to send Telegram message. Waiting ${wait_sec}s... (attempt $attempt/$max_attempt)"
+            echo "Info: failed to send Telegram message. Waiting ${wait_sec}s... attempt ${attempt}/${max_attempt}"
             sleep $wait_sec
             ((attempt++))
             continue
@@ -76,7 +76,7 @@ telegram_file() {
                 echo "Error: failed to send Telegram file after $attempt attempt, exit" >&2
                 exit 1
             fi
-            echo "Info: failed to send Telegram file. Waiting ${wait_sec}s... (attempt $attempt/$max_attempt)"
+            echo "Info: failed to send Telegram file. Waiting ${wait_sec}s... attempt ${attempt}/${max_attempt}"
             sleep $wait_sec
             ((attempt++))
             continue

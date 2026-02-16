@@ -1,33 +1,41 @@
 #!/bin/bash
-# script for add time user in xray config
+# script for manyally add user time in xray config
 
-# export path just in case
-PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-export PATH
-
-# user check
-[[ "$(whoami)" != "telegram-gateway" ]] && { echo "❌ Error: you are not the telegram-gateway user, exit"; exit 1; }
-
-# check another instanсe of the script is not running
-source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
-xray_lock
-uri_db_lock
+# common variables source
+# shellcheck source=share/variables.lib.sh
+source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit"; exit 1; }
 
 # main variables
-readonly XRAY_CONFIG="/usr/local/etc/xray/config.json"
-readonly URI_FILE="/usr/local/etc/xray/URI_DB"
-readonly XRAY_BACKUP_PATH="${XRAY_CONFIG}.$(date +%Y%m%d_%H%M%S).bak"
-readonly URI_BACKUP_PATH="${URI_FILE}.$(date +%Y%m%d_%H%M%S).bak"
-readonly INBOUND_TAG="Vless"
-readonly BLOCK_RULE_TAG="autoblock-expired-users"
-readonly USERNAME="$1"
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
+TMP_URI_DB="$(mktemp)"
+EXPIRED_BLOCK_TAG="autoblock-expired-users"
+TRAFFIC_BLOCK_TAG="autoblock-traffic-users"
+MANUAL_BLOCK_TAG="manual-block-users"
+TODAY="$(date +%F)"
+USERNAME="$1"
 DAYS="$2"
 
+# exit rm tmp file function
+# shellcheck disable=SC2329
+rm_tmp_config() {
+    if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null && rm -f "$TMP_URI_DB" 2> /dev/null; then
+        echo "✅ Success: delete tmp config file"
+    else
+        echo "❌ Error: delete tmp config file"
+    fi
+}
+
+# set trap for tmp removing and exit message
+trap 'rm_tmp_config' EXIT
+
+# user check
+[[ "$(whoami)" != "telegram_gateway" ]] && { echo "❌ Error: you are not the telegram_gateway user, exit"; exit 1; }
+
 # argument check
-if [[ "$#" -ne 2 ]]; then
+if [[ "$#" -ne 2 || "$USERNAME" == "--help" ]]; then
     echo "Use for add time for user in xray config, run: $0 <username> <days>"
     echo "days 0 - infinity days"
-    exit 1
+    exit 0
 fi
 
 if [[ ! $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
@@ -40,20 +48,9 @@ if [[ ! "$DAYS" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 
-# config check
-if [[ ! -r "$XRAY_CONFIG" || ! -w "$XRAY_CONFIG" ]]; then
-    echo "❌ Error: check $XRAY_CONFIG it's missing or you do not have permissions, exit"
-    exit 1
-fi
-
-if [[ ! -r "$URI_FILE" || ! -w "$URI_FILE" ]]; then
-    echo "❌ Error: check $URI_FILE it's missing or you do not have permissions, exit"
-    exit 1
-fi
-
-# helper func
+# helper function
 run_and_check() {
-    action="$1"
+    local action="$1"
     shift 1
     if "$@" > /dev/null; then
         echo "✅ Success: $action"
@@ -63,159 +60,179 @@ run_and_check() {
     fi
 }
 
-# calculate new today and exp day
-readonly TODAY="$(date +%F)"
+# function for serch we have rule with ruleTag in config? true or false
+search_rule() {
+    local block_tag="$1"
+    jq -r --arg ruleTag "$block_tag" '
+        any(.routing.rules[]?; (.ruleTag? // "") == $ruleTag)
+    ' "$XRAY_CONFIG" 2>/dev/null || echo "false"
+}
 
-# write variable
+# function for count how many times username blocked in rule
+count_user_in_rule() {
+    local block_tag="$1"
+    jq -r --arg ruleTag "$block_tag" --arg name "$USERNAME" '
+        [
+            .routing.rules[]? | select(.ruleTag == $ruleTag) |
+            ((.user // [])[]) |
+            select((split("|")[0]) == $name)
+        ] | length
+    ' "$XRAY_CONFIG"
+}
+
+# main func for renew email and deleting from block rule
+make_new_tmp_config() {
+    jq \
+        --arg inboundTag "$INBOUND_TAG" \
+        --arg ruleTag "$EXPIRED_BLOCK_TAG" \
+        --arg name "$USERNAME" \
+        --arg newEmail "$NEW_FULL_EMAIL" \
+        --argjson ruleExists "$( [[ "$EXPIRED_RULE_EXIST" == "true" ]] && echo true || echo false )" '
+        
+        # renew email if exist
+        (.inbounds[]? | select(.tag == $inboundTag) | .settings.clients) |=
+            ( . // [] | map(
+                if (((.email // "") | split("|")[0]) == $name)
+                then .email = $newEmail
+                else .
+                end
+            )
+        ) |
+
+        # if block rule exist delete user from them
+        (if $ruleExists then
+            .routing = (.routing // {}) |
+            .routing.rules = (.routing.rules // []) |
+            .routing.rules |= map(
+                if (.ruleTag? == $ruleTag) then
+                    .user = ((.user // []) | map(select((split("|")[0]) != $name)))
+                else .
+                end
+            ) |
+            
+            # if rule empty after user deleting, delete rule
+            .routing.rules |= map(
+                select( (.ruleTag? != $ruleTag) or (((.user // []) | length) > 0) )
+            )
+        else
+            .
+        end)
+    ' "$XRAY_CONFIG" > "$TMP_XRAY_CONFIG" || return 1
+}
+
+# function for install new config (original permission saved)
+install_new_conf() {
+    cat "$1" > "$2" || return 1
+}
+
+# source library for run_lock and file permission cheking
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
+
+# lock check
+run_lock_check "xray" "console"
+run_lock_check "uri_db" "console"
+
+# read and write conf check
+read_and_write_check "$XRAY_CONFIG" "console"
+read_and_write_check "$URI_DB" "console"
+
+# main logic start here
+# write new username
 if [[ "$DAYS" == "0" ]]; then
-    NEW_EMAIL="${USERNAME}|created=${TODAY}|days=infinity|exp=never"
+    NEW_FULL_EMAIL="${USERNAME}|created=${TODAY}|days=infinity|exp=never"
     DAYS="infinity"
     EXP="never"
 else
     EXP="$(date -d "$TODAY +$DAYS days" +%F)"
-    NEW_EMAIL="${USERNAME}|created=${TODAY}|days=${DAYS}|exp=${EXP}"
+    NEW_FULL_EMAIL="${USERNAME}|created=${TODAY}|days=${DAYS}|exp=${EXP}"
 fi
 
-# counts client in config
-client_count="$(
-  jq -r --arg tag "$INBOUND_TAG" --arg name "$USERNAME" '
-    [
-      .inbounds[]? | select(.tag == $tag) |
-      .settings.clients[]? |
-      select(((.email // "") | split("|")[0]) == $name)
-    ] | length
-  ' "$XRAY_CONFIG"
-)"
-
-# we have rule with ruleTag?
-rule_exists="$(
-  jq -r --arg ruleTag "$BLOCK_RULE_TAG" '
-    any(.routing.rules[]?; (.ruleTag? // "") == $ruleTag)
-  ' "$XRAY_CONFIG" 2>/dev/null || echo "false"
-)"
-
-# count how many time name blocked
-blocked_count=0
-if [[ "$rule_exists" == "true" ]]; then
-  blocked_count="$(
-    jq -r --arg ruleTag "$BLOCK_RULE_TAG" --arg name "$USERNAME" '
-      [
-        .routing.rules[]? | select(.ruleTag == $ruleTag) |
-        ((.user // [])[]) |
-        select((split("|")[0]) == $name)
-      ] | length
+# counts username in config (if have dublicat)
+USERNAME_COUNT="$(
+    jq -r --arg tag "$INBOUND_TAG" --arg name "$USERNAME" '
+        [
+            .inbounds[]? | select(.tag == $tag) |
+            .settings.clients[]? |
+            select(((.email // "") | split("|")[0]) == $name)
+        ] | length
     ' "$XRAY_CONFIG"
-  )"
-fi
+)"
 
 # if client not found, exit
-if [[ $client_count -eq 0 ]]; then
-  echo "❌ Error: '$USERNAME' not found in clients inbound '$INBOUND_TAG', exit"
-  exit 1
-fi
-
-# to many client found, exit
-if [[ $client_count -gt 1 ]]; then
-  echo "❌ Error: '$USERNAME' to many match in clients inbound '$INBOUND_TAG', exit"
-  exit 1
-fi
-
-# we have rule with manual block?
-readonly MANUAL_BLOCK_TAG="manual-block-users"
-rule_manual_exists="$(
-  jq -r --arg ruleTag "$MANUAL_BLOCK_TAG" '
-    any(.routing.rules[]?; (.ruleTag? // "") == $ruleTag)
-  ' "$XRAY_CONFIG" 2>/dev/null || echo "false"
-)"
-
-# count how many time name blocked
-blocked_manualy_count=0
-if [[ "$rule_manual_exists" == "true" ]]; then
-  blocked_manualy_count="$(
-    jq -r --arg ruleTag "$MANUAL_BLOCK_TAG" --arg name "$USERNAME" '
-      [
-        .routing.rules[]? | select(.ruleTag == $ruleTag) |
-        ((.user // [])[]) |
-        select((split("|")[0]) == $name)
-      ] | length
-    ' "$XRAY_CONFIG"
-  )"
-fi
-
-# exit if have manual block for not changing unic name
-if [[ $blocked_manualy_count -gt 0 ]]; then
-  echo "❌ Error: '$USERNAME' blocked manualy, unblock user first, exit"
-  exit 1
-fi
-
-# main func for renew email and deleting from block rule
-unblock_and_add_time() {
-    # make tmp file
-    TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
-    chmod 600 "$TMP_XRAY_CONFIG" || return 1
-    
-    # set trap for deleting tmp files
-    trap 'rm -f "$TMP_XRAY_CONFIG"' EXIT
-
-jq \
-  --arg inboundTag "$INBOUND_TAG" \
-  --arg ruleTag "$BLOCK_RULE_TAG" \
-  --arg name "$USERNAME" \
-  --arg newEmail "$NEW_EMAIL" \
-  --argjson ruleExists "$( [[ "$rule_exists" == "true" ]] && echo true || echo false )" '
-  # renew email if exist
-  (.inbounds[]? | select(.tag == $inboundTag) | .settings.clients) |=
-    ( . // [] | map(
-        if (((.email // "") | split("|")[0]) == $name)
-        then .email = $newEmail
-        else .
-        end
-      )
-    ) |
-
-  # if block rule exist delete user from them
-  (if $ruleExists then
-      .routing = (.routing // {}) |
-      .routing.rules = (.routing.rules // []) |
-      .routing.rules |= map(
-        if (.ruleTag? == $ruleTag) then
-          .user = ((.user // []) | map(select((split("|")[0]) != $name)))
-        else .
-        end
-      ) |
-      # if rule empty after user deleting, delete rule
-      .routing.rules |= map(
-        select( (.ruleTag? != $ruleTag) or (((.user // []) | length) > 0) )
-      )
-   else
-      .
-   end)
-' "$XRAY_CONFIG" > "$TMP_XRAY_CONFIG" || return 1
-
-    # backup
-    cp -a "$XRAY_CONFIG" "$XRAY_BACKUP_PATH" || return 1
-
-}
-
-# add time user, check config, install if config valid and delete tmp files
-run_and_check "add time xray user" unblock_and_add_time
-run_and_check "check new xray config" xray run -test -config "$TMP_XRAY_CONFIG"
-
-# Если нет изменений — выходим
-if cmp -s "$XRAY_CONFIG" "$TMP_XRAY_CONFIG"; then
-    rm -f "$TMP_XRAY_CONFIG"
-    echo "❌ Error: no changes, NEW_EMAIL='$NEW_EMAIL', exit"
+if [[ $USERNAME_COUNT -eq 0 ]]; then
+    echo "❌ Error: '$USERNAME' not found in clients inbound '$INBOUND_TAG', exit"
     exit 1
 fi
 
-install_new_conf() {
-    cat "$TMP_XRAY_CONFIG" > "$XRAY_CONFIG"
-}
-run_and_check "install new xray config" install_new_conf
-run_and_check "delete temporary xray files " rm -f "$TMP_XRAY_CONFIG"
+# to many client found, exit
+if [[ $USERNAME_COUNT -gt 1 ]]; then
+    echo "❌ Error: '$USERNAME' to many match in clients inbound '$INBOUND_TAG', edit config manually, exit"
+    exit 1
+fi
 
-# unset trap, tmp already deleted
-trap - EXIT
+# we have rule with expired auto block? true or false
+EXPIRED_RULE_EXIST="$(search_rule "$EXPIRED_BLOCK_TAG")"
+
+# count how many time username blocked
+EXPIRED_BLOCKED_COUNT=0
+if [[ "$EXPIRED_RULE_EXIST" == "true" ]]; then
+    EXPIRED_BLOCKED_COUNT="$(count_user_in_rule "$EXPIRED_BLOCK_TAG")"
+fi
+
+# exit if have expired block count > 1 user, its mean we have dublicat in rule
+if [[ $EXPIRED_BLOCKED_COUNT -gt 1 ]]; then
+    echo "❌ Error: '$USERNAME' to many match in ruleTag '$EXPIRED_BLOCK_TAG', edit config manually, exit"
+    exit 1
+fi
+
+# we have rule with traffic auto block? true or false
+TRAFFIC_BLOCK_EXIST="$(search_rule "$TRAFFIC_BLOCK_TAG")"
+
+# count how many time name blocked
+TRAFFIC_BLOCKED_COUNT=0
+if [[ "$TRAFFIC_BLOCK_EXIST" == "true" ]]; then
+    TRAFFIC_BLOCKED_COUNT="$(count_user_in_rule "$TRAFFIC_BLOCK_TAG")"
+fi
+
+# exit if have manual block for not changing unic name
+if [[ $TRAFFIC_BLOCKED_COUNT -gt 0 ]]; then
+    echo "❌ Error: '$USERNAME' blocked in '$TRAFFIC_BLOCK_TAG', reset user traffic first, exit"
+    exit 1
+fi
+
+# we have rule with manual block? true or false
+MANUAL_BLOCK_EXIST="$(search_rule "$MANUAL_BLOCK_TAG")"
+
+# count how many time name blocked
+MANUALLY_BLOCKED_COUNT=0
+if [[ "$MANUAL_BLOCK_EXIST" == "true" ]]; then
+    MANUALLY_BLOCKED_COUNT="$(count_user_in_rule "$MANUAL_BLOCK_TAG")"
+fi
+
+# exit if have manual block for not changing unic name
+if [[ $MANUALLY_BLOCKED_COUNT -gt 0 ]]; then
+    echo "❌ Error: '$USERNAME' blocked manualy in '$MANUAL_BLOCK_TAG', unblock user first, exit"
+    exit 1
+fi
+
+# main logic start here
+# make new config, add time and delete blocked user
+run_and_check "make new xray tmp config" make_new_tmp_config
+
+# if not changed, exit
+if cmp -s "$XRAY_CONFIG" "$TMP_XRAY_CONFIG"; then
+    echo "❌ Error: '$USERNAME' created and expiration date is the same, config not changed, exit"
+    exit 1
+fi
+
+# check new conf
+run_and_check "checking new xray tmp config" xray run -test -config "$TMP_XRAY_CONFIG"
+
+# backup old xray config
+run_and_check "backup old xray config to '$XRAY_CONFIG_BACKUP'" cp -a "$XRAY_CONFIG" "$XRAY_CONFIG_BACKUP"
+
+# install new config (original permission saved)
+run_and_check "install new xray config" install_new_conf "$TMP_XRAY_CONFIG" "$XRAY_CONFIG"
 
 # restart
 run_and_check "restart xray" systemctl restart xray.service
@@ -223,49 +240,38 @@ run_and_check "restart xray" systemctl restart xray.service
 # echo result
 echo "✅ Success: apply for '$USERNAME' from inbound tag '$INBOUND_TAG'"
 echo "✅ Success: new time, created: $TODAY, days: $DAYS, expiration: $EXP"
-if [[ "$rule_exists" == "true" ]]; then
-    echo "✅ Success: blocked rule found: yes (removed $blocked_count matches)"
+
+if [[ "$EXPIRED_RULE_EXIST" == "true" ]]; then
+    echo "✅ Success: blocked rule found, removed $EXPIRED_BLOCKED_COUNT matches"
 else
-    echo "✅ Success: blocked rule found: no"
+    echo "✅ Success: blocked rule not found"
 fi
-echo "✅ Success: Backup saved $XRAY_BACKUP_PATH"
 
-update_uri_db() {
-    # make tmp file
-    TMP_URI_FILE="$(mktemp)"
-
-    # set trap for deleting tmp files
-    trap 'rm -f "$TMP_URI_FILE"' EXIT
-
+make_new_tmp_uri_db() {
     # search username record in URI
-    if ! grep -qE "^name: ${USERNAME}, created: " "$URI_FILE"; then
+    if ! grep -qE "^name: ${USERNAME}, created: " "$URI_DB"; then
         echo "❌ Error: no record for in URI for ${USERNAME}"
         return 1
     fi
 
-  # renew only one sring created/days/expiration, not change other
+    # renew only one sring created/days/expiration, not change other
     awk -v n="$USERNAME" -v today="$TODAY" -v days="$DAYS" -v expiration="$EXP" '
         $0 ~ ("^name: " n ", created: ") {
         print "name: " n ", created: " today ", days: " days ", expiration: " expiration
         next
         }
         {print}
-    ' "$URI_FILE" > "$TMP_URI_FILE" || return 1
-
-    # backup
-    cp -a "$URI_FILE" "$URI_BACKUP_PATH" || return 1
-
-    # write from tmp to uri
-    cat "$TMP_URI_FILE" > "$URI_FILE" || return 1
-
+    ' "$URI_DB" > "$TMP_URI_DB" || return 1
 }
 
-run_and_check "update URI database" update_uri_db
-run_and_check "delete temporary uri files " rm -f "$TMP_URI_FILE"
+# make new database
+run_and_check "make new URI database" make_new_tmp_uri_db
 
-# unset trap
-trap - EXIT
+# backup
+run_and_check "backup old URI database '$URI_DB_BACKUP'" cp -a "$URI_DB" "$URI_DB_BACKUP"
+
+# install new 
+run_and_check "install new URI database" install_new_conf "$TMP_URI_DB" "$URI_DB"
 
 # echo result
 echo "✅ Success: URI database updated for '${USERNAME}'"
-echo "✅ Success: Backup saved '$URI_BACKUP_PATH'"
