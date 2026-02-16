@@ -130,11 +130,9 @@ source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to 
 
 # lock check
 run_lock_check "xray" "console"
-run_lock_check "uri_db" "console"
 
 # read and write conf check
 read_and_write_check "$XRAY_CONFIG" "console"
-read_and_write_check "$URI_DB" "console"
 
 # main logic start here
 # write new username
@@ -246,32 +244,3 @@ if [[ "$EXPIRED_RULE_EXIST" == "true" ]]; then
 else
     echo "✅ Success: blocked rule not found"
 fi
-
-make_new_tmp_uri_db() {
-    # search username record in URI
-    if ! grep -qE "^name: ${USERNAME}, created: " "$URI_DB"; then
-        echo "❌ Error: no record for in URI for ${USERNAME}"
-        return 1
-    fi
-
-    # renew only one sring created/days/expiration, not change other
-    awk -v n="$USERNAME" -v today="$TODAY" -v days="$DAYS" -v expiration="$EXP" '
-        $0 ~ ("^name: " n ", created: ") {
-        print "name: " n ", created: " today ", days: " days ", expiration: " expiration
-        next
-        }
-        {print}
-    ' "$URI_DB" > "$TMP_URI_DB" || return 1
-}
-
-# make new database
-run_and_check "make new URI database" make_new_tmp_uri_db
-
-# backup
-run_and_check "backup old URI database '$URI_DB_BACKUP'" cp -a "$URI_DB" "$URI_DB_BACKUP"
-
-# install new 
-run_and_check "install new URI database" install_new_conf "$TMP_URI_DB" "$URI_DB"
-
-# echo result
-echo "✅ Success: URI database updated for '${USERNAME}'"

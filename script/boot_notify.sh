@@ -59,7 +59,7 @@ daemon_status() {
         echo "☑️ <b>Status $name:</b> running"
     else
         echo "❌ <b>Status $name:</b> fail"
-        COMMON_STATUS=1
+        return 1
     fi
 }
 
@@ -85,11 +85,11 @@ SYSTEM_STATUS="$(systemctl is-system-running)"
 COMMON_STATUS=0
 
 # critical daemon status
-SSH_STATUS="$(daemon_status ssh.socket ssh)"
-CRON_STATUS="$(daemon_status cron.service cron)"
-FAIL2BAN_STATUS="$(daemon_status fail2ban.service fail2ban)"
-NGINX_STATUS="$(daemon_status nginx.service nginx)"
-XRAY_STATUS="$(daemon_status xray.service xray)"
+SSH_STATUS="$(daemon_status ssh.socket ssh)" || COMMON_STATUS=1
+CRON_STATUS="$(daemon_status cron.service cron)" || COMMON_STATUS=1
+FAIL2BAN_STATUS="$(daemon_status fail2ban.service fail2ban)" || COMMON_STATUS=1
+NGINX_STATUS="$(daemon_status nginx.service nginx)" || COMMON_STATUS=1
+XRAY_STATUS="$(daemon_status xray.service xray)" || COMMON_STATUS=1
 
 # start collecting message parts
 if [[  $COMMON_STATUS == 0 && "$SYSTEM_STATUS" == "running" ]]; then

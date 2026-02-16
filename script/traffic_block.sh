@@ -35,7 +35,7 @@ TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
 
 # exit logging message function
 # shellcheck disable=SC2329
-on_exit() {
+end_log() {
     if [[ "$RC" -eq "0" ]]; then
         echo "traffic block ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     else

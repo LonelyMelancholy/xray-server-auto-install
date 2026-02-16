@@ -4,7 +4,6 @@ set -u
 # main variables
 readonly LOCK_FILE="/run/lock/telegram_gateway.lock"
 RC_M=1
-readonly API="https://api.telegram.org/bot${BOT_TOKEN}"
 readonly TIMEOUT=50
 readonly OFFSET=0
 readonly HOSTNAME="$(hostname)"
@@ -40,6 +39,7 @@ flock -n 99 || { echo "Error: another instance is running, exit" >&2; exit 1; }
 # source Telegram func library
 # shellcheck source=share/telegram.lib.sh
 source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
+readonly API="https://api.telegram.org/bot${BOT_TOKEN}"
 
 # Track bot messages so we can delete old output/menu and keep only the latest.
 # (Single admin chat assumed.)

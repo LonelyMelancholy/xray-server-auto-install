@@ -483,10 +483,10 @@ install_xray_dir() {
     # create TR_DB file, $XRAY_CONFIG_GROUP can read, write, but not get upper permission to file
     touch "/usr/local/etc/xray/TR_DB_M" || return 1
     chmod 660 "/usr/local/etc/xray/TR_DB_M" || return 1
-    chown root:${XRAY_CONFIG_GROUP} "/var/log/xray/TR_DB_M" || return 1
+    chown root:${XRAY_CONFIG_GROUP} "/usr/local/etc/xray/TR_DB_M" || return 1
     touch "/usr/local/etc/xray/TR_DB_Y" || return 1
     chmod 660 "/usr/local/etc/xray/TR_DB_Y" || return 1
-    chown root:${XRAY_CONFIG_GROUP} "/var/log/xray/TR_DB_Y" || return 1
+    chown root:${XRAY_CONFIG_GROUP} "/usr/local/etc/xray/TR_DB_Y" || return 1
     #reset TR_DB
     echo > /usr/local/etc/xray/TR_DB_M
     echo > /usr/local/etc/xray/TR_DB_Y

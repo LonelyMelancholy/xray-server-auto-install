@@ -6,7 +6,7 @@
 
 # main variables
 readonly DATE="$(date '+%F')"
-DATE_START=$(date +%Y-%m-%d %H:%M:%S)
+DATE_START=$(date '+%Y-%m-%d %H:%M:%S')
 readonly LOCK_FILE="/run/lock/xray_update.lock"
 readonly ASSET_DIR="/usr/local/share/xray"
 readonly XRAY_DIR="/usr/local/bin"
@@ -82,7 +82,7 @@ run_lock_retry_check "tr_db"
 run_lock_retry_check "uri_db"
 
 # source Telegram func library
-source "/usr/local/lib/service/telegram.lib" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib', exit" >&2; exit 1; }
+source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib', exit" >&2; exit 1; }
 
 # cleanup old backup and log
 cleanup_old() {
@@ -128,10 +128,11 @@ _dl_with_retry() {
     local outfile="$2"
     local label="$3"
     local attempt=1
+    local max_attempts=3
 
     while true; do
         if ! _dl "$url" "$outfile"; then
-            if [ "$attempt" -ge "$MAX_ATTEMPTS" ]; then
+            if [ "$attempt" -ge "$max_attempts" ]; then
                 echo "Error: stage ${STAGE}, failed to download ${label} after ${attempt} attempts, exit" >&2
                 return 1
             fi
