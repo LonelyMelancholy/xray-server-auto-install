@@ -10,7 +10,6 @@ source "/usr/local/lib/service/variables.lib.sh" || { echo "Error: failed to sou
 
 # main variable
 RC=1
-readonly TS="$(date '+%Y%m%d-%H%M%S')"
 TMP_TR_DB_COMMON="$(mktemp)"
 TMP_TR_DB_M_OLD="$(mktemp)"
 TMP_TR_DB_Y_OLD="$(mktemp)"

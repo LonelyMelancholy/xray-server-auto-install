@@ -7,7 +7,14 @@
 #
 # for use permission check - read_check "file", read_and_write_check "file"
 # for output with emoji read_check "file" console, read_and_write_check "file" console
-# no external variable, only local
+# no external variable, only local, only one global array
+
+# array for descriptor lock depending on name
+declare -A LOCK_FDS=(
+  [xray]=7
+  [uri_db]=8
+  [tr_db]=9
+)
 
 read_check() {
     local file="$1"
@@ -42,14 +49,17 @@ run_lock_check() {
     local output_variant="$2"
     local lock_file="/run/lock/${lock}.lock"
     local error
+    local fd="${LOCK_FDS["$lock"]:-0}"
 
     case "$output_variant" in
         console) error="❌ Error" ;;
               *) error="Error" ;;
     esac
 
-    exec 8> "$lock_file" || { echo "$error: cannot open lock file '$lock_file', exit" >&2; exit 1; }
-    flock -n 8 || { echo "$error: another instance working on '$lock', exit" >&2; exit 1; }
+    [[ $fd -eq 0 ]] && { echo "$error: wrong lock file, only xray, uri_db, tr_db, exit" >&2; exit 1; }
+    
+    exec "$fd"> "$lock_file" || { echo "$error: cannot open lock file '$lock_file', exit" >&2; exit 1; }
+    flock -n "$fd" || { echo "$error: another instance working on '$lock', exit" >&2; exit 1; }
 }
 
 run_lock_retry_check() {
@@ -60,15 +70,18 @@ run_lock_retry_check() {
     local wait_sec="$(shuf -i "10-60" -n 1)"
     local attempt
     local max_attempt=3
+    local fd="${LOCK_FDS["$lock"]:-0}"
 
     case "$output_variant" in
         console) error="❌ Error"; info="📢 Info" ;;
               *) error="Error"; info="Info" ;;
     esac
 
-    exec 8> "$lock_file" || { echo "$error: cannot open lock file '$lock_file', exit" >&2; exit 1; }
+    [[ $fd -eq 0 ]] && { echo "$error: wrong lock file, only xray, uri_db, tr_db, exit" >&2; exit 1; }
+
+    exec "$fd"> "$lock_file" || { echo "$error: cannot open lock file '$lock_file', exit" >&2; exit 1; }
     for ((attempt=1; attempt<=max_attempt; attempt++)); do
-        if flock -n 8; then
+        if flock -n "$fd"; then
             break
         fi
         if [ "$attempt" -lt "$max_attempt" ]; then

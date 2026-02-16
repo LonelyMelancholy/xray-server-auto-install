@@ -7,7 +7,6 @@ source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to
 
 # main variables
 readonly USERNAME="$1"
-readonly BLOCK_RULE_TAG="manual-block-users"
 readonly ACTION="$2"
 
 # user check
@@ -69,7 +68,7 @@ get_client_emails() {
 
 # for unblock: find all client only from OUR tagged managed rule, match USERNAME|*
 get_blocked_emails_from_rule() {
-    jq -r --arg tag "$INBOUND_TAG" --arg name "$USERNAME" --arg bot "$BLOCK_OUTBOUND_TAG" --arg brt "$BLOCK_RULE_TAG" '
+    jq -r --arg tag "$INBOUND_TAG" --arg name "$USERNAME" --arg bot "$BLOCK_OUTBOUND_TAG" --arg brt "$MANUAL_BLOCK_TAG" '
         def is_managed_rule:
             (.type == "field")
             and (.outboundTag == $bot)
@@ -90,7 +89,7 @@ jq_apply_users() {
 
   jq --arg tag "$INBOUND_TAG" \
      --arg bot "$BLOCK_OUTBOUND_TAG" \
-     --arg rt "$BLOCK_RULE_TAG" \
+     --arg rt "$MANUAL_BLOCK_TAG" \
      --arg op "$op" \
      --argjson emails "$EMAILS_JSON" \
      "$jq_manage_users" "$XRAY_CONFIG" > "$TMP_XRAY_CONFIG"
@@ -163,7 +162,7 @@ case "$ACTION" in
         # check client only in our tagged rule
         mapfile -t EMAILS < <(get_blocked_emails_from_rule)
         if [[ ${#EMAILS[@]} -gt 0 ]]; then
-            echo "❌ Error: client for block name '$USERNAME' already blocked in ruleTag '$BLOCK_RULE_TAG'"
+            echo "❌ Error: client for block name '$USERNAME' already blocked in ruleTag '$MANUAL_BLOCK_TAG'"
             exit 1
         fi
 
@@ -183,7 +182,7 @@ case "$ACTION" in
         EMAILS_JSON="$(printf '%s\n' "${EMAILS[@]}" | jq -R . | jq -s .)"
 
         # run func for add user in block rule
-        run_and_check "block user ${EMAILS[*]}, ruleTag '$BLOCK_RULE_TAG'" jq_apply_users add
+        run_and_check "block user ${EMAILS[*]}, ruleTag '$MANUAL_BLOCK_TAG'" jq_apply_users add
     ;;
 
     unblock)
@@ -202,12 +201,12 @@ case "$ACTION" in
         # check client only in our tagged rule
         mapfile -t EMAILS < <(get_blocked_emails_from_rule)
         if [[ ${#EMAILS[@]} -gt 1 ]]; then
-            echo "❌ Error: '$USERNAME' to many match in ruleTag '$BLOCK_RULE_TAG', edit config manually, exit"
+            echo "❌ Error: '$USERNAME' to many match in ruleTag '$MANUAL_BLOCK_TAG', edit config manually, exit"
             exit 1
         elif [[ ${#EMAILS[@]} -eq 1 ]]; then
-            echo "✅ Success: found client for unblock name '$USERNAME' in ruleTag '$BLOCK_RULE_TAG'"
+            echo "✅ Success: found client for unblock name '$USERNAME' in ruleTag '$MANUAL_BLOCK_TAG'"
         else
-            echo "❌ Error: not found client for unblock name '$USERNAME' in ruleTag '$BLOCK_RULE_TAG', exit"
+            echo "❌ Error: not found client for unblock name '$USERNAME' in ruleTag '$MANUAL_BLOCK_TAG', exit"
             exit 1
         fi
 
@@ -215,7 +214,7 @@ case "$ACTION" in
         EMAILS_JSON="$(printf '%s\n' "${EMAILS[@]}" | jq -R . | jq -s .)"
         
         # run func for del user from block rule
-        run_and_check "unblock user ${EMAILS[*]}, ruleTag '$BLOCK_RULE_TAG'" jq_apply_users del
+        run_and_check "unblock user ${EMAILS[*]}, ruleTag '$MANUAL_BLOCK_TAG'" jq_apply_users del
     ;;
 
     *)

@@ -2,6 +2,10 @@
 # shellcheck disable=SC2034
 # source this library for common variable across scripts
 
+# dates
+readonly TODAY=$(date '+%F')
+readonly TS=$(date '+%Y%m%d_%H%M%S')
+
 # export path just in case
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
 export PATH
@@ -17,12 +21,15 @@ readonly TR_DB_Y="/usr/local/etc/xray/TR_DB_Y"
 readonly URI_DB="/usr/local/etc/xray/URI_DB"
 
 # path for backup
-readonly XRAY_CONFIG_BACKUP="${XRAY_CONFIG}.bak.$(date '+%Y%m%d_%H%M%S')"
-readonly URI_DB_BACKUP="${URI_DB}.bak.$(date '+%Y%m%d_%H%M%S')"
-readonly TR_DB_M_BACKUP="${TR_DB_M}.bak.$(date '+%Y%m%d_%H%M%S')"
+readonly XRAY_CONFIG_BACKUP="${XRAY_CONFIG}.bak.${TS}"
+readonly URI_DB_BACKUP="${URI_DB}.bak.${TS}"
+readonly TR_DB_M_BACKUP="${TR_DB_M}.bak.${TS}"
 
 # inbound tag for users
 readonly INBOUND_TAG="Vless"
 
 # blocked outbound tag
 readonly BLOCK_OUTBOUND_TAG="blocked"
+readonly MANUAL_BLOCK_TAG="manual-block-users"
+readonly EXPIRED_BLOCK_TAG="autoblock-expired-users"
+readonly TRAFFIC_BLOCK_TAG="autoblock-traffic-users"

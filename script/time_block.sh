@@ -9,8 +9,6 @@
 source "/usr/local/lib/service/variables.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit" >&2; exit 1; }
 
 # main variables
-readonly BLOCK_RULE_TAG="autoblock-expired-users"
-readonly TODAY=$(date '+%F')
 readonly TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
 RC="1"
 LOCK_FILE="/run/lock/time_block.lock"
@@ -108,7 +106,7 @@ make_new_tmp_config() {
     jq \
     --arg inbound "$INBOUND_TAG" \
     --arg out "blocked" \
-    --arg ruleTag "$BLOCK_RULE_TAG" \
+    --arg ruleTag "$EXPIRED_BLOCK_TAG" \
     --argjson users "$EXPIRED_USERS_JSON" '
         .routing = (.routing // {})
         | .routing.domainStrategy = (.routing.domainStrategy // "IPOnDemand")
@@ -211,11 +209,11 @@ run_and_check "backup old xray config $XRAY_CONFIG_BACKUP" cp -a "$XRAY_CONFIG" 
 run_and_check "install new xray config" install_new_conf
 
 # if not found exp email but we have blocked email, config changed make_new_tmp_config func, blocked email deleted
-# if email empty, rule $BLOCK_RULE_TAG deleted
+# if email empty, rule $EXPIRED_BLOCK_TAG deleted
 if (( ${#EXPIRED_EMAILS_FULL[@]} == 0 )); then
-    echo "Success: expired users not found, cleanup old ruleTag '$BLOCK_RULE_TAG' today=$TODAY, expired=${#EXPIRED_EMAILS_FULL[@]}"
+    echo "Success: expired users not found, cleanup old ruleTag '$EXPIRED_BLOCK_TAG' today=$TODAY, expired=${#EXPIRED_EMAILS_FULL[@]}"
 else
-    echo "Success: expired users found and blocked, ruleTag '$BLOCK_RULE_TAG', today=$TODAY, expired=${#EXPIRED_EMAILS_FULL[@]}"
+    echo "Success: expired users found and blocked, ruleTag '$EXPIRED_BLOCK_TAG', today=$TODAY, expired=${#EXPIRED_EMAILS_FULL[@]}"
 fi
 
 # restart xray and make xray status message

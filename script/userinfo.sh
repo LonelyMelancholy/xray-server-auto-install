@@ -6,10 +6,6 @@
 source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit"; exit 1; }
 
 # main variables
-# tags used for status detection
-readonly MANUAL_BLOCK_TAG="manual-block-users"
-readonly AUTO_BLOCK_EXPIRED_TAG="autoblock-expired-users"
-readonly AUTO_BLOCK_TRAFFIC_TAG="autoblock-traffic-users"
 USERNAME="$1"
 # reset user status and count device
 USER_ONLINE_STATUS="offline"
@@ -108,8 +104,8 @@ STATUS="$(
     jq -r \
         --arg u "$FULL_EMAIL" \
         --arg mb "$MANUAL_BLOCK_TAG" \
-        --arg ae "$AUTO_BLOCK_EXPIRED_TAG" \
-        --arg at "$AUTO_BLOCK_TRAFFIC_TAG" '
+        --arg ae "$EXPIRED_BLOCK_TAG" \
+        --arg at "$TRAFFIC_BLOCK_TAG" '
             def has($tag):
                 any(.routing.rules[]?;
                 (.ruleTag? == $tag) and any(.user[]?; . == $u)

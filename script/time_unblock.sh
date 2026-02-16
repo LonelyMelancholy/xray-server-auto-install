@@ -8,10 +8,6 @@ source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to
 # main variables
 TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
 TMP_URI_DB="$(mktemp)"
-EXPIRED_BLOCK_TAG="autoblock-expired-users"
-TRAFFIC_BLOCK_TAG="autoblock-traffic-users"
-MANUAL_BLOCK_TAG="manual-block-users"
-TODAY="$(date +%F)"
 USERNAME="$1"
 DAYS="$2"
 

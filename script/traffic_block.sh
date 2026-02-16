@@ -10,7 +10,6 @@ source "/usr/local/lib/service/variables.lib.sh" || { echo "Error: failed to sou
 
 # main variables
 RC=1
-readonly BLOCK_RULE_TAG="autoblock-traffic-users"
 readonly MAX_TR=$((3000 * 1024 * 1024 * 1024)) # 3TB limits
 readonly LOCK_FILE="/run/lock/traffic_block.lock"
 declare -A TOTAL_BYTES_BY_USERS
@@ -109,7 +108,7 @@ make_new_tmp_config() {
     jq \
     --arg inbound "$INBOUND_TAG" \
     --arg out "blocked" \
-    --arg ruleTag "$BLOCK_RULE_TAG" \
+    --arg ruleTag "$TRAFFIC_BLOCK_TAG" \
     --argjson users "$TRAFFIC_END_USERS_JSON" '
         .routing = (.routing // {})
         | .routing.domainStrategy = (.routing.domainStrategy // "IPOnDemand")
@@ -255,11 +254,11 @@ run_and_check "backup old xray config $XRAY_CONFIG_BACKUP" cp -a "$XRAY_CONFIG" 
 run_and_check "install new xray config" install_new_conf
 
 # if not found exceeded the limit email but we have blocked email, config changed make_new_tmp_config func, blocked email deleted
-# if email empty, rule $BLOCK_RULE_TAG deleted
+# if email empty, rule $TRAFFIC_BLOCK_TAG deleted
 if (( ${#FULL_EMAILS_TO_BLOCK[@]} == 0 )); then
-    echo "Success: exceeded the limit not found, cleanup old ruleTag '$BLOCK_RULE_TAG'"
+    echo "Success: exceeded the limit not found, cleanup old ruleTag '$TRAFFIC_BLOCK_TAG'"
 else
-    echo "Success: exceeded the limit found and blocked, ruleTag '$BLOCK_RULE_TAG', exceeded the limit=${#FULL_EMAILS_TO_BLOCK[@]}"
+    echo "Success: exceeded the limit found and blocked, ruleTag '$TRAFFIC_BLOCK_TAG', exceeded the limit=${#FULL_EMAILS_TO_BLOCK[@]}"
 fi
 
 # restart xray and make xray status message

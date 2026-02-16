@@ -5,7 +5,6 @@
 # exit codes work to tell Cron about success
 
 # main variables
-readonly TODAY="$(date +%F)"
 readonly LOCK_FILE="/run/lock/unattended_upgrade.lock"
 RC="1"
 REBOOT="0"

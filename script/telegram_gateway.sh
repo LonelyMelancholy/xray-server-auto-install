@@ -3,10 +3,10 @@ set -u
 
 # main variables
 readonly LOCK_FILE="/run/lock/telegram_gateway.lock"
-RC_M=1
 readonly TIMEOUT=50
-readonly OFFSET=0
 readonly HOSTNAME="$(hostname)"
+RC_M=1
+OFFSET=0
 
 # export path just in case
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"

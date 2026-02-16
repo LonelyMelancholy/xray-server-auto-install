@@ -7,9 +7,6 @@ source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to
 
 # main variables
 readonly OPTION="$1"
-readonly MANUAL_BLOCK_TAG="manual-block-users"
-readonly EXPIRED_BLOCK_TAG="autoblock-expired-users"
-readonly TRAFFIC_BLOCK_TAG="autoblock-traffic-users"
 declare -A FULL_USERNAMES=()
 declare -A DAYS_LEFT_BY_USER=()
 declare -A STATUS_BY_USER=()

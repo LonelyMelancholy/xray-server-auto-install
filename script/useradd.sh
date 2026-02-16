@@ -9,7 +9,6 @@ source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to
 readonly DEFAULT_FLOW="xtls-rprx-vision"
 readonly USERNAME="$1"
 DAYS="$2"
-readonly CREATED="$(date +%F)"
 
 # argument check
 if [[ "$#" -ne 2 || "$USERNAME" == "--help" ]]; then
@@ -134,12 +133,12 @@ fi
 # calculate exp and created date
 # write variable
 if [[ "$DAYS" == "0" ]]; then
-    XRAY_EMAIL="${USERNAME}|created=${CREATED}|days=infinity|exp=never"
+    XRAY_EMAIL="${USERNAME}|created=${TODAY}|days=infinity|exp=never"
     DAYS="infinity"
     EXP="never"
 else
-    EXP="$(date -d "$CREATED + $DAYS days" +%F)"
-    XRAY_EMAIL="${USERNAME}|created=${CREATED}|days=${DAYS}|exp=${EXP}"
+    EXP="$(date -d "$TODAY + $DAYS days" +%F)"
+    XRAY_EMAIL="${USERNAME}|created=${TODAY}|days=${DAYS}|exp=${EXP}"
 fi
 
 # check inbound
@@ -231,5 +230,5 @@ run_and_check "add user in URI_DB" install_new_uri_db
 
 # print result
 echo "✅ Success: name $USERNAME, added"
-echo "✅ Success: created: $CREATED, days: $DAYS, expiration: $EXP"
+echo "✅ Success: created: $TODAY, days: $DAYS, expiration: $EXP"
 echo "name: $USERNAME, vless link: $VLESS_URI"

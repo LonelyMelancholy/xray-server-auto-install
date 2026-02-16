@@ -927,7 +927,7 @@ install_scr_xray_backup() {
     install -m 755 -o root -g root "$XRAY_BACKUP_SCRIPT_SOURCE" "$XRAY_BACKUP_SCRIPT_DEST" || return 1
     tee /etc/cron.d/xray_backup > /dev/null <<'EOF' || return 1
 SHELL=/bin/bash
-0 23 28-31 * * telegram_gateway [ "$(date -d tomorrow +\%d)" = "01" ] && "/usr/local/bin/service/xray_backup.sh"
+0 23 28-31 * * telegram_gateway [ "$(date -d tomorrow +\%d)" = "01" ] && "/usr/local/bin/service/xray_backup.sh 0"
 EOF
     chmod 644 "/etc/cron.d/xray_backup" || return 1
 }

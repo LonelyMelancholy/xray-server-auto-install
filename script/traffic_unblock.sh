@@ -6,8 +6,6 @@ source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to
 
 # main variable
 USERNAME="$1"
-TS=$(date +%Y%m%d_%H%M%S)
-readonly BLOCK_RULE_TAG="autoblock-traffic-users"
 
 # user check
 [[ "$(whoami)" != "telegram_gateway" ]] && { echo "❌ Error: you are not the telegram_gateway user, exit"; exit 1; }
@@ -76,7 +74,7 @@ get_client_emails() {
 
 # for unblock: find all client only from OUR tagged managed rule, match USERNAME|*
 get_blocked_emails_from_rule() {
-    jq -r --arg tag "$INBOUND_TAG" --arg name "$USERNAME" --arg bot "$BLOCK_OUTBOUND_TAG" --arg brt "$BLOCK_RULE_TAG" '
+    jq -r --arg tag "$INBOUND_TAG" --arg name "$USERNAME" --arg bot "$BLOCK_OUTBOUND_TAG" --arg brt "$TRAFFIC_BLOCK_TAG" '
         def is_managed_rule:
             (.type == "field")
             and (.outboundTag == $bot)
@@ -95,7 +93,7 @@ get_blocked_emails_from_rule() {
 unblock_emails_json() {
     jq --arg tag "$INBOUND_TAG" \
         --arg bot "$BLOCK_OUTBOUND_TAG" \
-        --arg rt "$BLOCK_RULE_TAG" \
+        --arg rt "$TRAFFIC_BLOCK_TAG" \
         --argjson emails "$EMAILS_JSON" '
     .outbounds = (.outbounds // []) |
     if any(.outbounds[]?; .tag == $bot) then .
@@ -157,12 +155,12 @@ fi
 # check client only in our tagged rule
 mapfile -t EMAILS < <(get_blocked_emails_from_rule)
 if [[ ${#EMAILS[@]} -gt 1 ]]; then
-    echo "❌ Error: '$USERNAME' to many match in ruleTag '$BLOCK_RULE_TAG', edit config manually, exit"
+    echo "❌ Error: '$USERNAME' to many match in ruleTag '$TRAFFIC_BLOCK_TAG', edit config manually, exit"
     exit 1
 elif [[ ${#EMAILS[@]} -eq 1 ]]; then
-    echo "✅ Success: found client for unblock name '$USERNAME' in ruleTag '$BLOCK_RULE_TAG'"
+    echo "✅ Success: found client for unblock name '$USERNAME' in ruleTag '$TRAFFIC_BLOCK_TAG'"
 else
-    echo "❌ Error: not found client for unblock name '$USERNAME' in ruleTag '$BLOCK_RULE_TAG', exit"
+    echo "❌ Error: not found client for unblock name '$USERNAME' in ruleTag '$TRAFFIC_BLOCK_TAG', exit"
     exit 1
 fi
 
@@ -170,7 +168,7 @@ fi
 EMAILS_JSON="$(printf '%s\n' "${EMAILS[@]}" | jq -R . | jq -s .)"
 
 # run func for add user in block rule
-run_and_check "block user ${EMAILS[*]}, ruleTag '$BLOCK_RULE_TAG'" unblock_emails_json
+run_and_check "block user ${EMAILS[*]}, ruleTag '$TRAFFIC_BLOCK_TAG'" unblock_emails_json
 
 # checking new config
 run_and_check "new xray config checking" xray run -test -config "$TMP_XRAY_CONFIG"
