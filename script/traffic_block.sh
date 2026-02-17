@@ -10,7 +10,6 @@ source "/usr/local/lib/service/variables.lib.sh" || { echo "Error: failed to sou
 
 # main variables
 RC=1
-readonly MAX_TR=$((3000 * 1024 * 1024 * 1024)) # 3TB limits
 readonly LOCK_FILE="/run/lock/traffic_block.lock"
 declare -A TOTAL_BYTES_BY_USERS
 declare -a FULL_EMAILS=()
@@ -30,7 +29,7 @@ echo "traffic block started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 exec 99> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
 flock -n 99 || { echo "Error: another instance is running, exit" >&2; exit 1; }
 
-TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
 
 # exit logging message function
 # shellcheck disable=SC2329
@@ -189,8 +188,8 @@ while IFS=$'\t' read -r name value; do
     user_full="${user_full%%>>>traffic*}"
     # get username|
     username="${user_full%%|*}"
-    # add value to array
-    TOTAL_BYTES_BY_USERS["$username"]=$(( ${TOTAL_BYTES_BY_USERS["$username"]} + value ))
+    # add value to array, if array value empty set to 0 and add value
+    TOTAL_BYTES_BY_USERS["$username"]=$(( ${TOTAL_BYTES_BY_USERS["$username"]:-0} + value ))
 done <<< "$USERS_TRAFFIC_TOTAL"
 
 # check traffic in array, if empty value - exit
@@ -302,7 +301,7 @@ else
 fi
 
 # add log section
-MESSAGE+=$'\n'"💾 <b>Time block log:</b> journalctl -t time_block"
+MESSAGE+=$'\n'"💾 <b>Time block log:</b> journalctl -t traffic_block"
 
 # logging message
 echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"

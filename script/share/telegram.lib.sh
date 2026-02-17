@@ -21,6 +21,9 @@ source "$ENV_FILE" || { echo "Error: failed to source '$ENV_FILE', exit" >&2; ex
 # check group id from secret file
 [[ -z "$GROUP_ID" ]] && { echo "Error: Telegram group ID is missing in '$ENV_FILE', exit" >&2; exit 1; }
 
+# check group id from secret file
+[[ -z "$CHAT_ID" ]] && { echo "Error: Telegram chat ID is missing in '$ENV_FILE', exit" >&2; exit 1; }
+
 # pure Telegram message function with checking the sending status
 _tg_m() {
     local response

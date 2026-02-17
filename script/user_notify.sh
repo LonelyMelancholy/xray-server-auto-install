@@ -65,6 +65,10 @@ sum_users() {
      ' <<<"$lines" | LC_ALL=C sort
 }
 
+# function for statistic reset in json file
+# shellcheck disable=SC2329
+reset_stat_file() { printf '{"stat":[]}\n' > "$1"; }
+
 # formatting bytes function
 byte_to_human(){ numfmt --to=iec --suffix=B "$1"; }
 
@@ -103,16 +107,16 @@ RESET_ARG_Y="0"
 
 # reset traffic 1 day of month
 if [[ $RESET_ARG_M == "1" ]]; then
-    echo > "$TR_DB_M"
+    reset_stat_file "$TR_DB_M"
 fi
 
 # reset traffic 1 day of year
 if [[ $RESET_ARG_Y == "1" ]]; then
-    echo > "$TR_DB_Y"
+    reset_stat_file "$TR_DB_Y"
 fi
 
 # parse config for full users email
-readonly USERS_EMAILS_FULL="$(jq -r --arg tag "$INBOUND_TAG" '.inbounds[]? | select(.tag? == $tag) | .settings? | .clients?[]? | .email? // empty' "$XRAY_CONFIG")"
+readonly USERS_EMAILS_FULL="$(jq -r --arg tag "$INBOUND_TAG" '.inbounds[]? | select(.tag? == $tag) | .settings? | .clients[]? | .email? // empty' "$XRAY_CONFIG")"
 
 # parse and print email - exp days
 USERS_WITH_DAYS=""

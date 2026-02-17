@@ -131,7 +131,7 @@ fi
 # sudo without password
 ensure_nopasswd_sudo_for_group() {
     local sudoers_file="/etc/sudoers.d/90-${SECOND_USER}-nopasswd"
-    local line="%${SECOND_USER} ALL=(ALL:ALL) NOPASSWD: ALL"
+    local line="${SECOND_USER} ALL=(ALL:ALL) NOPASSWD: ALL"
     local tmp
 
     tmp="$(mktemp)" || return 1
@@ -168,7 +168,7 @@ fi
 # creating a new sshd configuration
 install_sshd() {
     install -m 644 -o root -g root "$SSH_CONF_SOURCE" "$SSH_CONF_DEST" || return 1
-    tee /etc/ssh/sshd_config > /dev/null <<EOF || return 1
+    tee /etc/ssh/sshd_config > /dev/null <<'EOF' || return 1
 Include /etc/ssh/sshd_config.d/*.conf
 EOF
     sed -i "s/{PORT}/$SSH_PORT/g" "$SSH_CONF_DEST" || return 1
@@ -226,7 +226,7 @@ install_scr_ssh_pam() {
 
 # ssh-pam-telegram-notify
 # Notify for success ssh login and logout via telegram bot
-session optional pam_exec.so seteuid $SSH_PAM_NOTIFY_SCRIPT_DEST
+session optional pam_exec.so $SSH_PAM_NOTIFY_SCRIPT_DEST
 EOF
     fi
 }
@@ -346,9 +346,9 @@ install_with_retry "install nginx and certbot package" apt-get install -y nginx 
 
 conf_nginx() {
     # delete default site
-    rm -rf "/var/www/*" || return 1
-    rm -rf "/etc/nginx/sites-available/*" || return 1
-    rm -rf "/etc/nginx/sites-enabled/*" || return 1
+    rm -rf /var/www/* || return 1
+    rm -rf /etc/nginx/sites-available/* || return 1
+    rm -rf /etc/nginx/sites-enabled/* || return 1
 
     mkdir -p "/var/www/${XRAY_HOSTNAME}/html" || return 1
 
@@ -483,10 +483,10 @@ install_xray_dir() {
     # create TR_DB file, $XRAY_CONFIG_GROUP can read, write, but not get upper permission to file
     touch "/usr/local/etc/xray/TR_DB_M" || return 1
     chmod 660 "/usr/local/etc/xray/TR_DB_M" || return 1
-    chown root:${XRAY_CONFIG_GROUP} "/usr/local/etc/xray/TR_DB_M" || return 1
+    chown root:telegram_gateway "/usr/local/etc/xray/TR_DB_M" || return 1
     touch "/usr/local/etc/xray/TR_DB_Y" || return 1
     chmod 660 "/usr/local/etc/xray/TR_DB_Y" || return 1
-    chown root:${XRAY_CONFIG_GROUP} "/usr/local/etc/xray/TR_DB_Y" || return 1
+    chown root:telegram_gateway "/usr/local/etc/xray/TR_DB_Y" || return 1
     #reset TR_DB
     echo > /usr/local/etc/xray/TR_DB_M
     echo > /usr/local/etc/xray/TR_DB_Y
@@ -494,7 +494,7 @@ install_xray_dir() {
     # create URI_DB, $XRAY_CONFIG_GROUP can read, write, but not get upper permission to file
     touch "$URI_DB"
     chmod 660 "$URI_DB"
-    chown root:${XRAY_CONFIG_GROUP} "$URI_DB"
+    chown root:telegram_gateway "$URI_DB"
     #reset URI_DB
     echo > "$URI_DB"
 
@@ -645,9 +645,9 @@ download_and_verify "$XRAY_URL" "$TMP_DIR/xray-linux-64.zip" "xray"
 download_and_verify "$GEOIP_URL" "$TMP_DIR/geoip.dat" "geoip.dat"
 download_and_verify "$GEOSITE_URL" "$TMP_DIR/geosite.dat" "geosite.dat"
 
-run_and_check "install xray binary" install -m 755 -o root -g root $UNPACK_DIR/xray /usr/local/bin/xray
-run_and_check "install geoip.dat" install -m 644 -o root -g root $TMP_DIR/geoip.dat /usr/local/share/xray/geoip.dat
-run_and_check "install geosite.dat" install -m 644 -o root -g root $TMP_DIR/geosite.dat /usr/local/share/xray/geosite.dat
+run_and_check "install xray binary" install -m 755 -o root -g root "$UNPACK_DIR/xray" "/usr/local/bin/xray"
+run_and_check "install geoip.dat" install -m 644 -o root -g root "$TMP_DIR/geoip.dat" "/usr/local/share/xray/geoip.dat"
+run_and_check "install geosite.dat" install -m 644 -o root -g root "$TMP_DIR/geosite.dat" "/usr/local/share/xray/geosite.dat"
 
 # configure xray service
 XRAY_CONFIG_SRC="cfg/config.json"
@@ -723,7 +723,7 @@ conf_json_xray() {
     shortId="$(openssl rand -hex 8)"
 
     # make tmp file
-    TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
+    TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || return 1
     trap 'rm -rf "$TMP_XRAY_CONFIG" "$TMP_DIR"' EXIT
 
     # update json
@@ -839,7 +839,7 @@ uri_encode() { printf '%s' "$1" | jq -sRr @uri; }
 # get link
 readonly VLESS_URI="vless://${UUID}@${SERVER_HOST}:${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
 security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
-$(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$USERNAME")"
+$(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$XRAY_NAME")"
 
 # print result to URI_DB
 tee "$URI_DB" > /dev/null <<EOF
@@ -870,7 +870,7 @@ install_scr_xray_stat() {
     install -m 755 -o root -g root "$XRAY_STAT_SCRIPT_SRC" "$XRAY_STAT_SCRIPT_DEST" || return 1
     tee /etc/cron.d/xray_stat > /dev/null <<EOF || return 1
 SHELL=/bin/bash
-0 * * * * telegram_gateway "$XRAY_STAT_SCRIPT_DEST"
+*/10 * * * * telegram_gateway "$XRAY_STAT_SCRIPT_DEST"
 EOF
     chmod 644 "/etc/cron.d/xray_stat" || return 1
 }
@@ -927,7 +927,7 @@ install_scr_xray_backup() {
     install -m 755 -o root -g root "$XRAY_BACKUP_SCRIPT_SOURCE" "$XRAY_BACKUP_SCRIPT_DEST" || return 1
     tee /etc/cron.d/xray_backup > /dev/null <<'EOF' || return 1
 SHELL=/bin/bash
-0 23 28-31 * * telegram_gateway [ "$(date -d tomorrow +\%d)" = "01" ] && "/usr/local/bin/service/xray_backup.sh 0"
+0 23 28-31 * * telegram_gateway [ "$(date -d tomorrow +\%d)" = "01" ] && /usr/local/bin/service/xray_backup.sh 0
 EOF
     chmod 644 "/etc/cron.d/xray_backup" || return 1
 }

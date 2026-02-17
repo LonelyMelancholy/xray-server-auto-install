@@ -77,7 +77,7 @@ fmt_bytes() { numfmt --to=iec --suffix=B "$1" 2>/dev/null; }
 collect_inbound_users_array() {
     local username full_username full_username_list duplicate_number=0
 
-    full_username_list="$(jq -r --arg tag "$INBOUND_TAG" '.inbounds[]? | select(.tag? == $tag) | .settings? | .clients?[]? | .email? // empty' "$XRAY_CONFIG" 2>/dev/null)"
+    full_username_list="$(jq -r --arg tag "$INBOUND_TAG" '.inbounds[]? | select(.tag? == $tag) | .settings? | .clients[]? | .email? // empty' "$XRAY_CONFIG" 2>/dev/null)"
 
     while IFS= read -r full_username; do
         # cut username| and check if empty, continue to next user

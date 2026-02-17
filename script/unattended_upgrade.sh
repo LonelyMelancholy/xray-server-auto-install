@@ -41,6 +41,7 @@ exec 99> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit
 flock -n 99 || { echo "Error: another instance is running, exit" >&2; exit 1; }
 
 # source Telegram func library
+# shellcheck source=share/telegram.lib.sh
 source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
 
 # function for update and upgrade with retry

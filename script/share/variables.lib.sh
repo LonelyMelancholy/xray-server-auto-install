@@ -6,6 +6,9 @@
 readonly TODAY=$(date '+%F')
 readonly TS=$(date '+%Y%m%d_%H%M%S')
 
+# common traffic limit per user ((3000 * 1024 * 1024 * 1024)) - 3TB limits
+readonly MAX_TR=$((3000 * 1024 * 1024 * 1024))
+
 # export path just in case
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
 export PATH

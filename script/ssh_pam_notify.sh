@@ -53,6 +53,7 @@ on_exit() {
 trap 'on_exit' EXIT
 
 # source Telegram func library
+# shellcheck source=share/telegram.lib.sh
 source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
 
 # main logic start here

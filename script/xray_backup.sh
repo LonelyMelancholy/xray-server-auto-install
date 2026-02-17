@@ -37,7 +37,7 @@ if [[ "$ONLY_ARCHIVE" != 1 && "$ONLY_ARCHIVE" != 0 ]]; then
 fi
 
 # make tmp directory
-TMPDIR="$(mktemp -d)"
+TMPDIR="$(mktemp -d)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
 
 # exit logging message function
 # shellcheck disable=SC2329

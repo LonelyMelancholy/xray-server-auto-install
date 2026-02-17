@@ -39,6 +39,7 @@ flock -n 99 || { echo "Error: another instance is running, exit" >&2; exit 1; }
 # source Telegram func library
 # shellcheck source=share/telegram.lib.sh
 source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
+
 readonly API="https://api.telegram.org/bot${BOT_TOKEN}"
 
 # Track bot messages so we can delete old output/menu and keep only the latest.
@@ -192,10 +193,9 @@ run_and_send_output() {
   local chat_id="$1"; shift
 
   local tmp
-  tmp="$(mktemp)"
+  tmp="$(mktemp)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
   # run, capture stdout+stderr
     "$@" >"$tmp" 2>&1
-    local rc=$?
 
     local cmd_str
     cmd_str="$(printf "%q " "$@")"
@@ -374,7 +374,7 @@ handle_message() {
     norm="${norm%"${norm##*[! ]}"}"
 
     case "$STATE" in
-        WAIT_BLOCK|WAIT_UNBLOCK|WAIT_DELETE|WAIT_TR)
+        WAIT_BLOCK|WAIT_UNBLOCK|WAIT_DELETE|WAIT_SHOW|WAIT_TR)
             local username action
             username="$norm"
 

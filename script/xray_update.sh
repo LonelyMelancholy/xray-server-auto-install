@@ -66,6 +66,10 @@ exit_cleanup() {
     fi
 }
 
+# source Telegram func library
+# shellcheck source=share/telegram.lib.sh
+source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
+
 # error exit log message for end log
 trap 'on_exit; exit_cleanup;' EXIT
 
@@ -74,15 +78,13 @@ exec 99> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit
 flock -n 99 || { echo "Error: another instance working on backup, exit" >&2; exit 1; }
 
 # source library for run_lock and file permission cheking
+# shellcheck source=share/run_lock.lib.sh
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit" >&2; exit 1; }
 
 # lock check
 run_lock_retry_check "xray"
 run_lock_retry_check "tr_db"
 run_lock_retry_check "uri_db"
-
-# source Telegram func library
-source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib', exit" >&2; exit 1; }
 
 # cleanup old backup and log
 cleanup_old() {

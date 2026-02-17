@@ -30,8 +30,8 @@ flock -n 99 || { echo "❌ Error: another instance is running, exit"; exit 1; }
 # check os version
 [[ -r /etc/os-release ]] || { echo "❌ Error: '/etc/os-release' missing or you do not have read permissions, exit"; exit 1; }
 source /etc/os-release
-if [[ "$ID" != "ubuntu" ]] || [[ "${VERSION_ID%%.*}" -lt 20 ]]; then
-    echo "❌ Error: this script requires Ubuntu 20.04 or higher, exit"
+if [[ "$ID" != "ubuntu" ]] || [[ "${VERSION_ID%%.*}" -lt 22 ]]; then
+    echo "❌ Error: this script requires Ubuntu 22.04 or higher, exit"
     exit 1
 fi
 

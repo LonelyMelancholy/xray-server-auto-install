@@ -6,15 +6,14 @@
 source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit"; exit 1; }
 
 # main variables
-TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
-TMP_URI_DB="$(mktemp)"
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
 USERNAME="$1"
 DAYS="$2"
 
 # exit rm tmp file function
 # shellcheck disable=SC2329
 rm_tmp_config() {
-    if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null && rm -f "$TMP_URI_DB" 2> /dev/null; then
+    if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null; then
         echo "✅ Success: delete tmp config file"
     else
         echo "❌ Error: delete tmp config file"

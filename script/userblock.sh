@@ -33,7 +33,7 @@ if ! [[ $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
 fi
 
 # make tmp file
-TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
 
 # exit rm tmp file function
 # shellcheck disable=SC2329

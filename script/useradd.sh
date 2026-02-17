@@ -42,7 +42,7 @@ read_and_write_check "$XRAY_CONFIG" "console"
 read_and_write_check "$URI_DB" "console"
 
 # make tmp file
-TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
 
 # exit rm tmp file function
 # shellcheck disable=SC2329

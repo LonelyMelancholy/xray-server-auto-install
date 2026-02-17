@@ -23,8 +23,8 @@ if [[ ! $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
 fi
 
 # make tmp config and tr_db
-TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
-TMP_TR_DB_M="$(mktemp)"
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
+TMP_TR_DB_M="$(mktemp)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
 
 # exit rm tmp file function
 # shellcheck disable=SC2329
@@ -62,7 +62,7 @@ run_and_check() {
     fi
 }
 
-# for block: find client emails in inbound Vless, match USERNAME|*
+# for unblock: find client emails in inbound Vless, match USERNAME|*
 get_client_emails() {
     jq -r --arg tag "$INBOUND_TAG" --arg name "$USERNAME" '
         .inbounds[]? | select(.tag == $tag)
@@ -167,8 +167,8 @@ fi
 # convert email to json
 EMAILS_JSON="$(printf '%s\n' "${EMAILS[@]}" | jq -R . | jq -s .)"
 
-# run func for add user in block rule
-run_and_check "block user ${EMAILS[*]}, ruleTag '$TRAFFIC_BLOCK_TAG'" unblock_emails_json
+# run func for remove user in block rule
+run_and_check "unblock user ${EMAILS[*]}, ruleTag '$TRAFFIC_BLOCK_TAG'" unblock_emails_json
 
 # checking new config
 run_and_check "new xray config checking" xray run -test -config "$TMP_XRAY_CONFIG"
@@ -187,7 +187,7 @@ echo "✅ Success: apply for '$USERNAME' from inbound tag '$INBOUND_TAG'"
 # reset user traffic to 0 in tmp file
 run_and_check "reset user traffic in TR_DB_M for '$USERNAME'" reset_user_traffic "$USERNAME"
 
-if jq -e empty "$TMP_TR_DB_M" &> /dev/null; then
+if jq empty "$TMP_TR_DB_M" &> /dev/null; then
     echo "Success: reset traffic in TR_DB_M for username '${USERNAME}'"
 else
     cp -f "$TMP_TR_DB_M" "${TR_DB_M}.bad_new_${TS}.json" 

@@ -9,7 +9,7 @@
 source "/usr/local/lib/service/variables.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit" >&2; exit 1; }
 
 # main variables
-readonly TMP_XRAY_CONFIG="$(mktemp --suffix=.json)"
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
 RC="1"
 LOCK_FILE="/run/lock/time_block.lock"
 
