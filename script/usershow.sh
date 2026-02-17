@@ -274,7 +274,7 @@ case "$OPTION" in
     ;;
 
     all)
-        run_and_check "print final table" print_all_table
+        print_all_table
         exit 0
     ;;
 

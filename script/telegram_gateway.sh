@@ -261,7 +261,7 @@ handle_callback() {
             show_menu "$chat_id"
             ;;
         SEND_BACKUP)
-            run_and_send_output "$chat_id" /usr/local/bin/service/xray_backup.sh "1"
+            run_and_send_output "$chat_id" /usr/local/bin/service/xray_backup.sh 1
             show_menu "$chat_id"
             ;;
         SHOW_ALL)

@@ -96,11 +96,11 @@ else
 fi
 
 # create group for access config files
-XRAY_CONFIG_GROUP="xray_config_group"
-if ! getent group "$XRAY_CONFIG_GROUP" &> /dev/null; then
-    run_and_check "creating '$XRAY_CONFIG_GROUP' group" addgroup "$XRAY_CONFIG_GROUP"
+XRAY_READ_WRITE_GROUP="xray_read_write_group"
+if ! getent group "$XRAY_READ_WRITE_GROUP" &> /dev/null; then
+    run_and_check "creating '$XRAY_READ_WRITE_GROUP' group" addgroup "$XRAY_READ_WRITE_GROUP"
 else 
-    echo "✅ Success: group $XRAY_CONFIG_GROUP already exists"
+    echo "✅ Success: group $XRAY_READ_WRITE_GROUP already exists"
 fi
 
 # create user and add in ssh and sudo group
@@ -355,6 +355,7 @@ conf_nginx() {
     tee "/etc/nginx/sites-available/${XRAY_HOSTNAME}.conf" >/dev/null <<'EOF' || return 1
 server {
     listen 80;
+    listen [::]:80;
     server_name __HOST__;
 
     root /var/www/__HOST__/html;
@@ -369,7 +370,7 @@ server {
     }
 
     location / {
-        return 301 https://$host$request_uri;
+        return 301 https://__HOST__$request_uri;
     }
 
 }
@@ -406,7 +407,7 @@ server {
     error_log  /var/log/nginx/__HOST__.8443.error.log;
 
     location / {
-        return 403;
+        return 403 https://__HOST__$request_uri;
     }
 
     set_real_ip_from 127.0.0.1;
@@ -451,53 +452,47 @@ else
     echo "✅ Success: user 'xray' already exists"
 fi
 
-run_and_check "added xray user to '$XRAY_CONFIG_GROUP' config group" usermod -aG "$XRAY_CONFIG_GROUP" "xray"
-run_and_check "added telegram_gateway user to '$XRAY_CONFIG_GROUP' group" usermod -aG "$XRAY_CONFIG_GROUP" "telegram_gateway"
+run_and_check "added xray user to '$XRAY_READ_WRITE_GROUP' group" usermod -aG "$XRAY_READ_WRITE_GROUP" "xray"
+run_and_check "added telegram_gateway user to '$XRAY_READ_WRITE_GROUP' group" usermod -aG "$XRAY_READ_WRITE_GROUP" "telegram_gateway"
 
 readonly URI_DB="/usr/local/etc/xray/URI_DB"
 
 install_xray_dir() {
     # create log dir, xray group can read, step in, write exist file but not create new and not get upper permission
+    # reset log file if exist
     mkdir -p /var/log/xray || return 1
     chmod 750 /var/log/xray || return 1
-    chown root:xray /var/log/xray || return 1
-    touch /var/log/xray/error.log || return 1
+    chown root:${XRAY_READ_WRITE_GROUP} /var/log/xray || return 1
+    echo > /var/log/xray/error.log || return 1
     chmod 660 /var/log/xray/error.log || return 1
-    chown root:xray /var/log/xray/error.log || return 1
-    touch /var/log/xray/access.log || return 1
+    chown root:${XRAY_READ_WRITE_GROUP} /var/log/xray/error.log || return 1
+    echo > /var/log/xray/access.log || return 1
     chmod 660 /var/log/xray/access.log || return 1
-    chown root:xray /var/log/xray/access.log || return 1
-    # reset logs
-    echo > /var/log/xray/error.log
-    echo > /var/log/xray/access.log
+    chown root:${XRAY_READ_WRITE_GROUP} /var/log/xray/access.log || return 1
     
     # create data dir, xray group and others only can read and step in
     mkdir -p /usr/local/share/xray || return 1
     chmod 755 /usr/local/share/xray || return 1
 
-    # create /etc, $XRAY_CONFIG_GROUP can write, read, step in and create new file
+    # create /etc, $XRAY_READ_WRITE_GROUP can write, read, step in and create new file
     mkdir -p /usr/local/etc/xray || return 1
     chmod 770 /usr/local/etc/xray || return 1
-    chown root:${XRAY_CONFIG_GROUP} "/usr/local/etc/xray" || return 1
+    chown root:${XRAY_READ_WRITE_GROUP} "/usr/local/etc/xray" || return 1
 
-    # create TR_DB file, $XRAY_CONFIG_GROUP can read, write, but not get upper permission to file
-    touch "/usr/local/etc/xray/TR_DB_M" || return 1
+    # create TR_DB file and reset if exist, telegram_gateway can read, write, but not get upper permission to file
+    echo > /usr/local/etc/xray/TR_DB_M || return 1
     chmod 660 "/usr/local/etc/xray/TR_DB_M" || return 1
     chown root:telegram_gateway "/usr/local/etc/xray/TR_DB_M" || return 1
-    touch "/usr/local/etc/xray/TR_DB_Y" || return 1
+    echo > /usr/local/etc/xray/TR_DB_Y || return 1
     chmod 660 "/usr/local/etc/xray/TR_DB_Y" || return 1
     chown root:telegram_gateway "/usr/local/etc/xray/TR_DB_Y" || return 1
-    #reset TR_DB
-    echo > /usr/local/etc/xray/TR_DB_M
-    echo > /usr/local/etc/xray/TR_DB_Y
 
-    # create URI_DB, $XRAY_CONFIG_GROUP can read, write, but not get upper permission to file
-    touch "$URI_DB"
+    # create URI_DB file and reset if exist, telegram_gateway can read, write, but not get upper permission to file
+    echo > "$URI_DB"
     chmod 660 "$URI_DB"
     chown root:telegram_gateway "$URI_DB"
     #reset URI_DB
-    echo > "$URI_DB"
-
+    
     TMP_DIR=$(mktemp -d) || return 1
     readonly TMP_DIR
 }
@@ -767,7 +762,7 @@ conf_json_xray() {
 
 run_and_check "generate new config" conf_json_xray
 run_and_check "new xray config checking" xray run -test -config "$TMP_XRAY_CONFIG"
-run_and_check "install new xray config" install -m 660 -o root -g "${XRAY_CONFIG_GROUP}" "$TMP_XRAY_CONFIG" "$XRAY_CONFIG_DEST"
+run_and_check "install new xray config" install -m 660 -o root -g "${XRAY_READ_WRITE_GROUP}" "$TMP_XRAY_CONFIG" "$XRAY_CONFIG_DEST"
 run_and_check "delete temporary xray files " rm -rf "$TMP_XRAY_CONFIG" "$TMP_DIR"
 trap - EXIT
 
@@ -981,7 +976,7 @@ install_scr_service() {
     ln -sfn "$USERINFO_SCRIPT_DEST" "$USER_HOME/user_info" || return 1
     ln -sfn "$TRAFFIC_UNBLOCK_SCRIPT_DEST" "$USER_HOME/traffic_unblock" || return 1
 
-    find "$USER_HOME" -type l -exec chown -h $SECOND_USER:$SECOND_USER {} +  || return 1
+    find "$USER_HOME" -type l -exec chown -h "$SECOND_USER":"$SECOND_USER" {} +  || return 1
 }
 run_and_check "install service script and create link in home directory" install_scr_service
 
@@ -1009,6 +1004,7 @@ RestartSec=10
 
 NoNewPrivileges=yes
 ProtectSystem=strict
+ReadWritePaths=/usr/local/etc/xray
 PrivateTmp=yes
 ProtectHome=yes
 ProtectKernelTunables=yes

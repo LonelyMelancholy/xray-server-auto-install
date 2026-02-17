@@ -63,7 +63,7 @@ chmod_out_file() {
     chown root:telegram_gateway "$TR_DB_Y" || return 1
 
     chmod 660 "$XRAY_CONFIG" || return 1
-    chown root:xray_config_group "$XRAY_CONFIG" || return 1
+    chown root:xray_read_write_group "$XRAY_CONFIG" || return 1
 }
 
 # main logic start here

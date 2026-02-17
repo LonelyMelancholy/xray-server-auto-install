@@ -11,11 +11,11 @@ source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
 
 # lock check
-run_lock_check tr_db "console"
+run_lock_check "tr_db" "console"
 
 # permission check
-read_and_write_check "$TR_DB_M"
-read_and_write_check "$TR_DB_Y"
+read_check "$TR_DB_M" "console"
+read_check "$TR_DB_Y" "console"
 
 # Network avg func for 10 seconds using ifstat function
 network_stat() {
