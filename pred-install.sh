@@ -117,7 +117,7 @@ if [[ -n "$UBUNTU_PRO_TOKEN" ]]; then
 fi
 
 # utilities check, if missing add to array
-for utility in curl unzip jq openssl ca-certificates ifstat; do
+for utility in curl unzip jq openssl ca-certificates ifstat nftables; do
     if ! command -v "$utility" &> /dev/null; then
         MISSING_PACKAGE_LIST+=("$utility")
     fi
