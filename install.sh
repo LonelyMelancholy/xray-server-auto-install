@@ -239,7 +239,7 @@ run_and_check "disable MOTD in PAM setting" sed -ri 's/^([[:space:]]*session[[:s
 
 # enable firewall
 conf_nftables() {
-    install 755 -o root -g root "cfg/nftables.conf" "/etc/nftables.conf" || return 1
+    install -m 755 -o root -g root "cfg/nftables.conf" "/etc/nftables.conf" || return 1
     sed -i "s/{PORT}/$SSH_PORT/g" "/etc/nftables.conf" || return 1
 }
 run_and_check "install nftables firewall configuration" conf_nftables
