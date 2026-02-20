@@ -66,16 +66,16 @@ rm_tmp_config() {
 trap 'on_exit; rm_tmp_config;' EXIT
 
 # check another instanсe of the script is not running
-exec 99> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
-flock -n 99 || { echo "Error: another instance working on backup, exit" >&2; exit 1; }
+exec {fd}> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
+flock -n ${fd} || { echo "Error: another instance working on backup, exit" >&2; exit 1; }
 
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit" >&2; exit 1; }
 
 # lock check
 run_lock_retry_check "xray"
-run_lock_retry_check "tr_db"
 run_lock_retry_check "uri_db"
+run_lock_retry_check "tr_db"
 
 # read permission check
 read_check "$XRAY_CONFIG"

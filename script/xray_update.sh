@@ -74,8 +74,8 @@ source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to sour
 trap 'on_exit; exit_cleanup;' EXIT
 
 # check another instanсe of the script is not running
-exec 99> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
-flock -n 99 || { echo "Error: another instance working on backup, exit" >&2; exit 1; }
+exec {fd}> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
+flock -n ${fd} || { echo "Error: another instance working on backup, exit" >&2; exit 1; }
 
 # source library for run_lock and file permission cheking
 # shellcheck source=share/run_lock.lib.sh
@@ -83,8 +83,8 @@ source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to sour
 
 # lock check
 run_lock_retry_check "xray"
-run_lock_retry_check "tr_db"
 run_lock_retry_check "uri_db"
+run_lock_retry_check "tr_db"
 
 # cleanup old backup and log
 cleanup_old() {

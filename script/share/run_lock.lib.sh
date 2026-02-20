@@ -9,6 +9,7 @@
 # for output with emoji read_check "file" console, read_and_write_check "file" console
 # no external variable, only local
 
+# checking read file rights and its existence
 read_check() {
     local file="$1"
     local output_variant="$2"
@@ -19,10 +20,11 @@ read_check() {
               *) error="Error" ;;
     esac
 
-    [[ ! -f "$file" ]] && { echo "$error: check '$file' it's not file, exit" >&2; exit 1; }
-    [[ ! -r "$file" ]] && { echo "$error: check '$file' it's missing or you do not have read permissions, exit" >&2; exit 1; }
+    [[ ! -f "$file" ]] && { echo "$error: check '$file' missing or not a file, exit" >&2; exit 1; }
+    [[ ! -r "$file" ]] && { echo "$error: check '$file' missing or you do not have read permissions, exit" >&2; exit 1; }
 }
 
+# checking read and write file rights and its existence
 read_and_write_check() {
     local file="$1"
     local output_variant="$2"
@@ -37,6 +39,7 @@ read_and_write_check() {
     [[ ! -r "$file" || ! -w "$file" ]] && { echo "$error: check '$file' it's missing or you do not have read or write permissions, exit" >&2; exit 1; }
 }
 
+# lock file with random file descriptor, no waiting
 run_lock_check() {
     local lock="$1"
     local output_variant="$2"
@@ -52,6 +55,7 @@ run_lock_check() {
     flock -n "$fd" || { echo "$error: another instance working on '$lock', exit" >&2; exit 1; }
 }
 
+# lock file with random file descriptor, waiting random time 10-60sec, 3 times try
 run_lock_retry_check() {
     local lock="$1"
     local output_variant="$2"

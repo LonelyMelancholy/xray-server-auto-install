@@ -21,8 +21,8 @@ echo "boot notify started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 [[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
 
 # check another instanсe of the script is not running
-exec 99> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
-flock -n 99 || { echo "Error: another instance is running, exit" >&2; exit 1; }
+exec {fd}> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
+flock -n ${fd} || { echo "Error: another instance is running, exit" >&2; exit 1; }
 
 # function section
 # exit logging message function
@@ -68,14 +68,14 @@ daemon_status() {
 source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
 
 # main logic start here
-# wait for all service started 3m
-sleep 180
+# wait for all service started 5m
+sleep 300
 
 # internet check 2m, exit if offline
 if wait_internet; then
     echo "Success: internet is available"
 else
-    echo "Error: no internet after 5 min, exit" >&2
+    echo "Error: no internet after 7 min, exit" >&2
     exit 1
 fi
 

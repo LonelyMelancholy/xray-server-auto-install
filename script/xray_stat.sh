@@ -53,8 +53,8 @@ rm_tmp_tr_db() {
 trap 'end_log; rm_tmp_tr_db;' EXIT
 
 # check another instanсe of the script is not running
-exec 99> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
-flock -n 99 || { echo "Error: another instance is running, exit" >&2; exit 1; }
+exec {fd}> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
+flock -n ${fd} || { echo "Error: another instance is running, exit" >&2; exit 1; }
 
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit" >&2; exit 1; }

@@ -11,8 +11,8 @@ cd "$SCRIPT_DIR" || exit 1
 
 # check another instanse of the script is not running
 readonly LOCK_FILE="/run/lock/vpn_install.lock"
-exec 99> "$LOCK_FILE" || { echo "❌ Error: cannot open lock file '$LOCK_FILE', exit"; exit 1; }
-flock -n 99 || { echo "❌ Error: another instance is running, exit"; exit 1; }
+exec {fd}> "$LOCK_FILE" || { echo "❌ Error: cannot open lock file '$LOCK_FILE', exit"; exit 1; }
+flock -n ${fd} || { echo "❌ Error: another instance is running, exit"; exit 1; }
 
 
 # main variables
@@ -237,6 +237,16 @@ MOTD="/etc/pam.d/sshd"
 run_and_check "disable MOTD in PAM setting" sed -ri 's/^([[:space:]]*session[[:space:]]+optional[[:space:]]+pam_motd\.so.*)$/# \1/' "$MOTD"
 
 
+# enable firewall
+conf_nftables() {
+    install 755 -o root -g root "cfg/nftables.conf" "/etc/nftables.conf" || return 1
+    sed -i "s/{PORT}/$SSH_PORT/g" "/etc/nftables.conf" || return 1
+}
+run_and_check "install nftables firewall configuration" conf_nftables
+
+run_and_check "enable nftables firewall" systemctl enable -q --now nftables.service
+
+
 # Install and setup fail2ban
 install_with_retry "install fail2ban package" apt-get install -y fail2ban
 F2B_CONF_SOURCE="cfg/jail.local"
@@ -248,6 +258,11 @@ conf_f2b() {
     install -m 644 -o root -g root "$F2B_CONF_SOURCE" "$F2B_CONF_DEST" || return 1
     sed -i "s/{PORT}/$SSH_PORT/g" "$F2B_CONF_DEST" || return 1
     install -m 644 -o root -g root "$TG_LOCAL_SOURCE" "$TG_LOCAL_DEST" || return 1
+    # enable ip6
+    tee /etc/fail2ban/fail2ban.local > /dev/null <<'EOF' || return 1
+[Definition]
+allowipv6 = auto
+EOF
 }
 run_and_check "install fail2ban configuration" conf_f2b
 
@@ -370,7 +385,7 @@ server {
     }
 
     location / {
-        return 301 https://__HOST__$request_uri;
+        return 301 https://$host$request_uri;
     }
 
 }
@@ -384,9 +399,9 @@ EOF
     ln -s "/etc/nginx/sites-available/${XRAY_HOSTNAME}.conf" /etc/nginx/sites-enabled/ || return 1
 
     # turn on nginx
-    nginx -t  || return 1
-    systemctl enable --now nginx  || return 1
-    systemctl restart nginx  || return 1
+    nginx -t > /dev/null || return 1
+    systemctl enable -q --now nginx || return 1
+    systemctl restart nginx > /dev/null || return 1
 }
 run_and_check "configure nginx" conf_nginx
 
@@ -407,7 +422,7 @@ server {
     error_log  /var/log/nginx/__HOST__.8443.error.log;
 
     location / {
-        return 403 https://__HOST__$request_uri;
+        return 403;
     }
 
     set_real_ip_from 127.0.0.1;
@@ -421,8 +436,8 @@ EOF
 
     sed -i "s/__HOST__/${XRAY_HOSTNAME}/g" "/etc/nginx/sites-available/${XRAY_HOSTNAME}.conf" || return 1
     
-    nginx -t  || return 1
-    systemctl restart nginx  || return 1
+    nginx -t > /dev/null || return 1
+    systemctl restart nginx > /dev/null || return 1
 }
 run_and_check "configure nginx work with sertificates" conf_nginx_sert
 
@@ -768,8 +783,7 @@ trap - EXIT
 
 # start xray
 run_and_check "reload systemd" systemctl daemon-reload
-run_and_check "enable autostart xray service" systemctl -q enable xray.service
-run_and_check "start xray service" systemctl start xray.service
+run_and_check "enable xray service" systemctl enable -q --now xray.service
 
 
 # start make link, get inbound paremetres
@@ -821,26 +835,40 @@ if [[ -z "$PUBLIC_KEY" ]]; then
 fi
 
 # get server ip
-SERVER_HOST="$(ip -4 route get 1.1.1.1 | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
+IP_4="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
+IP_6="$(ip -6 route get 2606:4700:4700::1111 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
 
 # if not get ip set host as hostname
-if [ -z "$SERVER_HOST" ]; then
-    SERVER_HOST="$(hostname)"
-fi
+[ -z "$IP_4" ] && { IP_4="$(hostname)"; }
 
 # make uri link
 uri_encode() { printf '%s' "$1" | jq -sRr @uri; }
 
 # get link
-readonly VLESS_URI="vless://${UUID}@${SERVER_HOST}:${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
+readonly VLESS_URI_IP4="vless://${UUID}@${IP_4}:${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
 security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
 $(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$XRAY_NAME")"
 
+# if not get ip6, skip make vless ip6 link
+if [ -n "$IP_6" ]; then
+    readonly VLESS_URI_IP6="vless://${UUID}@[${IP_6}]:${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
+security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
+$(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$XRAY_NAME")"
+fi
+
 # print result to URI_DB
-tee "$URI_DB" > /dev/null <<EOF
-name: $XRAY_NAME, vless link: $VLESS_URI
+if [ -n "$IP_6" ]; then
+    tee "$URI_DB" > /dev/null <<EOF
+name: $XRAY_NAME, vless ip_4 link: $VLESS_URI_IP4
+name: $XRAY_NAME, vless ip_6 link: $VLESS_URI_IP6
 
 EOF
+else
+    tee "$URI_DB" > /dev/null <<EOF
+name: $XRAY_NAME, vless ip_4 link: $VLESS_URI_IP4
+
+EOF
+fi
 
 # auto update xray and geobase
 XRAY_SCRIPT_SOURCE="script/xray_update.sh"
@@ -1005,6 +1033,7 @@ RestartSec=10
 NoNewPrivileges=yes
 ProtectSystem=strict
 ReadWritePaths=/usr/local/etc/xray
+ReadWritePaths=/var/log/xray
 PrivateTmp=yes
 ProtectHome=yes
 ProtectKernelTunables=yes
@@ -1048,20 +1077,19 @@ run_and_check "start Telegram gateway service" systemctl start telegram_gateway.
 
 
 # final output
-echo "#############[ SSH USERNAME - PORT ]#############"
+echo "#################[ SSH USERNAME - PORT ]#################"
 echo ""
 echo "$SECOND_USER - $SSH_PORT"
 echo ""
-echo "#################[ PRIVATE KEY ]#################"
+echo "#####################[ PRIVATE KEY ]#####################"
 echo ""
 echo "$PRIV_KEY"
 echo ""
-echo "#########[ PUBLIC KEY - $PUB_KEY_PATH ]##########"
+echo "#############[ PUBLIC KEY - $PUB_KEY_PATH ]##############"
 echo ""
 cat "$PUB_KEY_PATH"
 echo ""
-echo "#################[ VLESS LINK ]##################"
+echo "#####################[ VLESS LINK ]######################"
 echo ""
 cat "$URI_DB"
-echo ""
-echo "#################################################"
+echo "#########################################################"

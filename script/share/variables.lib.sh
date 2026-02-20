@@ -7,6 +7,7 @@ readonly TODAY=$(date '+%F')
 readonly TS=$(date '+%Y%m%d_%H%M%S')
 
 # common traffic limit per user ((3000 * 1024 * 1024 * 1024)) - 3TB limits
+# 3000 gigabytes convert to bytes
 readonly MAX_TR=$((3000 * 1024 * 1024 * 1024))
 
 # export path just in case

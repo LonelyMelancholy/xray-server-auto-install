@@ -22,15 +22,6 @@ exec > >(systemd-cat -t traffic_block -p info) 2> >(systemd-cat -t traffic_block
 # start logging message
 echo "traffic block started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 
-# user check
-[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
-
-# check another instanсe of the script is not running
-exec 99> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
-flock -n 99 || { echo "Error: another instance is running, exit" >&2; exit 1; }
-
-TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
-
 # exit logging message function
 # shellcheck disable=SC2329
 end_log() {
@@ -54,9 +45,17 @@ rm_tmp_config() {
     fi
 }
 
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
+
 # set trap for tmp removing and exit message
 trap 'end_log; rm_tmp_config;' EXIT
 
+# user check
+[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
+
+# check another instanсe of the script is not running
+exec {fd}> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
+flock -n ${fd} || { echo "Error: another instance is running, exit" >&2; exit 1; }
 
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit" >&2; exit 1; }
@@ -228,10 +227,12 @@ for username in "${!TOTAL_BYTES_BY_USERS[@]}"; do
     fi
 done
 
-# get json array full emails for block
-TRAFFIC_END_USERS_JSON="$(printf '%s\n' "${FULL_EMAILS_TO_BLOCK[@]}" \
-    | jq -R . \
-    | jq -s .)"
+# make users json array full emails for block if have email in array
+if [[ ${#FULL_EMAILS_TO_BLOCK[@]} == 0 ]]; then
+    TRAFFIC_END_USERS_JSON='[]'
+else
+    TRAFFIC_END_USERS_JSON="$(printf '%s\n' "${FULL_EMAILS_TO_BLOCK[@]}" | jq -R . | jq -s .)"
+fi
 
 # make new tmp config
 run_and_check "make new xray tmp config" make_new_tmp_config

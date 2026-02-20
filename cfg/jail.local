@@ -1,4 +1,5 @@
 # .local f2b conf for start telegram and iptables action
+# ip6 and ip4 ban, any protocol, any port - drop
 [sshd]
 enabled = true
 port = {PORT}
@@ -7,5 +8,5 @@ backend = systemd
 maxretry = 3
 bantime = 30d
 findtime = 30d
-action = iptables-allports[name=SSH, protocol=all, blocktype=DROP] ssh_telegram
 usedns = no
+action = nftables[type=custom, name=SSH, blocktype=drop] ssh_telegram

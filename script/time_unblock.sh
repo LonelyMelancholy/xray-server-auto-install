@@ -151,15 +151,15 @@ USERNAME_COUNT="$(
     ' "$XRAY_CONFIG"
 )"
 
-# if client not found, exit
-if [[ $USERNAME_COUNT -eq 0 ]]; then
-    echo "❌ Error: '$USERNAME' not found in clients inbound '$INBOUND_TAG', exit"
-    exit 1
-fi
-
 # to many client found, exit
+# if client not found, exit
 if [[ $USERNAME_COUNT -gt 1 ]]; then
     echo "❌ Error: '$USERNAME' to many match in clients inbound '$INBOUND_TAG', edit config manually, exit"
+    exit 1
+elif [[ $USERNAME_COUNT -eq 1 ]]; then
+    echo "✅ Success: found client with name '$USERNAME' in inbound tag '$INBOUND_TAG'"
+else
+    echo "❌ Error: not found client with name '$USERNAME' in inbound tag '$INBOUND_TAG', exit"
     exit 1
 fi
 
@@ -208,18 +208,24 @@ if [[ $MANUALLY_BLOCKED_COUNT -gt 0 ]]; then
     exit 1
 fi
 
+if [[ "$EXPIRED_RULE_EXIST" == "true" ]]; then
+    echo "✅ Success: found client for unblock name '$USERNAME' in ruleTag '$EXPIRED_BLOCK_TAG'"
+else
+    echo "✅ Success: blocked rule not found"
+fi
+
 # main logic start here
 # make new config, add time and delete blocked user
-run_and_check "make new xray tmp config" make_new_tmp_config
+run_and_check "make new tmp xray config" make_new_tmp_config
 
 # if not changed, exit
 if cmp -s "$XRAY_CONFIG" "$TMP_XRAY_CONFIG"; then
-    echo "❌ Error: '$USERNAME' created and expiration date is the same, config not changed, exit"
+    echo "❌ Error: '$USERNAME' created and expiration date is the same, xray config not changed, exit"
     exit 1
 fi
 
 # check new conf
-run_and_check "checking new xray tmp config" xray run -test -config "$TMP_XRAY_CONFIG"
+run_and_check "checking new tmp xray config" xray run -test -config "$TMP_XRAY_CONFIG"
 
 # backup old xray config
 run_and_check "backup old xray config to '$XRAY_CONFIG_BACKUP'" cp -a "$XRAY_CONFIG" "$XRAY_CONFIG_BACKUP"
@@ -228,14 +234,8 @@ run_and_check "backup old xray config to '$XRAY_CONFIG_BACKUP'" cp -a "$XRAY_CON
 run_and_check "install new xray config" install_new_conf "$TMP_XRAY_CONFIG" "$XRAY_CONFIG"
 
 # restart
-run_and_check "restart xray" systemctl restart xray.service
+run_and_check "restart xray service" systemctl restart xray.service
 
 # echo result
-echo "✅ Success: apply for '$USERNAME' from inbound tag '$INBOUND_TAG'"
+echo "✅ Success: xray config updated for '$USERNAME'"
 echo "✅ Success: new time, created: $TODAY, days: $DAYS, expiration: $EXP"
-
-if [[ "$EXPIRED_RULE_EXIST" == "true" ]]; then
-    echo "✅ Success: blocked rule found, removed $EXPIRED_BLOCKED_COUNT matches"
-else
-    echo "✅ Success: blocked rule not found"
-fi

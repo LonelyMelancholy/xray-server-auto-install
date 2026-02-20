@@ -32,8 +32,8 @@ source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to 
 
 # lock check
 run_lock_check "xray" "console"
-run_lock_check "tr_db" "console"
 run_lock_check "uri_db" "console"
+run_lock_check "tr_db" "console"
 
 # permission check
 read_check "$URI_DB" "console"
@@ -158,15 +158,15 @@ fi
 
 # get userstat from TR_DB_M for all username|
 TOTAL_M="$(
-  jq -r --arg u "$USERNAME" '
-    [ .stat[]?
-      | select(.name? and (.name | startswith("user>>>")))
-      | select((.name | split(">>>")[1] | split("|")[0]) == $u)
-      | (.value // 0)
-    ]
-    | (add // 0)
-    | . * 2
-  ' "$TR_DB_M" 2>/dev/null
+    jq -r --arg u "$USERNAME" '
+        [ .stat[]?
+            | select(.name? and (.name | startswith("user>>>")))
+            | select((.name | split(">>>")[1] | split("|")[0]) == $u)
+            | (.value // 0)
+        ]
+        | (add // 0)
+        | . * 2
+     ' "$TR_DB_M" 2>/dev/null
 )"
 
 # if JSON empty or null - reset, else - byte to human read
@@ -191,19 +191,19 @@ TOTAL_Y="$(
 
 # if JSON empty or null - reset, else - byte to human read
 if [[ -z "$TOTAL_Y" || "$TOTAL_Y" == "null" ]]; then
-  TOTAL_Y=0
+    TOTAL_Y=0
 else
-  TOTAL_Y="$(numfmt --to=iec --suffix=B "$TOTAL_Y")"
+    TOTAL_Y="$(numfmt --to=iec --suffix=B "$TOTAL_Y")"
 fi
 
 # search for
-# name: <username>, vless link: <link>
+# name: <username>, vless ip_* link: <link>
 # print "<link>", all matches
-USER_VLESS_LINKS="$(
+USER_VLESS_LINK_4="$(
     awk -v user="$USERNAME" '
         BEGIN { found=0 }
             {
-                if (match($0, /^name:[[:space:]]*([^,]+),[[:space:]]*vless link:[[:space:]]*(.+)$/, m)) {
+                if (match($0, /^name:[[:space:]]*([^,]+),[[:space:]]*vless ip_4 link:[[:space:]]*(.+)$/, m)) {
                     name = m[1]
                     link = m[2]
                     # print 100% matches only
@@ -213,17 +213,33 @@ USER_VLESS_LINKS="$(
                     }
                 }
             }
-        END { if (!found) exit 3 }
+        END { if (!found) exit }
     ' "$URI_DB"
-)" || {
-    rc=$?
-    if [[ $rc -eq 3 ]]; then
-        echo "User '$USERNAME' in URI_DB not found"
-        exit 1
-    fi
-    echo "Error: failed to parse '$URI_DB'"
-    exit 2
-}
+)"
+
+# search for
+# name: <username>, vless link: ip_* <link>
+# print "<link>", all matches
+USER_VLESS_LINK_6="$(
+    awk -v user="$USERNAME" '
+        BEGIN { found=0 }
+            {
+                if (match($0, /^name:[[:space:]]*([^,]+),[[:space:]]*vless ip_6 link:[[:space:]]*(.+)$/, m)) {
+                    name = m[1]
+                    link = m[2]
+                    # print 100% matches only
+                    if (name == user) {
+                        print link
+                        found=1
+                    }
+                }
+            }
+        END { if (!found) exit }
+    ' "$URI_DB"
+)"
+
+# convert limit bytes to human read traffic limit
+MAX_TR_H="$(numfmt --to=iec --suffix=B "$MAX_TR")"
 
 echo "🧑🏿‍💻 Name: $USERNAME"
 echo "📅 Created: $CREATED"
@@ -233,9 +249,10 @@ echo "📅 Expiration: $EXP"
 echo "🌐 Status: $USER_ONLINE_STATUS"
 echo "🔏 Active: $STATUS"
 echo "📱 Devices: $USER_DEVICE_COUNT"
-echo "📊 Traffic monthly: $TOTAL_M"
+echo "📊 Traffic monthly: $TOTAL_M/$MAX_TR_H"
 echo "📊 Traffic annual: $TOTAL_Y"
 echo "📝 IP: $IP_USER"
-echo "🛠 Vless link: $USER_VLESS_LINKS"
+echo "🛠 Vless ip_4 link: $USER_VLESS_LINK_4"
+echo "🛠 Vless ip_6 link: $USER_VLESS_LINK_6"
 
 exit 0

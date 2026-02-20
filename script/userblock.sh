@@ -38,7 +38,11 @@ TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp fil
 # exit rm tmp file function
 # shellcheck disable=SC2329
 rm_tmp_config() {
-    run_and_check "delete tmp config file" rm -f "$TMP_XRAY_CONFIG" > /dev/null
+    if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null; then
+        echo "✅ Success: delete tmp config file"
+    else
+        echo "❌ Error: delete tmp config file"
+    fi
 }
 
 # set trap for tmp removing and exit message
@@ -182,7 +186,7 @@ case "$ACTION" in
         EMAILS_JSON="$(printf '%s\n' "${EMAILS[@]}" | jq -R . | jq -s .)"
 
         # run func for add user in block rule
-        run_and_check "block user ${EMAILS[*]}, ruleTag '$MANUAL_BLOCK_TAG'" jq_apply_users add
+        run_and_check "block user '$USERNAME', ruleTag '$MANUAL_BLOCK_TAG'" jq_apply_users add
     ;;
 
     unblock)
@@ -214,7 +218,7 @@ case "$ACTION" in
         EMAILS_JSON="$(printf '%s\n' "${EMAILS[@]}" | jq -R . | jq -s .)"
         
         # run func for del user from block rule
-        run_and_check "unblock user ${EMAILS[*]}, ruleTag '$MANUAL_BLOCK_TAG'" jq_apply_users del
+        run_and_check "unblock user '$USERNAME', ruleTag '$MANUAL_BLOCK_TAG'" jq_apply_users del
     ;;
 
     *)
@@ -224,7 +228,7 @@ case "$ACTION" in
 esac
 
 # checking new config
-run_and_check "new xray config checking" xray run -test -config "$TMP_XRAY_CONFIG"
+run_and_check "checking new tmp xray config" xray run -test -config "$TMP_XRAY_CONFIG"
 
 # backup
 run_and_check "backup old xray config to '$XRAY_CONFIG_BACKUP'" cp -a "$XRAY_CONFIG" "$XRAY_CONFIG_BACKUP"
@@ -235,6 +239,6 @@ run_and_check "install new xray config" install_new_conf
 # restart xray
 run_and_check "restart xray service" systemctl restart xray.service
 
-echo "✅ Success: apply for '$USERNAME' from inbound tag '$INBOUND_TAG'"
+echo "✅ Success: xray config updated for '$USERNAME'"
 
 exit 0

@@ -179,7 +179,6 @@ run_and_check "restart xray service" systemctl restart xray.service
 
 # echo result
 echo "✅ Success: removed '$REMOVED' client(s) for '$USERNAME' from inbound tag '$INBOUND_TAG'"
-echo "✅ Success: Backup saved '$XRAY_CONFIG_BACKUP'"
 
 if [[ "$BLOCK_REMOVED" -gt 0 ]]; then
     echo "✅ Success: removed '$BLOCK_REMOVED' block record(s) for '$USERNAME' from routing rules (autoblock-expired-users/manual-block-users/autoblock-traffic-users)"
@@ -200,7 +199,6 @@ if [[ "$REMOVED" -gt 0 && -f "$URI_DB" ]]; then
 
     # echo result
     echo "✅ Success: removed $REMOVED client(s) for '$USERNAME' from URI database"
-    echo "✅ Success: Backup saved $URI_DB_BACKUP"
 fi
 
 exit 0

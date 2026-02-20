@@ -24,14 +24,14 @@ echo "📢 Info: starting the procedure for preparing the system for installatio
 
 # check another instance of the script is not running
 readonly LOCK_FILE="/var/run/vpn_pred-install.lock"
-exec 99> "$LOCK_FILE" || { echo "❌ Error: cannot open lock file '$LOCK_FILE', exit"; exit 1; }
-flock -n 99 || { echo "❌ Error: another instance is running, exit"; exit 1; }
+exec {fd}> "$LOCK_FILE" || { echo "❌ Error: cannot open lock file '$LOCK_FILE', exit"; exit 1; }
+flock -n ${fd} || { echo "❌ Error: another instance is running, exit"; exit 1; }
 
 # check os version
 [[ -r /etc/os-release ]] || { echo "❌ Error: '/etc/os-release' missing or you do not have read permissions, exit"; exit 1; }
 source /etc/os-release
-if [[ "$ID" != "ubuntu" ]] || [[ "${VERSION_ID%%.*}" -lt 22 ]]; then
-    echo "❌ Error: this script requires Ubuntu 22.04 or higher, exit"
+if [[ "$ID" != "ubuntu" ]] || [[ "${VERSION_ID%%.*}" -lt 24 ]]; then
+    echo "❌ Error: this script requires Ubuntu 24.04 or higher, exit"
     exit 1
 fi
 

@@ -90,13 +90,11 @@ parse_old_conf() {
         fi
     done
 
-    # make users json array if have expireed email
+    # make users json array if have expireed email in array
     if [[ ${#EXPIRED_EMAILS_FULL[@]} == 0 ]]; then
         EXPIRED_USERS_JSON='[]'
     else
-        EXPIRED_USERS_JSON="$(printf '%s\n' "${EXPIRED_EMAILS_FULL[@]}" \
-            | jq -R . \
-            | jq -s .)"
+        EXPIRED_USERS_JSON="$(printf '%s\n' "${EXPIRED_EMAILS_FULL[@]}" | jq -R . | jq -s .)"
     fi
 }
 
@@ -168,8 +166,8 @@ install_new_conf() {
 }
 
 # check another instanсe of the script is not running
-exec 99> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
-flock -n 99 || { echo "Error: another instance is running, exit" >&2; exit 1; }
+exec {fd}> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
+flock -n ${fd} || { echo "Error: another instance is running, exit" >&2; exit 1; }
 
 # source Telegram func library
 # shellcheck source=share/telegram.lib.sh

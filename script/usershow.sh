@@ -36,8 +36,8 @@ source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to 
 
 # lock check
 run_lock_check "xray" "console"
-run_lock_check "tr_db" "console"
 run_lock_check "uri_db" "console"
+run_lock_check "tr_db" "console"
 
 # read permission check
 read_check "$XRAY_CONFIG" "console"
@@ -228,7 +228,7 @@ print_all_table() {
     run_and_check "collect users traffic array" collect_users_traffic_array
 
     # formatting first string in table
-    out+=$'[user]-[online/offline]-[devices]-[status]-[traffic]-[days_left]\n'
+    out+=$'[username] - [online/offline] - [devices] - [status] - [traffic] - [days_left]\n'
 
     # for every username add string in variables
     for username_w_d in "${!FULL_USERNAMES[@]}"; do

@@ -72,7 +72,7 @@ run_and_check() {
 make_new_config() {
     # add user
     jq --arg tag "$INBOUND_TAG" \
-        --arg email "$XRAY_EMAIL" \
+        --arg email "$FULL_USERNAME" \
         --arg id "$UUID" \
         --arg dflow "$DEFAULT_FLOW" '
         (.inbounds[] | select(.tag==$tag) | .settings.clients[0].flow // $dflow) as $flow
@@ -106,10 +106,18 @@ uri_encode() { printf '%s' "$1" | jq -sRr @uri; }
 
 # function for update URI_DB
 install_new_uri_db() {
-    tee -a "$URI_DB" >/dev/null <<EOF
-name: $USERNAME, vless link: $VLESS_URI
+    if [ -n "$IP_6" ]; then
+        tee -a "$URI_DB" > /dev/null <<EOF
+name: $USERNAME, vless ip_4 link: $VLESS_URI_IP4
+name: $USERNAME, vless ip_6 link: $VLESS_URI_IP6
 
 EOF
+    else
+    tee -a "$URI_DB" > /dev/null <<EOF
+name: $USERNAME, vless ip_4 link: $VLESS_URI_IP4
+
+EOF
+    fi
 }
 
 # main logic start here
@@ -133,12 +141,12 @@ fi
 # calculate exp and created date
 # write variable
 if [[ "$DAYS" == "0" ]]; then
-    XRAY_EMAIL="${USERNAME}|created=${TODAY}|days=infinity|exp=never"
+    FULL_USERNAME="${USERNAME}|created=${TODAY}|days=infinity|exp=never"
     DAYS="infinity"
     EXP="never"
 else
     EXP="$(date -d "$TODAY + $DAYS days" +%F)"
-    XRAY_EMAIL="${USERNAME}|created=${TODAY}|days=${DAYS}|exp=${EXP}"
+    FULL_USERNAME="${USERNAME}|created=${TODAY}|days=${DAYS}|exp=${EXP}"
 fi
 
 # check inbound
@@ -171,7 +179,7 @@ run_and_check "install new xray config" install_new_conf
 run_and_check "restart xray service" systemctl restart xray.service
 
 # start make link, get inbound paremetres
-readonly PORT="$(jq -r --arg tag "$INBOUND_TAG" '
+readonly XRAY_PORT="$(jq -r --arg tag "$INBOUND_TAG" '
   .inbounds[] | select(.tag==$tag) | .port
 ' "$XRAY_CONFIG")"
 
@@ -192,7 +200,7 @@ readonly FLOW="$(jq -r --arg tag "$INBOUND_TAG" '
 ' "$XRAY_CONFIG")"
 
 # checking empty variable or not
-check_var "PORT" "$PORT"
+check_var "PORT" "$XRAY_PORT"
 check_var "REALITY_SNI" "$REALITY_SNI"
 check_var "PRIVATE_KEY" "$PRIVATE_KEY"
 check_var "SHORT_ID" "$SHORT_ID"
@@ -209,26 +217,32 @@ if [[ -z "$PUBLIC_KEY" ]]; then
 fi
 
 # get server ip
-SERVER_HOST="$(ip -4 route get 1.1.1.1 | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
+IP_4="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
+IP_6="$(ip -6 route get 2606:4700:4700::1111 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
 
 # if not get ip set host as hostname
-if [ -z "$SERVER_HOST" ]; then
-    SERVER_HOST="$(hostname)"
-fi
+[ -z "$IP_4" ] && { IP_4="$(hostname)"; }
 
 # get link
-readonly VLESS_URI="vless://${UUID}@${SERVER_HOST}:${PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
+readonly VLESS_URI_IP4="vless://${UUID}@${IP_4}:${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
 security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
 $(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$USERNAME")"
 
+# if not get ip6, skip make vless ip6 link
+if [ -n "$IP_6" ]; then
+    VLESS_URI_IP6="vless://${UUID}@[${IP_6}]:${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
+security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
+$(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$USERNAME")"
+fi
+
 # backup old uri_db
 run_and_check "backup old URI_DB '$URI_DB_BACKUP'" cp -a "$URI_DB" "$URI_DB_BACKUP"
-echo "✅ Success: Backup saved $URI_DB_BACKUP"
 
 # update URI_DB
 run_and_check "add user in URI_DB" install_new_uri_db
 
 # print result
-echo "✅ Success: name $USERNAME, added"
-echo "✅ Success: created: $TODAY, days: $DAYS, expiration: $EXP"
-echo "name: $USERNAME, vless link: $VLESS_URI"
+echo "✅ Success: name: $USERNAME, added"
+echo "✅ Success: time, created: $TODAY, days: $DAYS, expiration: $EXP"
+echo "✅ Success: vless ip_4 link: $VLESS_URI_IP4"
+[ -n "$IP_6" ] && { echo "✅ Success: vless ip_6 link: $VLESS_URI_IP6"; }
