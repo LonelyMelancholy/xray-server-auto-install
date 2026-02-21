@@ -399,14 +399,14 @@ EOF
     ln -s "/etc/nginx/sites-available/${XRAY_HOSTNAME}.conf" /etc/nginx/sites-enabled/ || return 1
 
     # turn on nginx
-    nginx -t > /dev/null || return 1
+    nginx -t &> /dev/null || return 1
     systemctl enable -q --now nginx || return 1
     systemctl restart nginx > /dev/null || return 1
 }
 run_and_check "configure nginx" conf_nginx
 
 conf_cert() {
-    certbot certonly --webroot -w "/var/www/${XRAY_HOSTNAME}/html" -d "${XRAY_HOSTNAME}" --agree-tos -m "$OWNER_EMAIL" --non-interactive || return 1
+    certbot certonly --webroot -w "/var/www/${XRAY_HOSTNAME}/html" -d "${XRAY_HOSTNAME}" --agree-tos -m "$OWNER_EMAIL" --non-interactive > /dev/null || return 1
 }
 run_and_check "configure sertificates" conf_cert
 
@@ -436,7 +436,7 @@ EOF
 
     sed -i "s/__HOST__/${XRAY_HOSTNAME}/g" "/etc/nginx/sites-available/${XRAY_HOSTNAME}.conf" || return 1
     
-    nginx -t > /dev/null || return 1
+    nginx -t &> /dev/null || return 1
     systemctl restart nginx > /dev/null || return 1
 }
 run_and_check "configure nginx work with sertificates" conf_nginx_sert

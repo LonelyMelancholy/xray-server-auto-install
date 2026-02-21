@@ -102,22 +102,8 @@ else
     echo "✅ Success: new hostname matches the old hostname, changes not needed"
 fi
 
-# update system
-if [[ -n "$UBUNTU_PRO_TOKEN" ]]; then
-    if command -v pro &> /dev/null; then
-        echo "📢 Info: try to activate Ubuntu Pro, please wait"
-        if pro attach "$UBUNTU_PRO_TOKEN" &> "$LOG_UBUNTU_PRO"; then
-            echo "✅ Success: Ubuntu Pro activated"
-        else
-            echo "📢 Info: Ubuntu Pro activation error, check '$LOG_UBUNTU_PRO' for more info, continue"
-        fi
-    else
-        echo "📢 Info: 'pro' command not found, skipping Ubuntu Pro attach"
-    fi
-fi
-
 # utilities check, if missing add to array
-for utility in curl unzip jq openssl ca-certificates ifstat nftables; do
+for utility in curl unzip jq openssl ca-certificates ifstat nftables ubuntu-pro-client; do
     if ! command -v "$utility" &> /dev/null; then
         MISSING_PACKAGE_LIST+=("$utility")
     fi
@@ -131,6 +117,16 @@ if [[ "${#MISSING_PACKAGE_LIST[@]}" -gt 0 ]]; then
     echo "📢 Info: required utilities: '${MISSING_PACKAGE_LIST[*]}' not found, prepare for installation"
     install_and_update "install required utilities: '${MISSING_PACKAGE_LIST[*]}'" "$LOG_INSTALL_UTILITIES" \
         "${CMD_INSTALL_PACKAGE[@]}" "${MISSING_PACKAGE_LIST[@]}"
+fi
+
+# activate ubuntu pro
+if [[ -n "$UBUNTU_PRO_TOKEN" ]]; then
+    echo "📢 Info: try to activate Ubuntu Pro, please wait"
+    if pro attach "$UBUNTU_PRO_TOKEN" &> "$LOG_UBUNTU_PRO"; then
+        echo "✅ Success: Ubuntu Pro activated"
+    else
+        echo "📢 Info: Ubuntu Pro activation error, check '$LOG_UBUNTU_PRO' for more info, continue"
+    fi
 fi
 
 # update packages
