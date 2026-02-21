@@ -103,7 +103,7 @@ else
 fi
 
 # utilities check, if missing add to array
-for utility in curl unzip jq openssl ca-certificates ifstat nftables ubuntu-pro-client; do
+for utility in curl unzip jq openssl ca-certificates ifstat nftables ubuntu-pro-client cron; do
     if ! command -v "$utility" &> /dev/null; then
         MISSING_PACKAGE_LIST+=("$utility")
     fi

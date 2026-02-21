@@ -91,6 +91,7 @@ CRON_STATUS="$(daemon_status cron.service cron)" || COMMON_STATUS=1
 FAIL2BAN_STATUS="$(daemon_status fail2ban.service fail2ban)" || COMMON_STATUS=1
 NGINX_STATUS="$(daemon_status nginx.service nginx)" || COMMON_STATUS=1
 XRAY_STATUS="$(daemon_status xray.service xray)" || COMMON_STATUS=1
+NFTABLES_STATUS="$(daemon_status nftables.service nftables)" || COMMON_STATUS=1
 
 # start collecting message parts
 if [[  $COMMON_STATUS == 0 && "$SYSTEM_STATUS" == "running" ]]; then
@@ -113,6 +114,7 @@ $SYSTEM_STATUS
 $SSH_STATUS
 $CRON_STATUS
 $FAIL2BAN_STATUS
+$NFTABLES_STATUS
 $NGINX_STATUS
 $XRAY_STATUS
 💾 <b>Notify log:</b> journalctl -t boot_notify"

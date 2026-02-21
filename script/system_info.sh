@@ -162,6 +162,7 @@ CRON_STATUS="$(daemon_status cron.service cron)"
 FAIL2BAN_STATUS="$(daemon_status fail2ban.service fail2ban)"
 NGINX_STATUS="$(daemon_status nginx.service nginx)"
 XRAY_STATUS="$(daemon_status xray.service xray)"
+NFTABLES_STATUS="$(daemon_status nftables.service nftables)"
 
 # count total and free space in / directory
 TOTAL_SPACE_GB=$(df -B1 --output=size / | awk 'NR==2 { printf "%.2f", $1/1024/1024/1024 }')
@@ -180,6 +181,7 @@ echo "${SYSTEM_STATUS}"
 echo "${SSH_STATUS}"
 echo "${CRON_STATUS}"
 echo "${FAIL2BAN_STATUS}"
+echo "${NFTABLES_STATUS}"
 echo "${NGINX_STATUS}"
 echo "${XRAY_STATUS}"
 echo "🧑🏿‍💻 Online users: ${ONLINE_USERS}"
