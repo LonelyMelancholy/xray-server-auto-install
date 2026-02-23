@@ -5,7 +5,7 @@ Description=Timer for run traffic_block.service every 10m
 OnCalendar=*-*-* *:0/10:00
 Persistent=true
 AccuracySec=1s
-RandomizedDelaySec=0
+RandomizedDelaySec=10
 
 [Install]
 WantedBy=timers.target

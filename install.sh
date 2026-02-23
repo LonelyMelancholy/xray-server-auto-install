@@ -152,11 +152,8 @@ run_and_check "changing root and $SECOND_USER passwords" conf_pswd
 
 # SSH Configuration
 # variables and port generation
-SSH_CONF_SOURCE="cfg/ssh.cfg"
 SSH_CONF_DEST="/etc/ssh/sshd_config.d/00-custom_security.conf"
-LOW="40000"
-HIGH="50000"
-SSH_PORT="$(shuf -i "${LOW}-${HIGH}" -n 1)"
+SSH_PORT="$(shuf -i "40000-50000" -n 1)"
 
 # deleting previous sshd configuration with high priority
 if compgen -G "/etc/ssh/sshd_config.d/*.conf" &> /dev/null; then
@@ -167,7 +164,7 @@ fi
 
 # creating a new sshd configuration
 install_sshd() {
-    install -m 644 -o root -g root "$SSH_CONF_SOURCE" "$SSH_CONF_DEST" || return 1
+    install -m 644 -o root -g root "cfg/ssh.cfg" "$SSH_CONF_DEST" || return 1
     tee /etc/ssh/sshd_config > /dev/null <<'EOF' || return 1
 Include /etc/ssh/sshd_config.d/*.conf
 EOF
@@ -216,17 +213,14 @@ install_tg_dir() {
 run_and_check "creating directory for all telegram script" install_tg_dir
 
 # install ssh pam script and enable script in PAM
-SSH_PAM_NOTIFY_SCRIPT_SOURCE=script/ssh_pam_notify.sh
-SSH_PAM_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/ssh_pam_notify.sh"
-
 install_scr_ssh_pam() {
-    install -m 755 -o root -g root "$SSH_PAM_NOTIFY_SCRIPT_SOURCE" "$SSH_PAM_NOTIFY_SCRIPT_DEST" || return 1
+    install -m 755 -o root -g root "script/ssh_pam_notify.sh" "/usr/local/bin/telegram/ssh_pam_notify.sh" || return 1
     if ! grep -q "ssh-pam-telegram-notify" "/etc/pam.d/sshd"; then
         tee -a /etc/pam.d/sshd > /dev/null <<EOF || return 1
 
 # ssh-pam-telegram-notify
 # Notify for success ssh login and logout via telegram bot
-session optional pam_exec.so $SSH_PAM_NOTIFY_SCRIPT_DEST
+session optional pam_exec.so /usr/local/bin/telegram/ssh_pam_notify.sh
 EOF
     fi
 }
@@ -243,21 +237,16 @@ conf_nftables() {
     sed -i "s/{PORT}/$SSH_PORT/g" "/etc/nftables.conf" || return 1
 }
 run_and_check "install nftables firewall configuration" conf_nftables
-
 run_and_check "enable nftables firewall" systemctl enable -q --now nftables.service
 
 
 # Install and setup fail2ban
 install_with_retry "install fail2ban package" apt-get install -y fail2ban
-F2B_CONF_SOURCE="cfg/jail.local"
-F2B_CONF_DEST="/etc/fail2ban/jail.local"
-TG_LOCAL_SOURCE="cfg/ssh_telegram.local"
-TG_LOCAL_DEST="/etc/fail2ban/action.d/ssh_telegram.local"
 
 conf_f2b() {
-    install -m 644 -o root -g root "$F2B_CONF_SOURCE" "$F2B_CONF_DEST" || return 1
-    sed -i "s/{PORT}/$SSH_PORT/g" "$F2B_CONF_DEST" || return 1
-    install -m 644 -o root -g root "$TG_LOCAL_SOURCE" "$TG_LOCAL_DEST" || return 1
+    install -m 644 -o root -g root "cfg/jail.local" "/etc/fail2ban/jail.local" || return 1
+    sed -i "s/{PORT}/$SSH_PORT/g" "/etc/fail2ban/jail.local" || return 1
+    install -m 644 -o root -g root "cfg/ssh_telegram.local" "/etc/fail2ban/action.d/ssh_telegram.local" || return 1
     # enable ip6
     tee /etc/fail2ban/fail2ban.local > /dev/null <<'EOF' || return 1
 [Definition]
@@ -267,13 +256,11 @@ EOF
 run_and_check "install fail2ban configuration" conf_f2b
 
 # Install ssh ban notify script
-SSH_F2B_NOTIFY_SCRIPT_SOURCE="script/ssh_f2b_notify.sh"
-SSH_F2B_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/ssh_f2b_notify.sh"
-run_and_check "ssh f2b notification script installation" install -m 755 -o root -g root "$SSH_F2B_NOTIFY_SCRIPT_SOURCE" "$SSH_F2B_NOTIFY_SCRIPT_DEST"
+run_and_check "ssh f2b notification script installation" install -m 755 -o root -g root "script/ssh_f2b_notify.sh" "/usr/local/bin/telegram/ssh_f2b_notify.sh"
 
 # Start fail2ban
 start_f2b() {
-    systemctl -q enable --now fail2ban.service || return 1
+    systemctl enable -q --now fail2ban.service || return 1
     systemctl restart fail2ban.service || return 1
 }
 run_and_check "enable and start fail2ban service" start_f2b
@@ -426,7 +413,6 @@ install_xray_dir() {
     echo > "$URI_DB"
     chmod 660 "$URI_DB"
     chown root:telegram_gateway "$URI_DB"
-    #reset URI_DB
     
     TMP_DIR=$(mktemp -d) || return 1
     readonly TMP_DIR
@@ -584,30 +570,7 @@ XRAY_CONFIG_SRC="cfg/config.json"
 XRAY_CONFIG_DEST="/usr/local/etc/xray/config.json"
 
 conf_xray() {
-    tee /etc/systemd/system/xray.service > /dev/null <<EOF || return 1
-[Unit]
-Description=Xray-core server
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-User=xray
-Group=xray
-ExecStart=/usr/local/bin/xray run -config $XRAY_CONFIG_DEST
-Restart=on-failure
-RestartPreventExitStatus=23
-RestartSec=10
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
-NoNewPrivileges=yes
-LimitNPROC=10000
-LimitNOFILE=1000000
-RuntimeDirectory=xray
-RuntimeDirectoryMode=0755
-
-[Install]
-WantedBy=multi-user.target
-EOF
+    install -m 644 -o root -g root "cfg/xray.service" "/etc/systemd/system/xray.service" || return 1
 }
 run_and_check "create xray systemd service" conf_xray
 
@@ -863,7 +826,7 @@ install_scr_un_up() {
     install -m 644 -o root -g root "cfg/unattended_upgrade.service" "/etc/systemd/system/unattended_upgrade.service" || return 1
     install -m 755 -o root -g root "script/unattended_upgrade.sh" "/usr/local/bin/service/unattended_upgrade.sh" || return 1
     systemctl daemon-reload || return 1
-    systemctl enable --now unattended-upgrade.timer || return 1
+    systemctl enable --now unattended_upgrade.timer || return 1
 }
 run_and_check "unattended update script installation" install_scr_un_up
 
@@ -878,123 +841,45 @@ install_scr_boot() {
 run_and_check "server boot notification script installation" install_scr_boot
 
 
-# maintance script
-USERADD_SCRIPT_SRC="script/useradd.sh"
-USERADD_SCRIPT_DEST="/usr/local/bin/service/useradd.sh"
-USERDEL_SCRIPT_SRC="script/userdel.sh"
-USERDEL_SCRIPT_DEST="/usr/local/bin/service/userdel.sh"
-TIME_UNBLOCK_SCRIPT_SRC="script/time_unblock.sh"
-TIME_UNBLOCK_SCRIPT_DEST="/usr/local/bin/service/time_unblock.sh"
-USERBLOCK_SCRIPT_SRC="script/userblock.sh"
-USERBLOCK_SCRIPT_DEST="/usr/local/bin/service/userblock.sh"
-USERSHOW_SCRIPT_SRC="script/usershow.sh"
-USERSHOW_SCRIPT_DEST="/usr/local/bin/service/usershow.sh"
-SYS_INFO_SCRIPT_SRC="script/system_info.sh"
-SYS_INFO_SCRIPT_DEST="/usr/local/bin/service/system_info.sh"
-RESTORE_BACKUP_SCRIPT_SRC="script/restore_backup.sh"
-RESTORE_BACKUP_SCRIPT_DEST="/usr/local/bin/service/restore_backup.sh"
-USERINFO_SCRIPT_SRC="script/userinfo.sh"
-USERINFO_SCRIPT_DEST="/usr/local/bin/service/userinfo.sh"
-TRAFFIC_UNBLOCK_SCRIPT_SRC="script/traffic_unblock.sh"
-TRAFFIC_UNBLOCK_SCRIPT_DEST="/usr/local/bin/service/traffic_unblock.sh"
-
-# add link for maintance
+# maintance script install and add link to home dir service_user_********
 install_scr_service() {
-    # module script
-    mkdir -p /usr/local/lib/service
     install -m 644 -o root -g root "script/share/telegram.lib.sh" "/usr/local/lib/service/telegram.lib.sh" || return 1
     install -m 644 -o root -g root "script/share/run_lock.lib.sh" "/usr/local/lib/service/run_lock.lib.sh" || return 1
     install -m 644 -o root -g root "script/share/variables.lib.sh" "/usr/local/lib/service/variables.lib.sh" || return 1
-    install -m 755 -o root -g root "$USERADD_SCRIPT_SRC" "$USERADD_SCRIPT_DEST" || return 1
-    install -m 755 -o root -g root "$USERDEL_SCRIPT_SRC" "$USERDEL_SCRIPT_DEST" || return 1
-    install -m 755 -o root -g root "$TIME_UNBLOCK_SCRIPT_SRC" "$TIME_UNBLOCK_SCRIPT_DEST" || return 1
-    install -m 755 -o root -g root "$USERBLOCK_SCRIPT_SRC" "$USERBLOCK_SCRIPT_DEST" || return 1
-    install -m 755 -o root -g root "$USERSHOW_SCRIPT_SRC" "$USERSHOW_SCRIPT_DEST" || return 1
-    install -m 755 -o root -g root "$SYS_INFO_SCRIPT_SRC" "$SYS_INFO_SCRIPT_DEST" || return 1
-    install -m 755 -o root -g root "$RESTORE_BACKUP_SCRIPT_SRC" "$RESTORE_BACKUP_SCRIPT_DEST" || return 1
-    install -m 755 -o root -g root "$USERINFO_SCRIPT_SRC" "$USERINFO_SCRIPT_DEST" || return 1
-    install -m 755 -o root -g root "$TRAFFIC_UNBLOCK_SCRIPT_SRC" "$TRAFFIC_UNBLOCK_SCRIPT_DEST" || return 1
+    install -m 755 -o root -g root "script/useradd.sh" "/usr/local/bin/service/useradd.sh" || return 1
+    install -m 755 -o root -g root "script/userdel.sh" "/usr/local/bin/service/userdel.sh" || return 1
+    install -m 755 -o root -g root "script/usershow.sh" "/usr/local/bin/service/usershow.sh" || return 1
+    install -m 755 -o root -g root "script/userinfo.sh" "/usr/local/bin/service/userinfo.sh" || return 1
+    install -m 755 -o root -g root "script/system_info.sh" "/usr/local/bin/service/system_info.sh" || return 1
+    install -m 755 -o root -g root "script/restore_backup.sh" "/usr/local/bin/service/restore_backup.sh" || return 1
+    install -m 755 -o root -g root "script/userblock.sh" "/usr/local/bin/service/userblock.sh" || return 1
+    install -m 755 -o root -g root "script/time_unblock.sh" "/usr/local/bin/service/time_unblock.sh" || return 1
+    install -m 755 -o root -g root "script/traffic_unblock.sh" "/usr/local/bin/service/traffic_unblock.sh" || return 1
 
-    ln -sfn "$USERADD_SCRIPT_DEST" "$USER_HOME/xray_user_add" || return 1
-    ln -sfn "$USERDEL_SCRIPT_DEST" "$USER_HOME/xray_user_del" || return 1
-    ln -sfn "$TIME_UNBLOCK_SCRIPT_DEST" "$USER_HOME/time_unblock" || return 1
-    ln -sfn "$USERBLOCK_SCRIPT_DEST" "$USER_HOME/xray_user_block" || return 1
-    ln -sfn "$USERSHOW_SCRIPT_DEST" "$USER_HOME/xray_user_show" || return 1
-    ln -sfn "$SYS_INFO_SCRIPT_DEST" "$USER_HOME/system_info" || return 1
-    ln -sfn "$RESTORE_BACKUP_SCRIPT_DEST" "$USER_HOME/restore_backup" || return 1
-    ln -sfn "$USERINFO_SCRIPT_DEST" "$USER_HOME/user_info" || return 1
-    ln -sfn "$TRAFFIC_UNBLOCK_SCRIPT_DEST" "$USER_HOME/traffic_unblock" || return 1
+    ln -sfn "/usr/local/bin/service/useradd.sh" "$USER_HOME/user_add" || return 1
+    ln -sfn "/usr/local/bin/service/userdel.sh" "$USER_HOME/user_del" || return 1
+    ln -sfn "/usr/local/bin/service/time_unblock.sh" "$USER_HOME/time_unblock" || return 1
+    ln -sfn "/usr/local/bin/service/userblock.sh" "$USER_HOME/user_block" || return 1
+    ln -sfn "/usr/local/bin/service/usershow.sh" "$USER_HOME/user_show" || return 1
+    ln -sfn "/usr/local/bin/service/system_info.sh" "$USER_HOME/system_info" || return 1
+    ln -sfn "/usr/local/bin/service/restore_backup.sh" "$USER_HOME/restore_backup" || return 1
+    ln -sfn "/usr/local/bin/service/userinfo.sh" "$USER_HOME/user_info" || return 1
+    ln -sfn "/usr/local/bin/service/traffic_unblock.sh" "$USER_HOME/traffic_unblock" || return 1
 
     find "$USER_HOME" -type l -exec chown -h "$SECOND_USER":"$SECOND_USER" {} +  || return 1
 }
-run_and_check "install service script and create link in home directory" install_scr_service
+run_and_check "all service script installation and create link in home directory" install_scr_service
 
 
-# Telegram gateway script
-TG_GATEWAY_SCRIPT_SRC="script/telegram_gateway.sh"
-TG_GATEWAY_SCRIPT_DEST="/usr/local/bin/service/telegram_gateway.sh"
-
-# /etc/systemd/system/telegram_gateway.service
+# Telegram gateway script install and start
 conf_tg_gateway() {
-    install -m 755 -o root -g root "$TG_GATEWAY_SCRIPT_SRC" "$TG_GATEWAY_SCRIPT_DEST" || return 1
-    tee /etc/systemd/system/telegram_gateway.service > /dev/null <<EOF || return 1
-[Unit]
-Description=Telegram gateway bot
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-User=telegram_gateway
-Group=telegram_gateway
-
-ExecStart=$TG_GATEWAY_SCRIPT_DEST
-Restart=always
-RestartSec=10
-
-NoNewPrivileges=yes
-ProtectSystem=strict
-ReadWritePaths=/usr/local/etc/xray
-ReadWritePaths=/var/log/xray
-PrivateTmp=yes
-ProtectHome=yes
-ProtectKernelTunables=yes
-ProtectControlGroups=yes
-ProtectKernelModules=yes
-LockPersonality=yes
-MemoryDenyWriteExecute=yes
-RestrictNamespaces=yes
-RestrictSUIDSGID=yes
-SystemCallArchitectures=native
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    tee /etc/polkit-1/rules.d/50-telegram_gateway.rules > /dev/null <<'EOF' || return 1
-polkit.addRule(function(action, subject) {
-  // Разрешаем пользователю telegram_gateway только restart для xray.service
-    if (subject.user === "telegram_gateway" &&
-        action.id === "org.freedesktop.systemd1.manage-units" &&
-        action.lookup("unit") === "xray.service" &&
-        action.lookup("verb") === "restart") {
-    return polkit.Result.YES;
-    }
-
-  // Разрешаем пользователю telegram_gateway reboot
-    if (subject.user === "telegram_gateway" &&
-        (action.id === "org.freedesktop.login1.reboot" ||
-        action.id === "org.freedesktop.login1.reboot-multiple-sessions")) {
-    return polkit.Result.YES;
-    }
-});
-EOF
+    install -m 755 -o root -g root "script/telegram_gateway.sh" "/usr/local/bin/service/telegram_gateway.sh" || return 1
+    install -m 644 -o root -g root "cfg/telegram_gateway.service" "/etc/systemd/system/telegram_gateway.service" || return 1
+    install -m 644 -o root -g root "cfg/50-telegram_gateway.rules" "/etc/polkit-1/rules.d/50-telegram_gateway.rules" || return 1
+    systemctl daemon-reload
+    systemctl enable -q --now telegram_gateway.service
 }
-
-# start Telegram gateway
-run_and_check "create Telegram gateway service" conf_tg_gateway
-run_and_check "reload systemd" systemctl daemon-reload
-run_and_check "enable autostart Telegram gateway service" systemctl -q enable telegram_gateway.service
-run_and_check "start Telegram gateway service" systemctl start telegram_gateway.service
+run_and_check " Telegram gateway service installation" conf_tg_gateway
 
 
 # final output
