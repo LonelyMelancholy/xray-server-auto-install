@@ -3,7 +3,6 @@ Description=Timer for run traffic_block.service every 10m
 
 [Timer]
 OnCalendar=*-*-* *:0/10:00
-Persistent=true
 AccuracySec=1s
 RandomizedDelaySec=10
 
