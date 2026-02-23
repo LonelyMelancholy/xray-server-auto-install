@@ -165,7 +165,7 @@ answer_callback() {
 
 show_menu() {
   local chat_id="$1"
-  send_message "$chat_id" "Menu $HOSTNAME management bot.\nPlease choose command:" "$MAIN_KB_JSON"
+  send_message "$chat_id" "Menu $HOSTNAME management bot.\nPlease choose command:                         " "$MAIN_KB_JSON"
 }
 
 is_admin_chat() {
@@ -351,7 +351,7 @@ handle_message() {
         [[ -z "$who" ]] && who="User"
 
         STATE=""
-        send_message "$chat_id" "Hello ${who}\nWelcome to $HOSTNAME management bot.\nPlease choose command:" "$MAIN_KB_JSON"
+        send_message "$chat_id" "Hello, ${who}.\nWelcome to $HOSTNAME management bot.\nPlease choose command:                         " "$MAIN_KB_JSON"
         return
     fi
 
