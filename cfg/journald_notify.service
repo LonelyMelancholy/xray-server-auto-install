@@ -1,0 +1,15 @@
+[Unit]
+Description=Telegram notify journald error level err-crit-alert-emerg
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=telegram_gateway
+SupplementaryGroups=systemd-journal
+ExecStart=/usr/local/bin/telegram/journald_notify.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

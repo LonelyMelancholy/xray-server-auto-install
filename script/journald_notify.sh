@@ -1,10 +1,10 @@
 #!/bin/bash
-# script for notify errors in journalctl level err-crit-alert-emerg via Telegram
-# all errors are logged in journald, see journalctl -t journalctl_notify
+# script for notify errors in journald level err-crit-alert-emerg via Telegram
+# all errors are logged in journald, see journalctl -t journald_notify
 
 # main variables
-readonly LOCK_FILE="/run/lock/journalctl_notify.lock"
-readonly STATE_FILE="/var/tmp/journalctl_notify.last_cursor"
+readonly LOCK_FILE="/run/lock/journald_notify.lock"
+readonly STATE_FILE="/var/tmp/journald_notify.last_cursor"
 
 # export path just in case
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -26,10 +26,10 @@ if [[ -f "$STATE_FILE" ]]; then
 fi
 
 # enable logging
-exec > >(systemd-cat -t journalctl_notify -p info) 2> >(systemd-cat -t journalctl_notify -p err) 5> >(systemd-cat -t journalctl_notify -p notice)
+exec > >(systemd-cat -t journald_notify -p info) 2> >(systemd-cat -t journald_notify -p err) 5> >(systemd-cat -t journald_notify -p notice)
 
 # start logging message
-echo "journalctl notify started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
+echo "journald notify started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 
 # user check
 [[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
@@ -41,7 +41,7 @@ flock -n ${fd} || { echo "Error: another instance is running, exit" >&2; exit 1;
 # exit logging message function
 # shellcheck disable=SC2329
 on_exit() {
-    echo "journalctl notify ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
+    echo "journald notify ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 }
 
 # trap for the end log message for the end log
@@ -64,14 +64,14 @@ while IFS= read -r json; do
     prio=$(jq -r '.PRIORITY // empty' <<<"$json")
 
     # collect message
-    MESSAGE="❌<b> Journalctl error report</b> 
+    MESSAGE="❌<b> Journald error report</b> 
 
 🖥️ <b>Host:</b> $(hostname)
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 🚨 <b>Error level:</b> ${ERROR_LEVEL[$prio]}
 ⚙️ <b>Unit:</b> ${unit}
 📑 <b>Messsage:</b> ${msg}
-💾 <b>Notify log:</b> journalctl -t journalctl_notify"
+💾 <b>Notify log:</b> journalctl -t journald_notify"
     
     # send message
     telegram_message

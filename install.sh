@@ -754,6 +754,37 @@ EOF
 fi
 
 
+# maintance script install and add link to home dir service_user_********
+# shellcheck disable=SC2329
+install_scr_service() {
+    install -m 644 -o root -g root "script/share/telegram.lib.sh" "/usr/local/lib/service/telegram.lib.sh" || return 1
+    install -m 644 -o root -g root "script/share/run_lock.lib.sh" "/usr/local/lib/service/run_lock.lib.sh" || return 1
+    install -m 644 -o root -g root "script/share/variables.lib.sh" "/usr/local/lib/service/variables.lib.sh" || return 1
+    install -m 755 -o root -g root "script/useradd.sh" "/usr/local/bin/service/useradd.sh" || return 1
+    install -m 755 -o root -g root "script/userdel.sh" "/usr/local/bin/service/userdel.sh" || return 1
+    install -m 755 -o root -g root "script/usershow.sh" "/usr/local/bin/service/usershow.sh" || return 1
+    install -m 755 -o root -g root "script/userinfo.sh" "/usr/local/bin/service/userinfo.sh" || return 1
+    install -m 755 -o root -g root "script/system_info.sh" "/usr/local/bin/service/system_info.sh" || return 1
+    install -m 755 -o root -g root "script/restore_backup.sh" "/usr/local/bin/service/restore_backup.sh" || return 1
+    install -m 755 -o root -g root "script/userblock.sh" "/usr/local/bin/service/userblock.sh" || return 1
+    install -m 755 -o root -g root "script/time_unblock.sh" "/usr/local/bin/service/time_unblock.sh" || return 1
+    install -m 755 -o root -g root "script/traffic_unblock.sh" "/usr/local/bin/service/traffic_unblock.sh" || return 1
+
+    ln -sfn "/usr/local/bin/service/useradd.sh" "$USER_HOME/user_add" || return 1
+    ln -sfn "/usr/local/bin/service/userdel.sh" "$USER_HOME/user_del" || return 1
+    ln -sfn "/usr/local/bin/service/time_unblock.sh" "$USER_HOME/time_unblock" || return 1
+    ln -sfn "/usr/local/bin/service/userblock.sh" "$USER_HOME/user_block" || return 1
+    ln -sfn "/usr/local/bin/service/usershow.sh" "$USER_HOME/user_show" || return 1
+    ln -sfn "/usr/local/bin/service/system_info.sh" "$USER_HOME/system_info" || return 1
+    ln -sfn "/usr/local/bin/service/restore_backup.sh" "$USER_HOME/restore_backup" || return 1
+    ln -sfn "/usr/local/bin/service/userinfo.sh" "$USER_HOME/user_info" || return 1
+    ln -sfn "/usr/local/bin/service/traffic_unblock.sh" "$USER_HOME/traffic_unblock" || return 1
+
+    find "$USER_HOME" -type l -exec chown -h "$SECOND_USER":"$SECOND_USER" {} +  || return 1
+}
+run_and_check "all service script installation and create link in home directory" install_scr_service
+
+
 # user statistics DB collecting
 # shellcheck disable=SC2329
 install_scr_xray_statistics() {
@@ -849,46 +880,15 @@ install_scr_boot() {
 run_and_check "server boot notification script installation" install_scr_boot
 
 
-# journalctl notify script via Telegram
+# journald notify script via Telegram
 # shellcheck disable=SC2329
-install_scr_journalctl_notify() {
-    install -m 644 -o root -g root "cfg/journalctl_notify.service" "/etc/systemd/system/journalctl_notify.service" || return 1
-    install -m 755 -o root -g root "script/journalctl_notify.sh" "/usr/local/bin/telegram/journalctl_notify.sh" || return 1
+install_scr_journald_notify() {
+    install -m 644 -o root -g root "cfg/journald_notify.service" "/etc/systemd/system/journald_notify.service" || return 1
+    install -m 755 -o root -g root "script/journald_notify.sh" "/usr/local/bin/telegram/journald_notify.sh" || return 1
     systemctl daemon-reload || return 1
-    systemctl enable -q --now journalctl_notify.service || return 1
+    systemctl enable -q --now journald_notify.service || return 1
 }
-run_and_check "journalctl error notification script installation" install_scr_journalctl_notify
-
-
-# maintance script install and add link to home dir service_user_********
-# shellcheck disable=SC2329
-install_scr_service() {
-    install -m 644 -o root -g root "script/share/telegram.lib.sh" "/usr/local/lib/service/telegram.lib.sh" || return 1
-    install -m 644 -o root -g root "script/share/run_lock.lib.sh" "/usr/local/lib/service/run_lock.lib.sh" || return 1
-    install -m 644 -o root -g root "script/share/variables.lib.sh" "/usr/local/lib/service/variables.lib.sh" || return 1
-    install -m 755 -o root -g root "script/useradd.sh" "/usr/local/bin/service/useradd.sh" || return 1
-    install -m 755 -o root -g root "script/userdel.sh" "/usr/local/bin/service/userdel.sh" || return 1
-    install -m 755 -o root -g root "script/usershow.sh" "/usr/local/bin/service/usershow.sh" || return 1
-    install -m 755 -o root -g root "script/userinfo.sh" "/usr/local/bin/service/userinfo.sh" || return 1
-    install -m 755 -o root -g root "script/system_info.sh" "/usr/local/bin/service/system_info.sh" || return 1
-    install -m 755 -o root -g root "script/restore_backup.sh" "/usr/local/bin/service/restore_backup.sh" || return 1
-    install -m 755 -o root -g root "script/userblock.sh" "/usr/local/bin/service/userblock.sh" || return 1
-    install -m 755 -o root -g root "script/time_unblock.sh" "/usr/local/bin/service/time_unblock.sh" || return 1
-    install -m 755 -o root -g root "script/traffic_unblock.sh" "/usr/local/bin/service/traffic_unblock.sh" || return 1
-
-    ln -sfn "/usr/local/bin/service/useradd.sh" "$USER_HOME/user_add" || return 1
-    ln -sfn "/usr/local/bin/service/userdel.sh" "$USER_HOME/user_del" || return 1
-    ln -sfn "/usr/local/bin/service/time_unblock.sh" "$USER_HOME/time_unblock" || return 1
-    ln -sfn "/usr/local/bin/service/userblock.sh" "$USER_HOME/user_block" || return 1
-    ln -sfn "/usr/local/bin/service/usershow.sh" "$USER_HOME/user_show" || return 1
-    ln -sfn "/usr/local/bin/service/system_info.sh" "$USER_HOME/system_info" || return 1
-    ln -sfn "/usr/local/bin/service/restore_backup.sh" "$USER_HOME/restore_backup" || return 1
-    ln -sfn "/usr/local/bin/service/userinfo.sh" "$USER_HOME/user_info" || return 1
-    ln -sfn "/usr/local/bin/service/traffic_unblock.sh" "$USER_HOME/traffic_unblock" || return 1
-
-    find "$USER_HOME" -type l -exec chown -h "$SECOND_USER":"$SECOND_USER" {} +  || return 1
-}
-run_and_check "all service script installation and create link in home directory" install_scr_service
+run_and_check "journald error notification script installation" install_scr_journald_notify
 
 
 # Telegram gateway script install and start
