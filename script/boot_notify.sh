@@ -87,7 +87,6 @@ COMMON_STATUS=0
 
 # critical daemon status
 SSH_STATUS="$(daemon_status ssh.socket ssh)" || COMMON_STATUS=1
-CRON_STATUS="$(daemon_status cron.service cron)" || COMMON_STATUS=1
 FAIL2BAN_STATUS="$(daemon_status fail2ban.service fail2ban)" || COMMON_STATUS=1
 NGINX_STATUS="$(daemon_status nginx.service nginx)" || COMMON_STATUS=1
 XRAY_STATUS="$(daemon_status xray.service xray)" || COMMON_STATUS=1
@@ -112,7 +111,6 @@ MESSAGE="$MESSAGE_TITLE
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 $SYSTEM_STATUS
 $SSH_STATUS
-$CRON_STATUS
 $FAIL2BAN_STATUS
 $NFTABLES_STATUS
 $NGINX_STATUS

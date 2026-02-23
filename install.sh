@@ -314,47 +314,6 @@ EOF
 }
 run_and_check "changing unattended upgrades settings" conf_un_up
 
-UNATTENDED_UPGRADE_SCRIPT_SOURCE="script/unattended_upgrade.sh"
-UNATTENDED_UPGRADE_SCRIPT_DEST="/usr/local/bin/service/unattended_upgrade.sh"
-un_up_scr() {
-    install -m 755 -o root -g root "$UNATTENDED_UPGRADE_SCRIPT_SOURCE" "$UNATTENDED_UPGRADE_SCRIPT_DEST" || return 1
-    tee /etc/cron.d/unattended-upgrade > /dev/null <<EOF || return 1
-SHELL=/bin/bash
-1 3 1 * * root "$UNATTENDED_UPGRADE_SCRIPT_DEST"
-EOF
-    chmod 644 "/etc/cron.d/unattended-upgrade" || return 1
-}
-run_and_check "security update script installation" un_up_scr
-
-
-# boot notify script via Telegram
-BOOT_SCRIPT_SOURCE="script/boot_notify.sh"
-BOOT_SCRIPT_DEST="/usr/local/bin/telegram/boot_notify.sh"
-
-install_scr_boot() {
-    install -m 755 -o root -g root "$BOOT_SCRIPT_SOURCE" "$BOOT_SCRIPT_DEST" || return 1
-    tee /etc/systemd/system/boot_notify.service > /dev/null <<EOF || return 1
-[Unit]
-Description=Telegram notify after boot
-Wants=network-online.target
-After=network-online.target
-
-[Service]
-User=telegram_gateway
-Group=telegram_gateway
-Type=oneshot
-Restart=no
-ExecStart=$BOOT_SCRIPT_DEST
-
-[Install]
-WantedBy=multi-user.target
-EOF
-    systemctl daemon-reload || return 1
-    systemctl -q enable boot_notify.service || return 1
-}
-
-run_and_check "server boot notification script installation" install_scr_boot
-
 
 # nginx+sert install
 install_with_retry "install nginx and certbot package" apt-get install -y nginx certbot python3-certbot-nginx 
@@ -367,40 +326,19 @@ conf_nginx() {
 
     mkdir -p "/var/www/${XRAY_HOSTNAME}/html" || return 1
 
-    tee "/etc/nginx/sites-available/${XRAY_HOSTNAME}.conf" >/dev/null <<'EOF' || return 1
-server {
-    listen 80;
-    listen [::]:80;
-    server_name __HOST__;
+    # install nginx .conf file
+    install -m 644 -o root -g root "cfg/nginx_80.conf" "/etc/nginx/sites-available/${XRAY_HOSTNAME}.conf" || return 1
 
-    root /var/www/__HOST__/html;
-
-    access_log /var/log/nginx/__HOST__.80.access.log;
-    error_log  /var/log/nginx/__HOST__.80.error.log;
-
-    location ^~ /.well-known/acme-challenge/ {
-        try_files $uri =404;
-        default_type "text/plain";
-        allow all;
-    }
-
-    location / {
-        return 301 https://$host$request_uri;
-    }
-
-}
-
-EOF
-
-    # change marker XRAY_HOSTNAME to variable value
-    sed -i "s/__HOST__/${XRAY_HOSTNAME}/g" "/etc/nginx/sites-available/${XRAY_HOSTNAME}.conf" || return 1
+    # change marker {HOST} to variable value
+    sed -i "s/{HOST}/${XRAY_HOSTNAME}/g" "/etc/nginx/sites-available/${XRAY_HOSTNAME}.conf" || return 1
 
     # turn on site
     ln -s "/etc/nginx/sites-available/${XRAY_HOSTNAME}.conf" /etc/nginx/sites-enabled/ || return 1
 
-    # turn on nginx
+    # check .conf and turn on nginx
     nginx -t &> /dev/null || return 1
     systemctl enable -q --now nginx || return 1
+    sleep 1
     systemctl restart nginx > /dev/null || return 1
 }
 run_and_check "configure nginx" conf_nginx
@@ -411,31 +349,13 @@ conf_cert() {
 run_and_check "configure sertificates" conf_cert
 
 conf_nginx_sert() {
-        tee -a "/etc/nginx/sites-available/${XRAY_HOSTNAME}.conf" >/dev/null <<'EOF' || return 1
-server {
-    listen 127.0.0.1:8443 ssl http2 proxy_protocol;
-    server_name __HOST__;
+    # install nginx .conf file
+    install -m 644 -o root -g root "cfg/nginx_80_443.conf" "/etc/nginx/sites-available/${XRAY_HOSTNAME}.conf" || return 1
 
-    root /var/www/__HOST__/html;
-
-    access_log /var/log/nginx/__HOST__.8443.access.log;
-    error_log  /var/log/nginx/__HOST__.8443.error.log;
-
-    location / {
-        return 403;
-    }
-
-    set_real_ip_from 127.0.0.1;
-    real_ip_header proxy_protocol;
-
-    ssl_protocols TLSv1.3;
-    ssl_certificate /etc/letsencrypt/live/__HOST__/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/__HOST__/privkey.pem;
-}
-EOF
-
-    sed -i "s/__HOST__/${XRAY_HOSTNAME}/g" "/etc/nginx/sites-available/${XRAY_HOSTNAME}.conf" || return 1
+    # change marker {HOST} to variable value
+    sed -i "s/{HOST}/${XRAY_HOSTNAME}/g" "/etc/nginx/sites-available/${XRAY_HOSTNAME}.conf" || return 1
     
+    # check .conf and restart
     nginx -t &> /dev/null || return 1
     systemctl restart nginx > /dev/null || return 1
 }
@@ -870,91 +790,92 @@ name: $XRAY_NAME, vless ip_4 link: $VLESS_URI_IP4
 EOF
 fi
 
-# auto update xray and geobase
-XRAY_SCRIPT_SOURCE="script/xray_update.sh"
-XRAY_SCRIPT_DEST="/usr/local/bin/service/xray_update.sh"
 
-install_scr_xr_up() {
-    install -m 755 -o root -g root "$XRAY_SCRIPT_SOURCE" "$XRAY_SCRIPT_DEST" || return 1
-    tee /etc/cron.d/xray_update > /dev/null <<EOF || return 1
-SHELL=/bin/bash
-1 2 1 * * root "$XRAY_SCRIPT_DEST"
-EOF
-    chmod 644 "/etc/cron.d/xray_update" || return 1
+# user statistics DB collecting
+install_scr_xray_statistics() {
+    install -m 644 -o root -g root "cfg/xray_statistics.timer" "/etc/systemd/system/xray_statistics.timer" || return 1
+    install -m 644 -o root -g root "cfg/xray_statistics.service" "/etc/systemd/system/xray_statistics.service" || return 1
+    install -m 755 -o root -g root "script/xray_statistics.sh" "/usr/local/bin/service/xray_statistics.sh" || return 1
+    systemctl daemon-reload || return 1
+    systemctl enable --now xray_statistics.timer || return 1
 }
-run_and_check "xray and geo*.dat update script installation" install_scr_xr_up
+run_and_check "xray statistic script installation" install_scr_xray_statistics
 
 
-# user stat DB
-XRAY_STAT_SCRIPT_SRC="script/xray_stat.sh"
-XRAY_STAT_SCRIPT_DEST="/usr/local/bin/service/xray_stat.sh"
-
-install_scr_xray_stat() {
-    install -m 755 -o root -g root "$XRAY_STAT_SCRIPT_SRC" "$XRAY_STAT_SCRIPT_DEST" || return 1
-    tee /etc/cron.d/xray_stat > /dev/null <<EOF || return 1
-SHELL=/bin/bash
-*/10 * * * * telegram_gateway "$XRAY_STAT_SCRIPT_DEST"
-EOF
-    chmod 644 "/etc/cron.d/xray_stat" || return 1
+# user server traffic + remaining days - Telegram bot notify
+install_scr_user_notify() {
+    install -m 644 -o root -g root "cfg/user_notify.timer" "/etc/systemd/system/user_notify.timer" || return 1
+    install -m 644 -o root -g root "cfg/user_notify.service" "/etc/systemd/system/user_notify.service" || return 1
+    install -m 755 -o root -g root "script/user_notify.sh" "/usr/local/bin/telegram/user_notify.sh" || return 1
+    systemctl daemon-reload || return 1
+    systemctl enable --now user_notify.timer || return 1
 }
-run_and_check "xray statistic script installation" install_scr_xray_stat
+run_and_check "user daily report script installation" install_scr_user_notify
 
 
-# user traffic ban
-TRAFFIC_BLOCK_SCRIPT_SRC="script/traffic_block.sh"
-TRAFFIC_BLOCK_SCRIPT_DEST="/usr/local/bin/service/traffic_block.sh"
+# time block expired users + Telegram bot notify
+install_scr_time_block() {
+    install -m 644 -o root -g root "cfg/time_block.timer" "/etc/systemd/system/time_block.timer" || return 1
+    install -m 644 -o root -g root "cfg/time_block.service" "/etc/systemd/system/time_block.service" || return 1
+    install -m 755 -o root -g root "script/time_block.sh" "/usr/local/bin/service/time_block.sh" || return 1
+    systemctl daemon-reload || return 1
+    systemctl enable --now time_block.timer || return 1
+}
+run_and_check "time block expired user script installation" install_scr_time_block
 
+
+# user traffic block + Telegram bot notify
 install_scr_traffic_block() {
-    install -m 755 -o root -g root "$TRAFFIC_BLOCK_SCRIPT_SRC" "$TRAFFIC_BLOCK_SCRIPT_DEST" || return 1
-    tee /etc/cron.d/traffic_block > /dev/null <<EOF || return 1
-SHELL=/bin/bash
-10 * * * * telegram_gateway "$TRAFFIC_BLOCK_SCRIPT_DEST"
-EOF
-    chmod 644 "/etc/cron.d/traffic_block" || return 1
+    install -m 644 -o root -g root "cfg/traffic_block.timer" "/etc/systemd/system/traffic_block.timer" || return 1
+    install -m 644 -o root -g root "cfg/traffic_block.service" "/etc/systemd/system/traffic_block.service" || return 1
+    install -m 755 -o root -g root "script/traffic_block.sh" "/usr/local/bin/service/traffic_block.sh" || return 1
+    systemctl daemon-reload || return 1
+    systemctl enable --now traffic_block.timer || return 1
 }
 run_and_check "traffic block script installation" install_scr_traffic_block
 
 
-# user, server traffic + user exp date Telegram bot notify
-USER_NOTIFY_SCRIPT_SOURCE="script/user_notify.sh"
-USER_NOTIFY_SCRIPT_DEST="/usr/local/bin/telegram/user_notify.sh"
-install_scr_user() {
-    install -m 755 -o root -g root "$USER_NOTIFY_SCRIPT_SOURCE" "$USER_NOTIFY_SCRIPT_DEST" || return 1
-    tee /etc/cron.d/user_notify > /dev/null <<EOF || return 1
-SHELL=/bin/bash
-1 1 * * * telegram_gateway "$USER_NOTIFY_SCRIPT_DEST"
-EOF
-    chmod 644 "/etc/cron.d/user_notify" || return 1
-}
-run_and_check "user daily report script installation" install_scr_user
-
-
-# time block exp users + Telegram bot notify
-TIME_BLOCK_SCRIPT_SOURCE="script/time_block.sh"
-TIME_BLOCK_SCRIPT_DEST="/usr/local/bin/service/time_block.sh"
-install_scr_time_block() {
-    install -m 755 -o root -g root "$TIME_BLOCK_SCRIPT_SOURCE" "$TIME_BLOCK_SCRIPT_DEST" || return 1
-    tee /etc/cron.d/time_block > /dev/null <<EOF || return 1
-SHELL=/bin/bash
-1 0 * * * telegram_gateway "$TIME_BLOCK_SCRIPT_DEST"
-EOF
-    chmod 644 "/etc/cron.d/time_block" || return 1
-}
-run_and_check "time block exp user script installation" install_scr_time_block
-
-
 # xray backup Telegram bot notify
-XRAY_BACKUP_SCRIPT_SOURCE="script/xray_backup.sh"
-XRAY_BACKUP_SCRIPT_DEST="/usr/local/bin/service/xray_backup.sh"
 install_scr_xray_backup() {
-    install -m 755 -o root -g root "$XRAY_BACKUP_SCRIPT_SOURCE" "$XRAY_BACKUP_SCRIPT_DEST" || return 1
-    tee /etc/cron.d/xray_backup > /dev/null <<'EOF' || return 1
-SHELL=/bin/bash
-0 23 28-31 * * telegram_gateway [ "$(date -d tomorrow +\%d)" = "01" ] && /usr/local/bin/service/xray_backup.sh 0
-EOF
-    chmod 644 "/etc/cron.d/xray_backup" || return 1
+    install -m 644 -o root -g root "cfg/xray_backup.timer" "/etc/systemd/system/xray_backup.timer" || return 1
+    install -m 644 -o root -g root "cfg/xray_backup.service" "/etc/systemd/system/xray_backup.service" || return 1
+    install -m 755 -o root -g root "script/xray_backup.sh" "/usr/local/bin/service/xray_backup.sh" || return 1
+    systemctl daemon-reload || return 1
+    systemctl enable --now xray_backup.timer || return 1
 }
 run_and_check "xray backup script installation" install_scr_xray_backup
+
+
+# auto update xray and geo*.dat + notify via Telegram
+install_scr_xray_update() {
+    install -m 644 -o root -g root "cfg/xray_update.timer" "/etc/systemd/system/xray_update.timer" || return 1
+    install -m 644 -o root -g root "cfg/xray_update.service" "/etc/systemd/system/xray_update.service" || return 1
+    install -m 755 -o root -g root "script/xray_update.sh" "/usr/local/bin/service/xray_update.sh" || return 1
+    systemctl daemon-reload || return 1
+    systemctl enable --now xray_update.timer || return 1
+}
+run_and_check "xray and geo*.dat update script installation" install_scr_xray_update
+
+
+# unattended upgrade + notify via Telegram
+install_scr_un_up() {
+    install -m 644 -o root -g root "cfg/unattended_upgrade.timer" "/etc/systemd/system/unattended_upgrade.timer" || return 1
+    install -m 644 -o root -g root "cfg/unattended_upgrade.service" "/etc/systemd/system/unattended_upgrade.service" || return 1
+    install -m 755 -o root -g root "script/unattended_upgrade.sh" "/usr/local/bin/service/unattended_upgrade.sh" || return 1
+    systemctl daemon-reload || return 1
+    systemctl enable --now unattended-upgrade.timer || return 1
+}
+run_and_check "unattended update script installation" install_scr_un_up
+
+
+# boot notify script via Telegram
+install_scr_boot() {
+    install -m 644 -o root -g root "cfg/boot_notify.service" "/etc/systemd/system/boot_notify.service" || return 1
+    install -m 755 -o root -g root "script/boot_notify.sh" "/usr/local/bin/telegram/boot_notify.sh" || return 1
+    systemctl daemon-reload || return 1
+    systemctl -q enable boot_notify.service || return 1
+}
+run_and_check "server boot notification script installation" install_scr_boot
 
 
 # maintance script

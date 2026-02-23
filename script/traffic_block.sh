@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# script for autoblock user who download traffic limit via cron every hour
+# script for autoblock user who download traffic limit via systemd timer every 10m
 # all errors are logged in journald, see journalctl -t traffic_block
-# 10 * * * * telegram_gateway /usr/local/bin/service/traffic_block.sh
-# exit codes work to tell Cron about success
+# exit codes work to tell systemd about success
 
 # common variables source
 # shellcheck source=share/variables.lib.sh

@@ -1,8 +1,7 @@
 #!/bin/bash
-# auto install upgrade (unattended-upgrade) and send notify via cron every first day month, 3:01 night time
+# auto install upgrade (unattended-upgrade) and send notify via systemd timer every first day month, 3:01 night time
 # all errors are logged in journald, see journalctl -t unattended-upgrade
-# 1 3 1 * * root /usr/local/bin/service/unattended_upgrade.sh
-# exit codes work to tell Cron about success
+# exit codes work to tell systemd about success
 
 # main variables
 readonly LOCK_FILE="/run/lock/unattended_upgrade.lock"

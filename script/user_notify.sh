@@ -1,8 +1,7 @@
 #!/bin/bash
-# script for notify xray traffic and user exp date via cron every day 1:01 night time
+# script for notify xray traffic and user exp date via systemd timer every day 0:02 night time
 # all errors are logged in journald, see journalctl -t user_notify
-# 1 1 * * * telegram_gateway /usr/local/bin/telegram/user_notify.sh
-# exit codes work to tell Cron about success
+# exit codes work to tell systemd about success
 
 # common variables source
 # shellcheck source=share/variables.lib.sh

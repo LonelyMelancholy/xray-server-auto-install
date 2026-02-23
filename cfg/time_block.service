@@ -1,0 +1,7 @@
+[Unit]
+Description=Service for running a script that blocks expired user in xray, start via timer
+
+[Service]
+Type=oneshot
+User=telegram_gateway
+ExecStart=/usr/local/bin/service/time_block.sh

@@ -1,0 +1,13 @@
+[Unit]
+Description=Telegram notify after boot
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=telegram_gateway
+Type=oneshot
+Restart=no
+ExecStart=/usr/local/bin/telegram/boot_notify.sh
+
+[Install]
+WantedBy=multi-user.target

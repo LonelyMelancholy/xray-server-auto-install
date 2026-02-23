@@ -1,0 +1,7 @@
+[Unit]
+Description=Service for running a script who run unattended upgrade
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/bin/service/unattended_upgrade.sh

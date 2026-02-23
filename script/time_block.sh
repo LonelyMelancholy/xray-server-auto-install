@@ -1,8 +1,7 @@
 #!/bin/bash
-# script for time block xray expired user via cron every day 0:01 night time
+# script for time block xray expired user via systemd timer every day 0:01 night time
 # all errors are logged in journald, see journalctl -t time_block
-# 1 0 * * * telegram_gateway /usr/local/bin/service/time_block.sh
-# exit codes work to tell Cron about success
+# exit codes work to tell systemd about success
 
 # common variables source
 # shellcheck source=share/variables.lib.sh

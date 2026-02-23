@@ -1,8 +1,7 @@
 #!/bin/bash
-# script for xray backup via cron 23:00 night time last day month
+# script for xray backup via systemd timer every first day month, 1:01 night time
 # all errors are logged in journald, see journalctl -t xray_backup
-# 0 23 28-31 * * root [ "$(date -v+1d +\%d)" = "01" ] && "/usr/local/bin/service/xray_backup.sh"
-# exit codes work to tell Cron about success
+# exit codes work to tell systemd about success
 
 # common variables source
 # shellcheck source=share/variables.lib.sh

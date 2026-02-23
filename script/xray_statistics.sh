@@ -1,8 +1,7 @@
 #!/bin/bash
-# script for collecting xray traffic stat via cron every 10m
-# all errors are logged in journald, see journalctl -t xray_stat
-# */10 * * * * telegram_gateway /usr/local/bin/service/xray_stat.sh
-# exit codes work to tell Cron about success
+# script for collecting xray traffic stat via systemd every 5m
+# all errors are logged in journald, see journalctl -t xray_statistics
+# exit codes work to tell systemd about success
 
 # common variables source
 # shellcheck source=share/variables.lib.sh
@@ -15,10 +14,10 @@ TMP_TR_DB_M_OLD="$(mktemp)" || { echo "Error: create temp file failed, exit" >&2
 TMP_TR_DB_Y_OLD="$(mktemp)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
 TMP_TR_DB_M_NEW="$(mktemp)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
 TMP_TR_DB_Y_NEW="$(mktemp)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
-readonly LOCK_FILE="/run/lock/xray_stat.lock"
+readonly LOCK_FILE="/run/lock/xray_statistics.lock"
 
 # enable logging
-exec > >(systemd-cat -t xray_stat -p info) 2> >(systemd-cat -t xray_stat -p err) 5> >(systemd-cat -t xray_stat -p notice)
+exec > >(systemd-cat -t xray_statistics -p info) 2> >(systemd-cat -t xray_statistics -p err) 5> >(systemd-cat -t xray_statistics -p notice)
 
 # start logging message
 echo "xray stat started - $(date '+%Y-%m-%d %H:%M:%S')" >&5

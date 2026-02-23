@@ -1,8 +1,7 @@
 #!/bin/bash
-# auto install xray update and send notify via cron every first day month, 2:01 night time
+# auto install xray update and send notify via systemd timer every first day month, 2:01 night time
 # all errors are logged in journald, see journalctl -t xray_update
-# 1 2 1 * * root /usr/local/bin/service/xray_update.sh
-# exit codes work to tell Cron about success
+# exit codes work to tell systemd about success
 
 # main variables
 readonly DATE="$(date '+%F')"

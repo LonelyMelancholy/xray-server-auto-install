@@ -1,0 +1,11 @@
+[Unit]
+Description=Timer for run xray_update.service monthly on day 1 at 02:01
+
+[Timer]
+OnCalendar=*-*-01 02:01:00
+Persistent=true
+AccuracySec=1s
+RandomizedDelaySec=0
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=Timer for run user_notify.service daily at 00:02
+
+[Timer]
+OnCalendar=*-*-* 00:02:00
+Persistent=true
+AccuracySec=1s
+RandomizedDelaySec=10
+
+[Install]
+WantedBy=timers.target

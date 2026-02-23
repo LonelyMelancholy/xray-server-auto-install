@@ -1,0 +1,7 @@
+[Unit]
+Description=Service for running a script who update Xray and geo*.dat
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/bin/service/xray_update.sh
