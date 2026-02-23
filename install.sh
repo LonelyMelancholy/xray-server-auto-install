@@ -755,6 +755,7 @@ fi
 
 
 # user statistics DB collecting
+# shellcheck disable=SC2329
 install_scr_xray_statistics() {
     install -m 644 -o root -g root "cfg/xray_statistics.timer" "/etc/systemd/system/xray_statistics.timer" || return 1
     install -m 644 -o root -g root "cfg/xray_statistics.service" "/etc/systemd/system/xray_statistics.service" || return 1
@@ -766,6 +767,7 @@ run_and_check "xray statistic script installation" install_scr_xray_statistics
 
 
 # user server traffic + remaining days - Telegram bot notify
+# shellcheck disable=SC2329
 install_scr_user_notify() {
     install -m 644 -o root -g root "cfg/user_notify.timer" "/etc/systemd/system/user_notify.timer" || return 1
     install -m 644 -o root -g root "cfg/user_notify.service" "/etc/systemd/system/user_notify.service" || return 1
@@ -777,6 +779,7 @@ run_and_check "user daily report script installation" install_scr_user_notify
 
 
 # time block expired users + Telegram bot notify
+# shellcheck disable=SC2329
 install_scr_time_block() {
     install -m 644 -o root -g root "cfg/time_block.timer" "/etc/systemd/system/time_block.timer" || return 1
     install -m 644 -o root -g root "cfg/time_block.service" "/etc/systemd/system/time_block.service" || return 1
@@ -788,6 +791,7 @@ run_and_check "time block expired user script installation" install_scr_time_blo
 
 
 # user traffic block + Telegram bot notify
+# shellcheck disable=SC2329
 install_scr_traffic_block() {
     install -m 644 -o root -g root "cfg/traffic_block.timer" "/etc/systemd/system/traffic_block.timer" || return 1
     install -m 644 -o root -g root "cfg/traffic_block.service" "/etc/systemd/system/traffic_block.service" || return 1
@@ -799,6 +803,7 @@ run_and_check "traffic block script installation" install_scr_traffic_block
 
 
 # xray backup Telegram bot notify
+# shellcheck disable=SC2329
 install_scr_xray_backup() {
     install -m 644 -o root -g root "cfg/xray_backup.timer" "/etc/systemd/system/xray_backup.timer" || return 1
     install -m 644 -o root -g root "cfg/xray_backup.service" "/etc/systemd/system/xray_backup.service" || return 1
@@ -810,6 +815,7 @@ run_and_check "xray backup script installation" install_scr_xray_backup
 
 
 # auto update xray and geo*.dat + notify via Telegram
+# shellcheck disable=SC2329
 install_scr_xray_update() {
     install -m 644 -o root -g root "cfg/xray_update.timer" "/etc/systemd/system/xray_update.timer" || return 1
     install -m 644 -o root -g root "cfg/xray_update.service" "/etc/systemd/system/xray_update.service" || return 1
@@ -821,6 +827,7 @@ run_and_check "xray and geo*.dat update script installation" install_scr_xray_up
 
 
 # unattended upgrade + notify via Telegram
+# shellcheck disable=SC2329
 install_scr_un_up() {
     install -m 644 -o root -g root "cfg/unattended_upgrade.timer" "/etc/systemd/system/unattended_upgrade.timer" || return 1
     install -m 644 -o root -g root "cfg/unattended_upgrade.service" "/etc/systemd/system/unattended_upgrade.service" || return 1
@@ -832,16 +839,29 @@ run_and_check "unattended update script installation" install_scr_un_up
 
 
 # boot notify script via Telegram
+# shellcheck disable=SC2329
 install_scr_boot() {
     install -m 644 -o root -g root "cfg/boot_notify.service" "/etc/systemd/system/boot_notify.service" || return 1
     install -m 755 -o root -g root "script/boot_notify.sh" "/usr/local/bin/telegram/boot_notify.sh" || return 1
     systemctl daemon-reload || return 1
-    systemctl -q enable boot_notify.service || return 1
+    systemctl enable -q boot_notify.service || return 1
 }
 run_and_check "server boot notification script installation" install_scr_boot
 
 
+# journalctl notify script via Telegram
+# shellcheck disable=SC2329
+install_scr_journalctl_notify() {
+    install -m 644 -o root -g root "cfg/journalctl_notify.service" "/etc/systemd/system/journalctl_notify.service" || return 1
+    install -m 755 -o root -g root "script/journalctl_notify.sh" "/usr/local/bin/telegram/journalctl_notify.sh" || return 1
+    systemctl daemon-reload || return 1
+    systemctl enable -q --now journalctl_notify.service || return 1
+}
+run_and_check "journalctl error notification script installation" install_scr_journalctl_notify
+
+
 # maintance script install and add link to home dir service_user_********
+# shellcheck disable=SC2329
 install_scr_service() {
     install -m 644 -o root -g root "script/share/telegram.lib.sh" "/usr/local/lib/service/telegram.lib.sh" || return 1
     install -m 644 -o root -g root "script/share/run_lock.lib.sh" "/usr/local/lib/service/run_lock.lib.sh" || return 1
@@ -872,12 +892,13 @@ run_and_check "all service script installation and create link in home directory
 
 
 # Telegram gateway script install and start
+# shellcheck disable=SC2329
 conf_tg_gateway() {
     install -m 755 -o root -g root "script/telegram_gateway.sh" "/usr/local/bin/service/telegram_gateway.sh" || return 1
     install -m 644 -o root -g root "cfg/telegram_gateway.service" "/etc/systemd/system/telegram_gateway.service" || return 1
     install -m 644 -o root -g root "cfg/50-telegram_gateway.rules" "/etc/polkit-1/rules.d/50-telegram_gateway.rules" || return 1
-    systemctl daemon-reload
-    systemctl enable -q --now telegram_gateway.service
+    systemctl daemon-reload || return 1
+    systemctl enable -q --now telegram_gateway.service || return 1
 }
 run_and_check " Telegram gateway service installation" conf_tg_gateway
 
