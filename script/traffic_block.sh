@@ -17,6 +17,9 @@ declare -a FULL_EMAILS_TO_BLOCK=()
 declare -a USERNAME_TO_BLOCK=()
 RC=1
 
+# enable logging
+exec > >(systemd-cat -t traffic_block -p info) 2> >(systemd-cat -t traffic_block -p err) 5> >(systemd-cat -t traffic_block -p notice)
+
 # start logging message
 echo "traffic block started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 
@@ -45,9 +48,6 @@ rm_tmp() {
 
 # set trap for tmp removing and exit message
 trap 'end_log; rm_tmp;' EXIT
-
-# enable logging
-exec > >(systemd-cat -t traffic_block -p info) 2> >(systemd-cat -t traffic_block -p err) 5> >(systemd-cat -t traffic_block -p notice)
 
 # user check
 [[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }

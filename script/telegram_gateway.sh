@@ -7,7 +7,6 @@ readonly TIMEOUT=50
 readonly HOSTNAME="$(hostname)"
 RC_M=1
 OFFSET=0
-RC=1
 
 # export path just in case
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -22,11 +21,7 @@ echo "telegram_gateway started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 # exit logging message function
 # shellcheck disable=SC2329
 end_log() {
-    if [[ "$RC" -eq "0" && "$?" -eq "0" ]]; then
-        echo "telegram gateway stopped - $(date '+%Y-%m-%d %H:%M:%S')" >&5
-    else
-        echo "telegram gateway failed - $(date '+%Y-%m-%d %H:%M:%S')" >&2
-    fi
+    echo "telegram gateway stopped - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 }
 # trap for the end log message for the end log
 trap 'end_log' EXIT
@@ -51,7 +46,6 @@ declare -a BOT_MSG_IDS=()
 # Bot state (single admin only)
 STATE=""   # "", "WAIT_BLOCK", "WAIT_UNBLOCK", "WAIT_DELETE", "WAIT_ADD", "WAIT_EXP"
 # pending action is implied by STATE
-RC=0
 
 MAIN_KB_JSON='{
     "inline_keyboard":[
@@ -142,22 +136,6 @@ send_message() {
   [[ -n "${mid}" ]] && BOT_MSG_IDS+=("$mid")
 }
 
-send_chunks_4000() {
-  local chat_id="$1"
-  local text="$2"
-  local max=4000
-
-  # Telegram hard limit is 4096; we use 4000 as requested
-  while (( ${#text} > max )); do
-    send_message "$chat_id" "${text:0:max}"
-    text="${text:max}"
-    # small pause to reduce rate-limit risk
-    sleep 0.2
-  done
-  # send the rest (including empty)
-  send_message "$chat_id" "$text"
-}
-
 answer_callback() {
   local cb_id="$1"
   api_post "answerCallbackQuery" \
@@ -191,27 +169,37 @@ valid_arg_num() {
 }
 
 run_and_send_output() {
-  local chat_id="$1"; shift
-
-  local tmp
-  tmp="$(mktemp)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
-  # run, capture stdout+stderr
+    local chat_id="$1"; shift
+    local max=4000
+    local tmp text body
+    tmp="$(mktemp)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
+    # run, capture stdout+stderr
     "$@" >"$tmp" 2>&1
 
-    local cmd_str
-    cmd_str="$(printf "%q " "$@")"
-    cmd_str="${cmd_str% }"
-
-    local body
+    # if file empty, set no output message
     if [[ -s "$tmp" ]]; then
         body="$(cat "$tmp")"
     else
         body="[no output]"
     fi
 
+    # delete tmp after write text to variable
     rm -f "$tmp"
+    
     # send as chunks
-    send_chunks_4000 "$chat_id" "$(printf "%s" "$body")"
+    text="$body"
+    
+    # while number of characters > max 
+    while (( ${#text} > max )); do
+        # send first 4000 characters
+        send_message "$chat_id" "${text:0:max}"
+        # delete first 4000 characters from variable
+        text="${text:max}"
+        # small pause to reduce rate-limit risk
+        sleep 0.2
+    done
+    # send the rest (including empty)
+    send_message "$chat_id" "$text"
 }
 
 prompt_one() {
@@ -327,32 +315,22 @@ handle_message() {
         return
     fi
 
-# Keep chat clean:
-# - delete previous bot output/menu
-# - try to delete user's message (works in groups/supergroups if bot can delete)
-# IMPORTANT: do NOT delete /start (some Telegram clients will show the Start button again
-# if the /start message disappears, which creates an annoying loop).
-# Also handle deep-link payloads: "/start something" and "/start@BotName".
+    # Keep chat clean:
+    # - delete previous bot output/menu
+    # - try to delete user's message (works in groups/supergroups if bot can delete)
+    # IMPORTANT: do NOT delete /start (some Telegram clients will show the Start button again
+    # if the /start message disappears, which creates an annoying loop).
+    # Also handle deep-link payloads: "/start something" and "/start@BotName".
     if [[ -n "${user_msg_id:-}" && "${user_msg_id}" != "null" ]]; then
         if [[ ! "$text" == "/start" ]]; then
             delete_message "$chat_id" "$user_msg_id"
         fi
     fi
 
-  # Commands
+    # Commands
     if [[ "$text" == "/start" || "$text" == "/help" ]]; then
-        local first last who
-        first="$(jq -r '.message.from.first_name // empty' <<<"$upd")"
-        last="$(jq -r '.message.from.last_name // empty' <<<"$upd")"
-
-        who="${first} ${last}"
-        who="$(tr -s ' ' <<<"$who")"
-        who="${who#"${who%%[! ]*}"}"
-        who="${who%"${who##*[! ]}"}"
-        [[ -z "$who" ]] && who="User"
-
         STATE=""
-        send_message "$chat_id" "Welcome, ${who}.\nServer management bot menu, please choose command:\nHost: $HOSTNAME" "$MAIN_KB_JSON"
+        show_menu "$chat_id"
         return
     fi
 
@@ -362,13 +340,13 @@ handle_message() {
         return
     fi
 
-  # If not waiting input, just show menu
+    # If not waiting input, just show menu
     if [[ -z "$STATE" ]]; then
         show_menu "$chat_id"
         return
     fi
 
-  # Normalize for 2-args inputs: newlines -> spaces, trim
+    # Normalize for 2-args inputs: newlines -> spaces, trim
     local norm
     norm="$(tr '\n' ' ' <<<"$text" | tr -s ' ' )"
     norm="${norm#"${norm%%[! ]*}"}"

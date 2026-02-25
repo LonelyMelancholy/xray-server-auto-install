@@ -5,7 +5,6 @@
 # main variables
 readonly LOCK_FILE="/run/lock/journald_notify.lock"
 readonly STATE_FILE="/var/tmp/journald_notify.last_cursor"
-RC=1
 
 # export path just in case
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -34,11 +33,7 @@ echo "journald notify started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 # exit logging message function
 # shellcheck disable=SC2329
 end_log() {
-    if [[ "$RC" -eq "0" && "$?" -eq "0" ]]; then
-        echo "journald notify stopped - $(date '+%Y-%m-%d %H:%M:%S')" >&5
-    else
-        echo "journald notify failed - $(date '+%Y-%m-%d %H:%M:%S')" >&2
-    fi
+    echo "journald notify stopped - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 }
 # trap for the end log message for the end log
 trap 'end_log' EXIT
@@ -53,10 +48,6 @@ flock -n ${fd} || { echo "Error: another instance is running, exit" >&2; exit 1;
 # source Telegram func library
 # shellcheck source=share/telegram.lib.sh
 source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
-
-# If you've reached this point, then all checks are successful and you can set RC to 0
-# Next, check for success using the response code of the last command
-RC=0
 
 # main logic start here
 # run eternal cycle and and catch messages

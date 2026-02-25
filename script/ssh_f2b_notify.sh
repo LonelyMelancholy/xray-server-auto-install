@@ -21,6 +21,7 @@ if [[ -z "${TG_BG:-}" ]]; then
     if [[ "$(whoami)" != "$TARGET_USER" ]]; then
         /usr/bin/setpriv \
         --reuid="$TARGET_USER" \
+        --regid="$TARGET_USER" \
         --init-groups \
         --inh-caps=-all \
         -- "$0" "$@" &
