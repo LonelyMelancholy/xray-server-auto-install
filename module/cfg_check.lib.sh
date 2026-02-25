@@ -1,3 +1,4 @@
+# shellcheck disable=SC2148
 # configuration file checking library
 
 # config file read check

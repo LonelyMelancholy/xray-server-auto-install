@@ -22,9 +22,6 @@ exec > >(systemd-cat -t xray_statistics -p info) 2> >(systemd-cat -t xray_statis
 # start logging message
 echo "xray stat started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 
-# user check
-[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
-
 # exit logging message function
 # shellcheck disable=SC2329
 end_log() {
@@ -37,7 +34,7 @@ end_log() {
 
 # exit rm tmp file function
 # shellcheck disable=SC2329
-rm_tmp_tr_db() {
+rm_tmp() {
     echo "cleaning start - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     if rm -f "$TMP_TR_DB_COMMON" "$TMP_TR_DB_M_OLD" "$TMP_TR_DB_Y_OLD" "$TMP_TR_DB_M_NEW" "$TMP_TR_DB_Y_NEW" > /dev/null; then
         echo "Success: delete tmp TR_DB file"
@@ -49,7 +46,10 @@ rm_tmp_tr_db() {
 }
 
 # trap for the end log message for the end log
-trap 'end_log; rm_tmp_tr_db;' EXIT
+trap 'end_log; rm_tmp;' EXIT
+
+# user check
+[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
 
 # check another instanсe of the script is not running
 exec {fd}> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }

@@ -20,12 +20,11 @@ if [[ -z "${TG_BG:-}" ]]; then
     if [[ "$(whoami)" != "$TARGET_USER" ]]; then
         /usr/bin/setpriv \
         --reuid="$TARGET_USER" \
-        --regid="$TARGET_USER" \
         --init-groups \
         --inh-caps=-all \
-        -- "$0" "$@" &> /dev/null &
+        -- "$0" "$@" &
     else
-        "$0" "$@" &> /dev/null &
+        "$0" "$@" &
     fi
     exit 0
 fi
@@ -33,15 +32,12 @@ fi
 # enable logging
 exec > >(systemd-cat -t ssh_pam_notify -p info) 2> >(systemd-cat -t ssh_pam_notify -p err) 5> >(systemd-cat -t ssh_pam_notify -p notice)
 
-# user check
-[[ "$(whoami)" != "$TARGET_USER" ]] && { echo "Error: you are not the $TARGET_USER user, exit" >&2; exit 1; }
-
 # start logging message
 echo "ssh pam notify started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 
 # exit logging message function
 # shellcheck disable=SC2329
-on_exit() {
+end_log() {
     if [[ "$RC_M" -eq "0" ]]; then
         echo "ssh pam notify ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     else
@@ -50,7 +46,10 @@ on_exit() {
 }
 
 # trap for the end log message for the end log
-trap 'on_exit' EXIT
+trap 'end_log' EXIT
+
+# user check
+[[ "$(whoami)" != "$TARGET_USER" ]] && { echo "Error: you are not the $TARGET_USER user, exit" >&2; exit 1; }
 
 # source Telegram func library
 # shellcheck source=share/telegram.lib.sh

@@ -93,6 +93,7 @@ mkdir -p logs &> /dev/null || { echo "❌ Error: cannot create 'logs' directory,
 # check and source configuration file
 CFG_CHECK="module/cfg_check.lib.sh"
 [[ -r "$CFG_CHECK" ]] || { echo "❌ Error: check '$CFG_CHECK' it's missing or you do not have read permissions, exit"; exit 1; }
+# shellcheck source=module/cfg_check.lib.sh
 source "$CFG_CHECK" || { echo "❌ Error: failed to source '$CFG_CHECK', exit"; exit 1; }
 
 # hostname change

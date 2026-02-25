@@ -21,12 +21,11 @@ if [[ -z "${TG_BG:-}" ]]; then
     if [[ "$(whoami)" != "$TARGET_USER" ]]; then
         /usr/bin/setpriv \
         --reuid="$TARGET_USER" \
-        --regid="$TARGET_USER" \
         --init-groups \
         --inh-caps=-all \
-        -- "$0" "$@" &> /dev/null &
+        -- "$0" "$@" &
     else
-        "$0" "$@" &> /dev/null &
+        "$0" "$@" &
     fi
     exit 0
 fi
@@ -37,12 +36,9 @@ exec > >(systemd-cat -t ssh_f2b_notify -p info) 2> >(systemd-cat -t ssh_f2b_noti
 # start logging message
 echo "ssh fail2ban notify started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 
-# user check
-[[ "$(whoami)" != "$TARGET_USER" ]] && { echo "Error: you are not the $TARGET_USER user, exit" >&2; exit 1; }
-
 # exit logging message function
 # shellcheck disable=SC2329
-on_exit() {
+end_log() {
     if [[ "$RC_M" -eq "0" ]]; then
         echo "ssh fail2ban notify ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     else
@@ -51,7 +47,10 @@ on_exit() {
 }
 
 # trap for the end log message for the end log
-trap 'on_exit' EXIT
+trap 'end_log' EXIT
+
+# user check
+[[ "$(whoami)" != "$TARGET_USER" ]] && { echo "Error: you are not the $TARGET_USER user, exit" >&2; exit 1; }
 
 # function to calculate human readable values ban time
 duration_human() {
@@ -82,7 +81,7 @@ source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to sour
 
 # main logic start here
 # converting seconds to human readable values
-readonly BAN_TIME="$(duration_human "$BANTIME_SEC")"
+BAN_TIME="$(duration_human "$BANTIME_SEC")"
 
 # start collecting message parts
 case "$ACTION" in

@@ -58,6 +58,7 @@ run_and_check() {
 # check configuration file
 CFG_CHECK="module/cfg_check.lib.sh"
 [[ -r "$CFG_CHECK" ]] || { echo "❌ Error: check '$CFG_CHECK' it's missing or you do not have read permissions, exit"; exit 1; }
+# shellcheck source=module/cfg_check.lib.sh
 source "$CFG_CHECK" || { echo "❌ Error: failed to source '$CFG_CHECK', exit"; exit 1; }
 
 
@@ -575,7 +576,7 @@ conf_xray() {
 run_and_check "create xray systemd service" conf_xray
 
 # calculate exp and created date
-readonly CREATED="$(date +%F)"
+CREATED="$(date +%F)"
 
 # write variable
 if [[ "$XRAY_DAYS" == "0" ]]; then
@@ -591,7 +592,7 @@ readonly INBOUND_TAG="Vless"
 readonly DEFAULT_FLOW="xtls-rprx-vision"
 
 # check inbound
-readonly HAS_INBOUND="$(jq --arg tag "$INBOUND_TAG" '
+HAS_INBOUND="$(jq --arg tag "$INBOUND_TAG" '
     any(.inbounds[]?; .tag == $tag and .protocol == "vless")
 ' "$XRAY_CONFIG_SRC")"
 
@@ -601,7 +602,7 @@ if [[ "$HAS_INBOUND" != "true" ]]; then
 fi
 
 # uuid generation
-readonly UUID="$(xray uuid)"
+UUID="$(xray uuid)"
 
 # configure json 
 conf_json_xray() {
@@ -670,23 +671,23 @@ run_and_check "enable xray service" systemctl enable -q --now xray.service
 
 
 # start make link, get inbound paremetres
-readonly XRAY_PORT="$(jq -r --arg tag "$INBOUND_TAG" '
+XRAY_PORT="$(jq -r --arg tag "$INBOUND_TAG" '
   .inbounds[] | select(.tag==$tag) | .port
 ' "$XRAY_CONFIG_DEST")"
 
-readonly REALITY_SNI="$(jq -r --arg tag "$INBOUND_TAG" '
+REALITY_SNI="$(jq -r --arg tag "$INBOUND_TAG" '
   .inbounds[] | select(.tag==$tag) | .streamSettings.realitySettings.serverNames[0] // ""
 ' "$XRAY_CONFIG_DEST")"
 
-readonly PRIVATE_KEY="$(jq -r --arg tag "$INBOUND_TAG" '
+PRIVATE_KEY="$(jq -r --arg tag "$INBOUND_TAG" '
   .inbounds[] | select(.tag==$tag) | .streamSettings.realitySettings.privateKey // ""
 ' "$XRAY_CONFIG_DEST")"
 
-readonly SHORT_ID="$(jq -r --arg tag "$INBOUND_TAG" '
+SHORT_ID="$(jq -r --arg tag "$INBOUND_TAG" '
   .inbounds[] | select(.tag==$tag) | .streamSettings.realitySettings.shortIds[0] // ""
 ' "$XRAY_CONFIG_DEST")"
 
-readonly FLOW="$(jq -r --arg tag "$INBOUND_TAG" '
+FLOW="$(jq -r --arg tag "$INBOUND_TAG" '
   .inbounds[] | select(.tag==$tag) | .settings.clients[0].flow // ""
 ' "$XRAY_CONFIG_DEST")"
 
@@ -708,9 +709,9 @@ check_var "SHORT_ID" "$SHORT_ID"
 check_var "FLOW" "$FLOW"
 
 # generate public key from privat key
-readonly XRAY_X25519_OUT="$(xray x25519 -i "$PRIVATE_KEY")"
+XRAY_X25519_OUT="$(xray x25519 -i "$PRIVATE_KEY")"
 
-readonly PUBLIC_KEY="$(printf '%s\n' "$XRAY_X25519_OUT" | awk -F': ' '/Password:/ {print $2}')"
+PUBLIC_KEY="$(printf '%s\n' "$XRAY_X25519_OUT" | awk -F': ' '/Password:/ {print $2}')"
 
 if [[ -z "$PUBLIC_KEY" ]]; then
   echo "❌ Error: empty publicKey/password, exit"
@@ -728,13 +729,13 @@ IP_6="$(ip -6 route get 2606:4700:4700::1111 2>/dev/null | awk '{for(i=1;i<=NF;i
 uri_encode() { printf '%s' "$1" | jq -sRr @uri; }
 
 # get link
-readonly VLESS_URI_IP4="vless://${UUID}@${IP_4}:${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
+VLESS_URI_IP4="vless://${UUID}@${IP_4}:${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
 security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
 $(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$XRAY_NAME")"
 
 # if not get ip6, skip make vless ip6 link
 if [ -n "$IP_6" ]; then
-    readonly VLESS_URI_IP6="vless://${UUID}@[${IP_6}]:${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
+    VLESS_URI_IP6="vless://${UUID}@[${IP_6}]:${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
 security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
 $(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$XRAY_NAME")"
 fi

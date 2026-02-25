@@ -6,13 +6,14 @@
 source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit"; exit 1; }
 
 # main variables
+readonly USERNAME="$1"
+# make tmp config
 TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
-USERNAME="$1"
 DAYS="$2"
 
 # exit rm tmp file function
 # shellcheck disable=SC2329
-rm_tmp_config() {
+rm_tmp() {
     if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null; then
         echo "✅ Success: delete tmp config file"
     else
@@ -21,7 +22,7 @@ rm_tmp_config() {
 }
 
 # set trap for tmp removing and exit message
-trap 'rm_tmp_config' EXIT
+trap 'rm_tmp' EXIT
 
 # user check
 [[ "$(whoami)" != "telegram_gateway" ]] && { echo "❌ Error: you are not the telegram_gateway user, exit"; exit 1; }
@@ -76,6 +77,7 @@ count_user_in_rule() {
 }
 
 # main func for renew email and deleting from block rule
+# shellcheck disable=SC2329
 make_new_tmp_config() {
     jq \
         --arg inboundTag "$INBOUND_TAG" \
@@ -116,9 +118,8 @@ make_new_tmp_config() {
 }
 
 # function for install new config (original permission saved)
-install_new_conf() {
-    cat "$1" > "$2" || return 1
-}
+# shellcheck disable=SC2329
+install_new_conf() { cat "$1" > "$2" || return 1; }
 
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
@@ -239,3 +240,5 @@ run_and_check "restart xray service" systemctl restart xray.service
 # echo result
 echo "✅ Success: xray config updated for '$USERNAME'"
 echo "✅ Success: new time, created: $TODAY, days: $DAYS, expiration: $EXP"
+
+exit 0

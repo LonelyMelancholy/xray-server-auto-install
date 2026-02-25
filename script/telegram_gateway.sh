@@ -7,6 +7,7 @@ readonly TIMEOUT=50
 readonly HOSTNAME="$(hostname)"
 RC_M=1
 OFFSET=0
+RC=1
 
 # export path just in case
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -16,18 +17,19 @@ export PATH
 exec > >(systemd-cat -t telegram_gateway -p info) 2> >(systemd-cat -t telegram_gateway -p err) 5> >(systemd-cat -t telegram_gateway -p notice)
 
 # start logging message
-echo "boot notify started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
+echo "telegram_gateway started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 
-on_exit() {
-    if [[ "$RC_M" -eq "0" ]]; then
-        echo "boot notify ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
+# exit logging message function
+# shellcheck disable=SC2329
+end_log() {
+    if [[ "$RC" -eq "0" && "$?" -eq "0" ]]; then
+        echo "telegram gateway stopped - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     else
-        echo "boot notify failed - $(date '+%Y-%m-%d %H:%M:%S')" >&2
+        echo "telegram gateway failed - $(date '+%Y-%m-%d %H:%M:%S')" >&2
     fi
 }
-
 # trap for the end log message for the end log
-trap on_exit EXIT
+trap 'end_log' EXIT
 
 # user check
 [[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
@@ -49,8 +51,7 @@ declare -a BOT_MSG_IDS=()
 # Bot state (single admin only)
 STATE=""   # "", "WAIT_BLOCK", "WAIT_UNBLOCK", "WAIT_DELETE", "WAIT_ADD", "WAIT_EXP"
 # pending action is implied by STATE
-
-RC_M=0
+RC=0
 
 MAIN_KB_JSON='{
     "inline_keyboard":[

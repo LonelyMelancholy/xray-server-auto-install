@@ -8,18 +8,24 @@ source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to
 # main variables
 readonly USERNAME="$1"
 readonly ACTION="$2"
+# make tmp file
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
+
+# exit rm tmp file function
+# shellcheck disable=SC2329
+rm_tmp() {
+    if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null; then
+        echo "✅ Success: delete tmp config file"
+    else
+        echo "❌ Error: delete tmp config file"
+    fi
+}
+
+# set trap for tmp removing and exit message
+trap 'rm_tmp' EXIT
 
 # user check
 [[ "$(whoami)" != "telegram_gateway" ]] && { echo "❌ Error: you are not the telegram_gateway user, exit"; exit 1; }
-
-# source library for run_lock and file permission cheking
-source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
-
-# lock check
-run_lock_check "xray" "console"
-
-# read and write conf check
-read_and_write_check "$XRAY_CONFIG" "console"
 
 # argument check
 if [[ ! "$#" -eq 2 || "$USERNAME" == "--help" ]]; then
@@ -32,21 +38,14 @@ if ! [[ $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
     exit 1
 fi
 
-# make tmp file
-TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
+# source library for run_lock and file permission cheking
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
 
-# exit rm tmp file function
-# shellcheck disable=SC2329
-rm_tmp_config() {
-    if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null; then
-        echo "✅ Success: delete tmp config file"
-    else
-        echo "❌ Error: delete tmp config file"
-    fi
-}
+# lock check
+run_lock_check "xray" "console"
 
-# set trap for tmp removing and exit message
-trap 'rm_tmp_config' EXIT
+# read and write conf check
+read_and_write_check "$XRAY_CONFIG" "console"
 
 # helper func
 run_and_check() {

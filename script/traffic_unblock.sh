@@ -5,7 +5,23 @@
 source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit"; exit 1; }
 
 # main variable
-USERNAME="$1"
+readonly USERNAME="$1"
+# make tmp config and tr_db
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
+TMP_TR_DB_M="$(mktemp)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
+
+# exit rm tmp file function
+# shellcheck disable=SC2329
+rm_tmp() {
+    if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null && rm -f "$TMP_TR_DB_M" 2> /dev/null; then
+        echo "✅ Success: delete tmp config file"
+    else
+        echo "❌ Error: delete tmp config file"
+    fi
+}
+
+# set trap for tmp removing and exit message
+trap 'rm_tmp' EXIT
 
 # user check
 [[ "$(whoami)" != "telegram_gateway" ]] && { echo "❌ Error: you are not the telegram_gateway user, exit"; exit 1; }
@@ -21,23 +37,6 @@ if [[ ! $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
     echo "❌ Error: only letters, numbers and - in username, exit"
     exit 1
 fi
-
-# make tmp config and tr_db
-TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
-TMP_TR_DB_M="$(mktemp)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
-
-# exit rm tmp file function
-# shellcheck disable=SC2329
-rm_tmp_config() {
-    if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null && rm -f "$TMP_TR_DB_M" 2> /dev/null; then
-        echo "✅ Success: delete tmp config file"
-    else
-        echo "❌ Error: delete tmp config file"
-    fi
-}
-
-# set trap for tmp removing and exit message
-trap 'rm_tmp_config' EXIT
 
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }

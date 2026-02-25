@@ -9,6 +9,24 @@ source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to
 readonly DEFAULT_FLOW="xtls-rprx-vision"
 readonly USERNAME="$1"
 DAYS="$2"
+# make tmp file
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
+
+# exit rm tmp file function
+# shellcheck disable=SC2329
+rm_tmp() {
+    if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null; then
+        echo "✅ Success: delete tmp config file"
+    else
+        echo "❌ Error: delete tmp config file"
+    fi
+}
+
+# set trap for tmp removing and exit message
+trap 'rm_tmp' EXIT
+
+# user check
+[[ "$(whoami)" != "telegram_gateway" ]] && { echo "❌ Error: you are not the telegram_gateway user, exit"; exit 1; }
 
 # argument check
 if [[ "$#" -ne 2 || "$USERNAME" == "--help" ]]; then
@@ -27,9 +45,6 @@ if ! [[ "$DAYS" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 
-# user check
-[[ "$(whoami)" != "telegram_gateway" ]] && { echo "❌ Error: you are not the telegram_gateway user, exit"; exit 1; }
-
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
 
@@ -40,22 +55,6 @@ run_lock_check "uri_db" "console"
 # read and write conf check
 read_and_write_check "$XRAY_CONFIG" "console"
 read_and_write_check "$URI_DB" "console"
-
-# make tmp file
-TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
-
-# exit rm tmp file function
-# shellcheck disable=SC2329
-rm_tmp_config() {
-    if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null; then
-        echo "✅ Success: delete tmp config file"
-    else
-        echo "❌ Error: delete tmp config file"
-    fi
-}
-
-# set trap for tmp removing and exit message
-trap 'rm_tmp_config' EXIT
 
 # helper func
 run_and_check() {
@@ -69,6 +68,8 @@ run_and_check() {
     fi
 }
 
+# make new config with add new user
+# shellcheck disable=SC2329
 make_new_config() {
     # add user
     jq --arg tag "$INBOUND_TAG" \
@@ -89,6 +90,8 @@ make_new_config() {
     ' "$XRAY_CONFIG" > "$TMP_XRAY_CONFIG"
 }
 
+# install new config with save old permission
+# shellcheck disable=SC2329
 install_new_conf() { cat "$TMP_XRAY_CONFIG" > "$XRAY_CONFIG"; }
 
 # function for checking variables in json config
@@ -105,6 +108,7 @@ check_var() {
 uri_encode() { printf '%s' "$1" | jq -sRr @uri; }
 
 # function for update URI_DB
+# shellcheck disable=SC2329
 install_new_uri_db() {
     if [ -n "$IP_6" ]; then
         tee -a "$URI_DB" > /dev/null <<EOF
@@ -150,7 +154,7 @@ else
 fi
 
 # check inbound
-readonly HAS_INBOUND="$(jq --arg tag "$INBOUND_TAG" '
+HAS_INBOUND="$(jq --arg tag "$INBOUND_TAG" '
     any(.inbounds[]?; .tag == $tag and .protocol == "vless")
 ' "$XRAY_CONFIG")"
 
@@ -161,7 +165,7 @@ if [[ "$HAS_INBOUND" != "true" ]]; then
 fi
 
 # uuid generation
-readonly UUID="$(xray uuid)"
+UUID="$(xray uuid)"
 
 # add user
 run_and_check "add xray user and make new config" make_new_config
@@ -179,23 +183,23 @@ run_and_check "install new xray config" install_new_conf
 run_and_check "restart xray service" systemctl restart xray.service
 
 # start make link, get inbound paremetres
-readonly XRAY_PORT="$(jq -r --arg tag "$INBOUND_TAG" '
+XRAY_PORT="$(jq -r --arg tag "$INBOUND_TAG" '
   .inbounds[] | select(.tag==$tag) | .port
 ' "$XRAY_CONFIG")"
 
-readonly REALITY_SNI="$(jq -r --arg tag "$INBOUND_TAG" '
+REALITY_SNI="$(jq -r --arg tag "$INBOUND_TAG" '
   .inbounds[] | select(.tag==$tag) | .streamSettings.realitySettings.serverNames[0] // ""
 ' "$XRAY_CONFIG")"
 
-readonly PRIVATE_KEY="$(jq -r --arg tag "$INBOUND_TAG" '
+PRIVATE_KEY="$(jq -r --arg tag "$INBOUND_TAG" '
   .inbounds[] | select(.tag==$tag) | .streamSettings.realitySettings.privateKey // ""
 ' "$XRAY_CONFIG")"
 
-readonly SHORT_ID="$(jq -r --arg tag "$INBOUND_TAG" '
+SHORT_ID="$(jq -r --arg tag "$INBOUND_TAG" '
   .inbounds[] | select(.tag==$tag) | .streamSettings.realitySettings.shortIds[0] // ""
 ' "$XRAY_CONFIG")"
 
-readonly FLOW="$(jq -r --arg tag "$INBOUND_TAG" '
+FLOW="$(jq -r --arg tag "$INBOUND_TAG" '
   .inbounds[] | select(.tag==$tag) | .settings.clients[0].flow // ""
 ' "$XRAY_CONFIG")"
 
@@ -207,8 +211,8 @@ check_var "SHORT_ID" "$SHORT_ID"
 check_var "FLOW" "$FLOW"
 
 # generate public key from privat key
-readonly XRAY_X25519_OUT="$(xray x25519 -i "$PRIVATE_KEY")"
-readonly PUBLIC_KEY="$(printf '%s\n' "$XRAY_X25519_OUT" | awk -F': ' '/Password:/ {print $2}')"
+XRAY_X25519_OUT="$(xray x25519 -i "$PRIVATE_KEY")"
+PUBLIC_KEY="$(printf '%s\n' "$XRAY_X25519_OUT" | awk -F': ' '/Password:/ {print $2}')"
 
 # checking pubkey not empty
 if [[ -z "$PUBLIC_KEY" ]]; then
@@ -224,7 +228,7 @@ IP_6="$(ip -6 route get 2606:4700:4700::1111 2>/dev/null | awk '{for(i=1;i<=NF;i
 [ -z "$IP_4" ] && { IP_4="$(hostname)"; }
 
 # get link
-readonly VLESS_URI_IP4="vless://${UUID}@${IP_4}:${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
+VLESS_URI_IP4="vless://${UUID}@${IP_4}:${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
 security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
 $(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$USERNAME")"
 
@@ -246,3 +250,5 @@ echo "✅ Success: name: $USERNAME, added"
 echo "✅ Success: time, created: $TODAY, days: $DAYS, expiration: $EXP"
 echo "✅ Success: vless ip_4 link: $VLESS_URI_IP4"
 [ -n "$IP_6" ] && { echo "✅ Success: vless ip_6 link: $VLESS_URI_IP6"; }
+
+exit 0

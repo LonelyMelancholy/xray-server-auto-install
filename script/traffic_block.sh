@@ -8,15 +8,14 @@
 source "/usr/local/lib/service/variables.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit" >&2; exit 1; }
 
 # main variables
-RC=1
 readonly LOCK_FILE="/run/lock/traffic_block.lock"
+# make tmp config
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
 declare -A TOTAL_BYTES_BY_USERS
 declare -a FULL_EMAILS=()
 declare -a FULL_EMAILS_TO_BLOCK=()
 declare -a USERNAME_TO_BLOCK=()
-
-# enable logging
-exec > >(systemd-cat -t traffic_block -p info) 2> >(systemd-cat -t traffic_block -p err) 5> >(systemd-cat -t traffic_block -p notice)
+RC=1
 
 # start logging message
 echo "traffic block started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
@@ -33,7 +32,7 @@ end_log() {
 
 # exit rm tmp file function
 # shellcheck disable=SC2329
-rm_tmp_config() {
+rm_tmp() {
     echo "cleaning start - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     if rm -f "$TMP_XRAY_CONFIG" > /dev/null; then
         echo "Success: delete tmp config file"
@@ -44,10 +43,11 @@ rm_tmp_config() {
     fi
 }
 
-TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
-
 # set trap for tmp removing and exit message
-trap 'end_log; rm_tmp_config;' EXIT
+trap 'end_log; rm_tmp;' EXIT
+
+# enable logging
+exec > >(systemd-cat -t traffic_block -p info) 2> >(systemd-cat -t traffic_block -p err) 5> >(systemd-cat -t traffic_block -p notice)
 
 # user check
 [[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }

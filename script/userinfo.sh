@@ -12,6 +12,9 @@ USER_ONLINE_STATUS="offline"
 USER_DEVICE_COUNT=0
 IP_USER=""
 
+# user check
+[[ "$(whoami)" != "telegram_gateway" ]] && { echo "❌ Error: you are not the telegram_gateway user, exit"; exit 1; }
+
 # argument check
 if [[ $# -ne 1 || $USERNAME == "--help" ]]; then
     echo "Use for show individual user info"
@@ -23,9 +26,6 @@ if ! [[ $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
     echo "❌ Error: only letters, numbers and - in name, exit"
     exit 1
 fi
-
-# user check
-[[ "$(whoami)" != "telegram_gateway" ]] && { echo "❌ Error: you are not the telegram_gateway user, exit"; exit 1; }
 
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }

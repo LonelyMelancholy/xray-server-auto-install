@@ -8,18 +8,16 @@
 source "/usr/local/lib/service/variables.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit" >&2; exit 1; }
 
 # main variables
+readonly LOCK_FILE="/run/lock/time_block.lock"
+# make tmp config
 TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
-RC="1"
-LOCK_FILE="/run/lock/time_block.lock"
+RC=1
 
 # enable logging
 exec > >(systemd-cat -t time_block -p info) 2> >(systemd-cat -t time_block -p err) 5> >(systemd-cat -t time_block -p notice)
 
 # start logging message
 echo "time block started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
-
-# user check
-[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
 
 # exit logging message function
 # shellcheck disable=SC2329
@@ -33,7 +31,7 @@ end_log() {
 
 # exit rm tmp file function
 # shellcheck disable=SC2329
-rm_tmp_config() {
+rm_tmp() {
     echo "cleaning start - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     if rm -f "$TMP_XRAY_CONFIG" > /dev/null; then
         echo "Success: delete tmp config file"
@@ -45,7 +43,10 @@ rm_tmp_config() {
 }
 
 # set trap for tmp removing and exit message
-trap 'end_log; rm_tmp_config;' EXIT
+trap 'end_log; rm_tmp;' EXIT
+
+# user check
+[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
 
 # helper func
 run_and_check() {

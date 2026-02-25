@@ -18,12 +18,9 @@ exec > >(systemd-cat -t unattended_upgrade -p info) 2> >(systemd-cat -t unattend
 # start logging message
 echo "unattended upgrade started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 
-# root check
-[[ $EUID -ne 0 ]] && { echo "Error: you are not the root user, exit" >&2; exit 1; }
-
 # exit logging message function
 # shellcheck disable=SC2329
-on_exit() {
+end_log() {
     if [[ "$RC" -eq "0" ]]; then
         echo "unattended upgrade ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
         [[ "$REBOOT" -eq "1" ]] && { echo "reboot required, start reboot system"; reboot || echo "reboot failed" >&2; }
@@ -33,7 +30,10 @@ on_exit() {
 }
 
 # trap for the end log message for the end log
-trap 'on_exit' EXIT
+trap 'end_log' EXIT
+
+# root check
+[[ $EUID -ne 0 ]] && { echo "Error: you are not the root user, exit" >&2; exit 1; }
 
 # check another instance of the script is not running
 exec {fd}> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }

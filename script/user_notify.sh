@@ -17,12 +17,9 @@ exec > >(systemd-cat -t user_notify -p info) 2> >(systemd-cat -t user_notify -p 
 # start logging message
 echo "user notify started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 
-# user check
-[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
-
 # exit logging message function
 # shellcheck disable=SC2329
-on_exit() {
+end_log() {
     if [[ "$RC_M" -eq "0" ]]; then
         echo "user notify ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     else
@@ -31,7 +28,10 @@ on_exit() {
 }
 
 # trap for the end log message for the end log
-trap 'on_exit' EXIT
+trap 'end_log' EXIT
+
+# user check
+[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
 
 # function for parse json to name:name:number
 stat_lines() {
@@ -115,7 +115,7 @@ if [[ $RESET_ARG_Y == "1" ]]; then
 fi
 
 # parse config for full users email
-readonly USERS_EMAILS_FULL="$(jq -r --arg tag "$INBOUND_TAG" '.inbounds[]? | select(.tag? == $tag) | .settings? | .clients[]? | .email? // empty' "$XRAY_CONFIG")"
+USERS_EMAILS_FULL="$(jq -r --arg tag "$INBOUND_TAG" '.inbounds[]? | select(.tag? == $tag) | .settings? | .clients[]? | .email? // empty' "$XRAY_CONFIG")"
 
 # parse and print email - exp days
 USERS_WITH_DAYS=""

@@ -1,5 +1,5 @@
 #!/bin/bash
-# script for notify after server up, via systemctl timer
+# script for notify after server up, via systemd timer
 # all errors are logged in journald, see journalctl -t boot_notify
 # exit codes work to tell systemd about success sending message
 
@@ -17,17 +17,9 @@ exec > >(systemd-cat -t boot_notify -p info) 2> >(systemd-cat -t boot_notify -p 
 # start logging message
 echo "boot notify started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 
-# user check
-[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
-
-# check another instanсe of the script is not running
-exec {fd}> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
-flock -n ${fd} || { echo "Error: another instance is running, exit" >&2; exit 1; }
-
-# function section
 # exit logging message function
 # shellcheck disable=SC2329
-on_exit() {
+end_log() {
     if [[ "$RC_M" -eq "0" ]]; then
         echo "boot notify ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     else
@@ -36,8 +28,16 @@ on_exit() {
 }
 
 # trap for the end log message for the end log
-trap on_exit EXIT
+trap 'end_log' EXIT
 
+# user check
+[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
+
+# check another instanсe of the script is not running
+exec {fd}> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
+flock -n ${fd} || { echo "Error: another instance is running, exit" >&2; exit 1; }
+
+# function section
 # wait for internet access function
 wait_internet() {
     local timeout=60

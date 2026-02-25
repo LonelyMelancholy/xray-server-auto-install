@@ -14,6 +14,8 @@ readonly LOCK_FILE="/run/lock/backup.lock"
 readonly FILES=("$XRAY_CONFIG" "$URI_DB" "$TR_DB_M" "$TR_DB_Y")
 readonly FILE_NAME="xray_backup_$(hostname)_$(date '+%Y-%m-%d_%H-%M-%S').tar.gz"
 readonly FILE_PATH="/tmp/${FILE_NAME}"
+# make tmp directory
+TMPDIR="$(mktemp -d)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
 
 # umask for not allow anyone read backup
 umask 077
@@ -24,23 +26,9 @@ exec > >(systemd-cat -t xray_backup -p info) 2> >(systemd-cat -t xray_backup -p 
 # start logging message
 echo "backup started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 
-# user check
-[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit"; exit 1; } >&2
-
-# check arguments
-if [[ "$ONLY_ARCHIVE" != 1 && "$ONLY_ARCHIVE" != 0 ]]; then
-    echo "Use for backup xray, run: $0 0|1"
-    echo "0 - for auto backup with message"
-    echo "1 - for only archive to Telegram, no message"
-    exit 0
-fi
-
-# make tmp directory
-TMPDIR="$(mktemp -d)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
-
 # exit logging message function
 # shellcheck disable=SC2329
-on_exit() {
+end_log() {
     if [[ "$RC_F" -eq "0" ]]; then
         echo "backup ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     else
@@ -50,7 +38,7 @@ on_exit() {
 
 # exit rm tmp file function
 # shellcheck disable=SC2329
-rm_tmp_config() {
+rm_tmp() {
     echo "cleaning start - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     if rm -rf "$TMPDIR" "$FILE_PATH" > /dev/null; then
         echo "Success: delete tmp files"
@@ -62,7 +50,18 @@ rm_tmp_config() {
 }
 
 # trap for the end log message for the end log and cleanup
-trap 'on_exit; rm_tmp_config;' EXIT
+trap 'end_log; rm_tmp;' EXIT
+
+# user check
+[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit"; exit 1; } >&2
+
+# check arguments
+if [[ "$ONLY_ARCHIVE" != 1 && "$ONLY_ARCHIVE" != 0 ]]; then
+    echo "Use for backup xray, run: $0 0|1"
+    echo "0 - for auto backup with message"
+    echo "1 - for only archive to Telegram, no message"
+    exit 0
+fi
 
 # check another instanсe of the script is not running
 exec {fd}> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }

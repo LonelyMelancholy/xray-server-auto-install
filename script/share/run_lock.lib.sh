@@ -1,3 +1,4 @@
+# shellcheck disable=SC2148
 # lock library, for checking running another instance working on file which we also need
 # lock which retry for background script, lock whichout retry for manualy running script
 # read and write check, checking permission on file
@@ -61,6 +62,7 @@ run_lock_retry_check() {
     local output_variant="$2"
     local lock_file="/run/lock/${lock}.lock"
     local error info fd
+    # shellcheck disable=SC2155
     local wait_sec="$(shuf -i "10-60" -n 1)"
     local attempt
     local max_attempt=3

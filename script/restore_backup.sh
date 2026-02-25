@@ -1,4 +1,5 @@
 #!/bin/bash
+# script for restore server backup from archive
 
 # main variables
 ARCHIVE="$1"
@@ -25,12 +26,6 @@ source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to 
 run_lock_check "xray" "console"
 run_lock_check "uri_db" "console"
 run_lock_check "tr_db" "console"
-
-# read and write conf check
-read_and_write_check "$URI_DB" "console"
-read_and_write_check "$TR_DB_M" "console"
-read_and_write_check "$TR_DB_Y" "console"
-read_and_write_check "$XRAY_CONFIG" "console"
 
 # help function
 run_and_check() {
@@ -73,7 +68,7 @@ if [[ "$ARCHIVE" != /* ]]; then
 fi
 
 # check path
-read_check "$ARCHIVE"
+read_check "$ARCHIVE" "console"
 
 run_and_check "unpack archive and copy files" unpack_archive
 run_and_check "set permissions to files" chmod_out_file

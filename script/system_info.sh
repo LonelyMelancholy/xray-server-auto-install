@@ -1,13 +1,14 @@
-#!/usr/bin/env bash
+#!/bin/bash
+
+# user check
+[[ "$(whoami)" != "telegram_gateway" ]] && { echo "❌ Error: you are not the telegram_gateway user, exit"; exit 1; }
 
 # common variables source
 # shellcheck source=share/variables.lib.sh
 source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit"; exit 1; }
 
-# user check
-[[ "$(whoami)" != "telegram_gateway" ]] && { echo "❌ Error: you are not the telegram_gateway user, exit"; exit 1; }
-
 # source library for run_lock and file permission cheking
+# shellcheck source=share/run_lock.lib.sh
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
 
 # lock check
@@ -17,7 +18,8 @@ run_lock_check "tr_db" "console"
 read_check "$TR_DB_M" "console"
 read_check "$TR_DB_Y" "console"
 
-# Network avg func for 10 seconds using ifstat function
+# function section
+# network avg func for 10 seconds using ifstat function
 network_stat() {
     ifstat 1 10 2>/dev/null | awk '
         NR>2 {rx+=$1; tx+=$2; n++}

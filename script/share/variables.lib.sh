@@ -3,8 +3,10 @@
 # source this library for common variable across scripts
 
 # dates
-readonly TODAY=$(date '+%F')
-readonly TS=$(date '+%Y%m%d_%H%M%S')
+TODAY=$(date '+%F')
+readonly TODAY
+TS=$(date '+%Y%m%d_%H%M%S')
+readonly TS
 
 # common traffic limit per user ((3000 * 1024 * 1024 * 1024)) - 3TB limits
 # 3000 gigabytes convert to bytes

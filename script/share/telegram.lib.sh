@@ -1,3 +1,4 @@
+# shellcheck disable=SC2148
 # telegram sender message, if call telegram_message function, function send text in $MESSAGE variable
 # if sending failed, RC_M not changed, if sending success RC_M=0
 # RC_M - message sender return code
@@ -13,6 +14,7 @@ if [[ ! -f "$ENV_FILE" ]] || [[ "$(stat -L -c '%U:%G:%a' "$ENV_FILE" 2> /dev/nul
     echo "Error: env file '$ENV_FILE' not found or has wrong permissions, exit" >&2
     exit 1
 fi
+# shellcheck disable=SC1090
 source "$ENV_FILE" || { echo "Error: failed to source '$ENV_FILE', exit" >&2; exit 1; }
 
 # check token from secret file
@@ -52,6 +54,7 @@ telegram_message() {
             continue
         else
             echo "Success: message was sent to Telegram after $attempt attempt"
+            # shellcheck disable=SC2034
             RC_M=0
             return 0
         fi
@@ -85,6 +88,7 @@ telegram_file() {
             continue
         else
             echo "Success: file was sent to Telegram after $attempt attempt"
+            # shellcheck disable=SC2034
             RC_F=0
             return 0
         fi
