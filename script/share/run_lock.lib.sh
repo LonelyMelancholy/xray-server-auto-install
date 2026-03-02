@@ -52,7 +52,7 @@ run_lock_check() {
               *) error="Error" ;;
     esac
 
-    exec {fd}> "$lock_file" || { echo "$error: cannot open lock file '$lock_file', exit" >&2; exit 1; }
+    exec {fd}< "$lock_file" || { echo "$error: cannot open lock file '$lock_file', exit" >&2; exit 1; }
     flock -n "$fd" || { echo "$error: another instance working on '$lock', exit" >&2; exit 1; }
 }
 
@@ -72,7 +72,7 @@ run_lock_retry_check() {
               *) error="Error"; info="Info" ;;
     esac
 
-    exec {fd}> "$lock_file" || { echo "$error: cannot open lock file '$lock_file', exit" >&2; exit 1; }
+    exec {fd}< "$lock_file" || { echo "$error: cannot open lock file '$lock_file', exit" >&2; exit 1; }
     for ((attempt=1; attempt<=max_attempt; attempt++)); do
         if flock -n "$fd"; then
             break

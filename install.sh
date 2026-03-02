@@ -204,29 +204,6 @@ run_and_check "reload systemd" systemctl daemon-reload
 run_and_check "restart sshd" systemctl restart ssh.socket
 
 
-# Install ssh login/logout notify and disable MOTD
-# install log directory
-install_tg_dir() {
-    mkdir -p /usr/local/bin/telegram || return 1
-    mkdir -p /usr/local/bin/service || return 1
-    mkdir -p /usr/local/lib/service || return 1
-}
-run_and_check "creating directory for all telegram script" install_tg_dir
-
-# install ssh pam script and enable script in PAM
-install_scr_ssh_pam() {
-    install -m 755 -o root -g root "script/ssh_pam_notify.sh" "/usr/local/bin/telegram/ssh_pam_notify.sh" || return 1
-    if ! grep -q "ssh-pam-telegram-notify" "/etc/pam.d/sshd"; then
-        tee -a /etc/pam.d/sshd > /dev/null <<EOF || return 1
-
-# ssh-pam-telegram-notify
-# Notify for success ssh login and logout via telegram bot
-session optional pam_exec.so /usr/local/bin/telegram/ssh_pam_notify.sh
-EOF
-    fi
-}
-run_and_check "ssh PAM notification script installation" install_scr_ssh_pam
-
 # Disable message of the day
 MOTD="/etc/pam.d/sshd"
 run_and_check "disable MOTD in PAM setting" sed -ri 's/^([[:space:]]*session[[:space:]]+optional[[:space:]]+pam_motd\.so.*)$/# \1/' "$MOTD"
@@ -255,9 +232,6 @@ allowipv6 = auto
 EOF
 }
 run_and_check "install fail2ban configuration" conf_f2b
-
-# Install ssh ban notify script
-run_and_check "ssh f2b notification script installation" install -m 755 -o root -g root "script/ssh_f2b_notify.sh" "/usr/local/bin/telegram/ssh_f2b_notify.sh"
 
 # Start fail2ban
 start_f2b() {
@@ -731,13 +705,13 @@ uri_encode() { printf '%s' "$1" | jq -sRr @uri; }
 # get link
 VLESS_URI_IP4="vless://${UUID}@${IP_4}:${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
 security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
-$(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$XRAY_NAME")"
+$(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$XRAY_NAME")-$(uri_encode "$REALITY_SNI")-IP4"
 
 # if not get ip6, skip make vless ip6 link
 if [ -n "$IP_6" ]; then
     VLESS_URI_IP6="vless://${UUID}@[${IP_6}]:${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
 security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
-$(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$XRAY_NAME")"
+$(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$XRAY_NAME")-$(uri_encode "$REALITY_SNI")-IP6"
 fi
 
 # print result to URI_DB
@@ -758,6 +732,9 @@ fi
 # maintance script install and add link to home dir service_user_********
 # shellcheck disable=SC2329
 install_scr_service() {
+    mkdir -p /usr/local/bin/telegram || return 1
+    mkdir -p /usr/local/bin/service || return 1
+    mkdir -p /usr/local/lib/service || return 1
     install -m 644 -o root -g root "script/share/telegram.lib.sh" "/usr/local/lib/service/telegram.lib.sh" || return 1
     install -m 644 -o root -g root "script/share/run_lock.lib.sh" "/usr/local/lib/service/run_lock.lib.sh" || return 1
     install -m 644 -o root -g root "script/share/variables.lib.sh" "/usr/local/lib/service/variables.lib.sh" || return 1
@@ -770,6 +747,7 @@ install_scr_service() {
     install -m 755 -o root -g root "script/userblock.sh" "/usr/local/bin/service/userblock.sh" || return 1
     install -m 755 -o root -g root "script/time_unblock.sh" "/usr/local/bin/service/time_unblock.sh" || return 1
     install -m 755 -o root -g root "script/traffic_unblock.sh" "/usr/local/bin/service/traffic_unblock.sh" || return 1
+    install -m 755 -o root -g root "script/ssh_f2b_notify.sh" "/usr/local/bin/telegram/ssh_f2b_notify.sh" || return 1
 
     ln -sfn "/usr/local/bin/service/useradd.sh" "$USER_HOME/user_add" || return 1
     ln -sfn "/usr/local/bin/service/userdel.sh" "$USER_HOME/user_del" || return 1
@@ -786,6 +764,33 @@ install_scr_service() {
 run_and_check "all service script installation and create link in home directory" install_scr_service
 
 
+# precreate lockfiles script
+# shellcheck disable=SC2329
+install_scr_precreate_lockfiles() {
+    install -m 644 -o root -g root "cfg/precreate_lockfiles.service" "/etc/systemd/system/precreate_lockfiles.service" || return 1
+    install -m 755 -o root -g root "script/precreate_lockfiles.sh" "/usr/local/bin/service/precreate_lockfiles.sh" || return 1
+    systemctl daemon-reload || return 1
+    systemctl enable -q --now precreate_lockfiles.service || return 1
+}
+run_and_check "precreate lockfiles service installation" install_scr_precreate_lockfiles
+
+
+# install ssh pam script and enable script in PAM
+# shellcheck disable=SC2329
+install_scr_ssh_pam() {
+    install -m 755 -o root -g root "script/ssh_pam_notify.sh" "/usr/local/bin/telegram/ssh_pam_notify.sh" || return 1
+    if ! grep -q "ssh-pam-telegram-notify" "/etc/pam.d/sshd"; then
+        tee -a /etc/pam.d/sshd > /dev/null <<EOF || return 1
+
+# ssh-pam-telegram-notify
+# Notify for success ssh login and logout via telegram bot
+session optional pam_exec.so /usr/local/bin/telegram/ssh_pam_notify.sh
+EOF
+    fi
+}
+run_and_check "ssh PAM notification script installation" install_scr_ssh_pam
+
+
 # user statistics DB collecting
 # shellcheck disable=SC2329
 install_scr_xray_statistics() {
@@ -795,7 +800,7 @@ install_scr_xray_statistics() {
     systemctl daemon-reload || return 1
     systemctl enable --now xray_statistics.timer || return 1
 }
-run_and_check "xray statistic script installation" install_scr_xray_statistics
+run_and_check "xray statistic service installation" install_scr_xray_statistics
 
 
 # user server traffic + remaining days - Telegram bot notify
@@ -807,7 +812,7 @@ install_scr_user_notify() {
     systemctl daemon-reload || return 1
     systemctl enable --now user_notify.timer || return 1
 }
-run_and_check "user daily report script installation" install_scr_user_notify
+run_and_check "user daily report service installation" install_scr_user_notify
 
 
 # time block expired users + Telegram bot notify
@@ -819,7 +824,7 @@ install_scr_time_block() {
     systemctl daemon-reload || return 1
     systemctl enable --now time_block.timer || return 1
 }
-run_and_check "time block expired user script installation" install_scr_time_block
+run_and_check "time block expired user service installation" install_scr_time_block
 
 
 # user traffic block + Telegram bot notify
@@ -831,7 +836,7 @@ install_scr_traffic_block() {
     systemctl daemon-reload || return 1
     systemctl enable --now traffic_block.timer || return 1
 }
-run_and_check "traffic block script installation" install_scr_traffic_block
+run_and_check "traffic block service installation" install_scr_traffic_block
 
 
 # xray backup Telegram bot notify
@@ -843,7 +848,7 @@ install_scr_xray_backup() {
     systemctl daemon-reload || return 1
     systemctl enable --now xray_backup.timer || return 1
 }
-run_and_check "xray backup script installation" install_scr_xray_backup
+run_and_check "xray backup service installation" install_scr_xray_backup
 
 
 # auto update xray and geo*.dat + notify via Telegram
@@ -855,7 +860,7 @@ install_scr_xray_update() {
     systemctl daemon-reload || return 1
     systemctl enable --now xray_update.timer || return 1
 }
-run_and_check "xray and geo*.dat update script installation" install_scr_xray_update
+run_and_check "xray and geo*.dat update service installation" install_scr_xray_update
 
 
 # unattended upgrade + notify via Telegram
@@ -867,7 +872,7 @@ install_scr_un_up() {
     systemctl daemon-reload || return 1
     systemctl enable --now unattended_upgrade.timer || return 1
 }
-run_and_check "unattended update script installation" install_scr_un_up
+run_and_check "unattended update service installation" install_scr_un_up
 
 
 # boot notify script via Telegram
@@ -878,18 +883,29 @@ install_scr_boot() {
     systemctl daemon-reload || return 1
     systemctl enable -q boot_notify.service || return 1
 }
-run_and_check "server boot notification script installation" install_scr_boot
+run_and_check "server boot notification service installation" install_scr_boot
 
 
-# journald notify script via Telegram
+# journald alert script via Telegram
 # shellcheck disable=SC2329
-install_scr_journald_notify() {
-    install -m 644 -o root -g root "cfg/journald_notify.service" "/etc/systemd/system/journald_notify.service" || return 1
-    install -m 755 -o root -g root "script/journald_notify.sh" "/usr/local/bin/telegram/journald_notify.sh" || return 1
+install_scr_journald_alert() {
+    install -m 644 -o root -g root "cfg/journald_alert.service" "/etc/systemd/system/journald_alert.service" || return 1
+    install -m 755 -o root -g root "script/journald_alert.sh" "/usr/local/bin/telegram/journald_alert.sh" || return 1
     systemctl daemon-reload || return 1
-    systemctl enable -q --now journald_notify.service || return 1
+    systemctl enable -q --now journald_alert.service || return 1
 }
-run_and_check "journald error notification script installation" install_scr_journald_notify
+run_and_check "journald error alert service installation" install_scr_journald_alert
+
+
+# cpu alert script via Telegram
+# shellcheck disable=SC2329
+install_scr_cpu_alert() {
+    install -m 644 -o root -g root "cfg/cpu_alert.service" "/etc/systemd/system/cpu_alert.service" || return 1
+    install -m 755 -o root -g root "script/cpu_alert.sh" "/usr/local/bin/telegram/cpu_alert.sh" || return 1
+    systemctl daemon-reload || return 1
+    systemctl enable -q --now cpu_alert.service || return 1
+}
+run_and_check "cpu high usage alert service installation" install_scr_cpu_alert
 
 
 # Telegram gateway script install and start

@@ -1,10 +1,10 @@
 #!/bin/bash
-# script for notify errors in journald level err-crit-alert-emerg via Telegram
-# all errors are logged in journald, see journalctl -t journald_notify
+# script for send alert errors in journald (level err-crit-alert-emerg) via Telegram
+# all errors are logged in journald, see journalctl -t journald_alert
 
 # main variables
-readonly LOCK_FILE="/run/lock/journald_notify.lock"
-readonly STATE_FILE="/var/tmp/journald_notify.last_cursor"
+readonly LOCK_FILE="/run/lock/journald_alert.lock"
+readonly STATE_FILE="/var/tmp/journald_alert.last_cursor"
 
 # export path just in case
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -25,15 +25,15 @@ if [[ -f "$STATE_FILE" ]]; then
 fi
 
 # enable logging
-exec > >(systemd-cat -t journald_notify -p info) 2> >(systemd-cat -t journald_notify -p err) 5> >(systemd-cat -t journald_notify -p notice)
+exec > >(systemd-cat -t journald_alert -p info) 2> >(systemd-cat -t journald_alert -p err) 5> >(systemd-cat -t journald_alert -p notice)
 
 # start logging message
-echo "journald notify started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
+echo "journald alert started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 
 # exit logging message function
 # shellcheck disable=SC2329
 end_log() {
-    echo "journald notify stopped - $(date '+%Y-%m-%d %H:%M:%S')" >&5
+    echo "journald alert stopped - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 }
 # trap for the end log message for the end log
 trap 'end_log' EXIT
@@ -42,7 +42,7 @@ trap 'end_log' EXIT
 [[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
 
 # check another instanсe of the script is not running
-exec {fd}> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
+exec {fd}< "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
 flock -n ${fd} || { echo "Error: another instance is running, exit" >&2; exit 1; }
 
 # source Telegram func library
@@ -63,14 +63,14 @@ while IFS= read -r json; do
     prio=$(jq -r '.PRIORITY // empty' <<<"$json")
 
     # collect message
-    MESSAGE="❌<b> Journald error report</b> 
+    MESSAGE="🚨 <b> Journald error alert</b> 
 
 🖥️ <b>Host:</b> $(hostname)
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 🚨 <b>Error level:</b> ${ERROR_LEVEL[$prio]}
 ⚙️ <b>Unit:</b> ${unit}
 📑 <b>Messsage:</b> ${msg}
-💾 <b>Notify log:</b> journalctl -t journald_notify"
+💾 <b>alert log:</b> journalctl -t journald_alert"
     
     # logging message
     echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"

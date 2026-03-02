@@ -10,7 +10,7 @@ source "/usr/local/lib/service/variables.lib.sh" || { echo "Error: failed to sou
 # main variables
 ONLY_ARCHIVE="$1"
 RC_F=1
-readonly LOCK_FILE="/run/lock/backup.lock"
+readonly LOCK_FILE="/run/lock/xray_backup.lock"
 readonly FILES=("$XRAY_CONFIG" "$URI_DB" "$TR_DB_M" "$TR_DB_Y")
 readonly FILE_NAME="xray_backup_$(hostname)_$(date '+%Y-%m-%d_%H-%M-%S').tar.gz"
 readonly FILE_PATH="/tmp/${FILE_NAME}"
@@ -64,7 +64,7 @@ if [[ "$ONLY_ARCHIVE" != 1 && "$ONLY_ARCHIVE" != 0 ]]; then
 fi
 
 # check another instanсe of the script is not running
-exec {fd}> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
+exec {fd}< "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
 flock -n ${fd} || { echo "Error: another instance working on backup, exit" >&2; exit 1; }
 
 # source library for run_lock and file permission cheking

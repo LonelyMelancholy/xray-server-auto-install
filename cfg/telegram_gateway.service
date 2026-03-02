@@ -2,10 +2,12 @@
 Description=Telegram gateway bot
 After=network-online.target
 Wants=network-online.target
+Requires=precreate-lockfiles.service
+After=precreate-lockfiles.service
 
 [Service]
+Type=simple
 User=telegram_gateway
-Group=telegram_gateway
 ExecStart=/usr/local/bin/service/telegram_gateway.sh
 Restart=always
 RestartSec=10

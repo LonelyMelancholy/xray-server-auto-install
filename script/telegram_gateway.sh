@@ -4,8 +4,6 @@ set -u
 # main variables
 readonly LOCK_FILE="/run/lock/telegram_gateway.lock"
 readonly TIMEOUT=50
-readonly HOSTNAME="$(hostname)"
-RC_M=1
 OFFSET=0
 
 # export path just in case
@@ -30,14 +28,12 @@ trap 'end_log' EXIT
 [[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
 
 # check another instanсe of the script is not running
-exec {fd}> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
+exec {fd}< "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
 flock -n ${fd} || { echo "Error: another instance is running, exit" >&2; exit 1; }
 
 # source Telegram func library
 # shellcheck source=share/telegram.lib.sh
 source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
-
-readonly API="https://api.telegram.org/bot${BOT_TOKEN}"
 
 # Track bot messages so we can delete old output/menu and keep only the latest.
 # (Single admin chat assumed.)
@@ -78,13 +74,8 @@ MAIN_KB_JSON='{
 }'
 
 api_post() {
-  local method="$1"; shift
-  curl -sS --max-time 70 -X POST "${API}/${method}" "$@"
-}
-
-restart_xray() {
-    systemctl restart xray.service || return 1
-    echo "Xray restarted"
+    local method="$1"; shift
+    curl -sS --max-time 70 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/${method}" "$@"
 }
 
 delete_message() {
@@ -100,9 +91,7 @@ delete_message() {
 cleanup_old_bot_messages() {
   local chat_id="$1"; shift
   local extra_ids=()  # optional IDs to delete even if not tracked
-  if (( $# > 0 )); then
-    extra_ids=("$@")
-  fi
+  [[ $# -gt 0 ]] && extra_ids=("$@")
 
   local mid
   for mid in "${BOT_MSG_IDS[@]}" "${extra_ids[@]}"; do
@@ -136,36 +125,30 @@ send_message() {
   [[ -n "${mid}" ]] && BOT_MSG_IDS+=("$mid")
 }
 
-answer_callback() {
-  local cb_id="$1"
-  api_post "answerCallbackQuery" \
-    --data-urlencode "callback_query_id=${cb_id}" >/dev/null
-}
-
+# show menu and welcome message
 show_menu() {
-  local chat_id="$1"
-  send_message "$chat_id" "Server management bot menu, please choose command:\nHost: $HOSTNAME" "$MAIN_KB_JSON"
+    local chat_id="$1"
+    send_message "$chat_id" "Server management bot menu, please choose command:\nHost: $(hostname)" "$MAIN_KB_JSON"
 }
 
-is_admin_chat() {
-  local chat_id="$1"
-  [[ "$chat_id" == "$CHAT_ID" ]]
-}
-
-# Validate single argument: 1..30 chars, only A-Z a-z 0-9 and '-'
+# Validate single argument
 valid_arg() {
-  local s="$1"
-  [[ ${#s} -ge 1 && ${#s} -le 30 && "$s" =~ ^[A-Za-z0-9-]+$ ]]
-}
-
-valid_arg_answer() {
-    local s="$1"
-    [[ "$s" == "yes" ]]
-}
-
-valid_arg_num() {
-  local s="$1"
-  [[ ${#s} -ge 1 && ${#s} -le 10 && "$s" =~ ^[0-9]+$ ]]
+    local arg="$1"
+    local var="$2"
+    case "$var" in
+        username)
+            # 1..30 chars, only A-Z a-z 0-9 and '-'
+            [[ ${#arg} -ge 1 && ${#arg} -le 30 && "$arg" =~ ^[A-Za-z0-9-]+$ ]] || return 1
+        ;;
+        number)
+            # 1..10 numbers only 0-9
+            [[ ${#arg} -ge 1 && ${#arg} -le 10 && "$arg" =~ ^[0-9]+$ ]] || return 1
+        ;;
+        answer)
+            # yes,Yes,YES accept
+            [[ "$arg" =~ ^[Yy][Ee][Ss]$ ]] || return 1
+        ;;
+    esac
 }
 
 run_and_send_output() {
@@ -202,45 +185,43 @@ run_and_send_output() {
     send_message "$chat_id" "$text"
 }
 
-prompt_one() {
-  local chat_id="$1"
-  local action_text="$2"
-  send_message "$chat_id" "${action_text}\nEnter username or /cancel:"
+reboot_server() {
+    run_and_send_output "$chat_id" echo "Server reboot started"
+    show_menu "$chat_id"
+    if ! systemctl reboot; then
+        echo "Server fail to reboot"
+        show_menu "$chat_id"
+    fi
 }
 
-prompt_two() {
-  local chat_id="$1"
-  local action_text="$2"
-  send_message "$chat_id" "${action_text}\nEnter username and number of days, separated by a space/line break or /cancel:"
-}
-
-prompt_reboot() {
-  local chat_id="$1"
-  local action_text="$2"
-  send_message "$chat_id" "${action_text}\nEnter yes for confirmation (or /cancel):"
+restart_xray() {
+    if systemctl restart xray.service; then
+        echo "Xray restarted"
+    else
+        echo "Xray fail to restart"
+    fi
+    show_menu "$chat_id"
 }
 
 handle_callback() {
-  local upd="$1"
+    local upd="$1"
 
-  local cb_id data chat_id
-  cb_id="$(jq -r '.callback_query.id' <<<"$upd")"
-  data="$(jq -r '.callback_query.data' <<<"$upd")"
-  chat_id="$(jq -r '.callback_query.message.chat.id' <<<"$upd")"
+    local cb_id data chat_id
+    cb_id="$(jq -r '.callback_query.id' <<<"$upd")"
+    data="$(jq -r '.callback_query.data' <<<"$upd")"
+    chat_id="$(jq -r '.callback_query.message.chat.id' <<<"$upd")"
 
-  # Always answer callback to stop Telegram "loading"
-  answer_callback "$cb_id"
+    # Always answer callback to stop Telegram "loading"
+    api_post "answerCallbackQuery" --data-urlencode "callback_query_id=${cb_id}" >/dev/null
 
-  if ! is_admin_chat "$chat_id"; then
-    # silently ignore (or you can notify)
-    return
-  fi
+    # if chat id not match, silent exit
+    [[ "$chat_id" != "$CHAT_ID" ]] && return 0
 
-  # Remove previous bot output/menu so only the latest stays in the chat.
-  # Also try to delete the menu message that was clicked (helps after restarts).
-  local clicked_msg_id
-  clicked_msg_id="$(jq -r '.callback_query.message.message_id // empty' <<<"$upd")"
-  cleanup_old_bot_messages "$chat_id" "$clicked_msg_id"
+    # Remove previous bot output/menu so only the latest stays in the chat.
+    # Also try to delete the menu message that was clicked (helps after restarts).
+    local clicked_msg_id
+    clicked_msg_id="$(jq -r '.callback_query.message.message_id // empty' <<<"$upd")"
+    cleanup_old_bot_messages "$chat_id" "$clicked_msg_id"
 
     case "$data" in
         SHOW_STAT)
@@ -248,56 +229,56 @@ handle_callback() {
             run_and_send_output "$chat_id" echo "Wait 10 sec, network statistic accumulate process"
             run_and_send_output "$chat_id" /usr/local/bin/service/system_info.sh
             show_menu "$chat_id"
-            ;;
+        ;;
         SEND_BACKUP)
             run_and_send_output "$chat_id" /usr/local/bin/service/xray_backup.sh 1
             show_menu "$chat_id"
-            ;;
+        ;;
         SHOW_ALL)
             STATE=""
-            run_and_send_output "$chat_id" /usr/local/bin/service/usershow.sh all
+            run_and_send_output "$chat_id" /usr/local/bin/service/usershow.sh "all"
             show_menu "$chat_id"
-            ;;
-
+        ;;
         ASK_SHOW)
             STATE="WAIT_SHOW"
-            prompt_one "$chat_id" "Show user info."
+            send_message "$chat_id" "Show user info.\nEnter username [or /cancel]:"
         ;;
         ASK_SERVER_REBOOT)
             STATE="WAIT_REBOOT"
-            prompt_reboot "$chat_id" "Server reboot."
+            send_message "$chat_id" "Server reboot.\nEnter yes for confirmation [or /cancel]:"
         ;;
         ASK_XRAY_RESTART)
             STATE="WAIT_RESTART"
-            prompt_reboot "$chat_id" "Xray restart."
+            send_message "$chat_id" "Xray restart.\nEnter yes for confirmation [or /cancel]:"
         ;;
         ASK_BLOCK)
             STATE="WAIT_BLOCK"
-            prompt_one "$chat_id" "Blocking user."
-            ;;
+            send_message "$chat_id" "Blocking user.\nEnter username [or /cancel]:"
+        ;;
         ASK_UNBLOCK)
             STATE="WAIT_UNBLOCK"
-            prompt_one "$chat_id" "Unblocking user."
-            ;;
+            send_message "$chat_id" "Unblocking user.\nEnter username [or /cancel]:"
+        ;;
         ASK_DELETE)
             STATE="WAIT_DELETE"
-            prompt_one "$chat_id" "Deleting user."
-            ;;
+            send_message "$chat_id" "Deleting user.\nEnter username [or /cancel]:"
+        ;;
         ASK_ADD)
             STATE="WAIT_ADD"
-            prompt_two "$chat_id" "Adding new user."
-            ;;
+            send_message "$chat_id" "Adding new user.\nEnter username and number of days, separated by a space [or /cancel]:"
+        ;;
         ASK_EXP)
             STATE="WAIT_EXP"
-            prompt_two "$chat_id" "Change user time."
-            ;;
+            send_message "$chat_id" "Change user time.\nEnter username and number of days, separated by a space [or /cancel]:"
+        ;;
         ASK_TR)
             STATE="WAIT_TR"
-            prompt_one "$chat_id" "Reset user traffic."
-            ;;
+            send_message "$chat_id" "Reset user traffic.\nEnter username [or /cancel]:"
+        ;;
         *)
-            send_message "$chat_id" "Unknown button. Showing menu." "$MAIN_KB_JSON"
-            ;;
+            send_message "$chat_id" "Unknown button. Showing menu."
+            show_menu "$chat_id"
+        ;;
     esac
 }
 
@@ -309,18 +290,14 @@ handle_message() {
     text="$(jq -r '.message.text // empty' <<<"$upd")"
     user_msg_id="$(jq -r '.message.message_id // empty' <<<"$upd")"
 
-    if ! is_admin_chat "$chat_id"; then
-        # Optional: tell unknown chat it is private
-        # send_message "$chat_id" "Unauthorized."
-        return
-    fi
+    # if chat id not match, silent exit
+    [[ "$chat_id" != "$CHAT_ID" ]] && return 0
 
     # Keep chat clean:
     # - delete previous bot output/menu
     # - try to delete user's message (works in groups/supergroups if bot can delete)
     # IMPORTANT: do NOT delete /start (some Telegram clients will show the Start button again
     # if the /start message disappears, which creates an annoying loop).
-    # Also handle deep-link payloads: "/start something" and "/start@BotName".
     if [[ -n "${user_msg_id:-}" && "${user_msg_id}" != "null" ]]; then
         if [[ ! "$text" == "/start" ]]; then
             delete_message "$chat_id" "$user_msg_id"
@@ -336,7 +313,8 @@ handle_message() {
 
     if [[ "$text" == "/cancel" ]]; then
         STATE=""
-        send_message "$chat_id" "Canceled." "$MAIN_KB_JSON"
+        send_message "$chat_id" "Canceled."
+        show_menu "$chat_id"
         return
     fi
 
@@ -357,78 +335,81 @@ handle_message() {
             local username action
             username="$norm"
 
-        case "$STATE" in
-            WAIT_BLOCK)   action="Blocking user." ;;
-            WAIT_UNBLOCK) action="Unblocking user." ;;
-            WAIT_DELETE)  action="Deleting user." ;;
-            WAIT_SHOW)  action="Show user info." ;;
-            WAIT_TR)  action="Reset user traffic." ;;
-        esac
+            case "$STATE" in
+                WAIT_BLOCK)
+                    action="Blocking user."
+                ;;
+                WAIT_UNBLOCK)
+                    action="Unblocking user."
+                ;;
+                WAIT_DELETE)
+                    action="Deleting user."
+                ;;
+                WAIT_SHOW)
+                    action="Show user info."
+                ;;
+                WAIT_TR)
+                    action="Reset user traffic."
+                ;;
+            esac
 
-        if ! valid_arg "$username"; then
-            send_message "$chat_id" "❌ Error: username must be 1..30 characters long and contain only '-', letters, and numbers.\n${action}\nEnter username (or /cancel):"
-            return
-        fi
+            if ! valid_arg "$username" "username"; then
+                send_message "$chat_id" "${action}\n❌ Error: username must be 1..30 characters long and contain only '-', letters, and numbers.\nEnter username [or /cancel]:"
+                return
+            fi
 
-        case "$STATE" in
-            WAIT_BLOCK)
-                STATE=""
-                run_and_send_output "$chat_id" /usr/local/bin/service/userblock.sh "$username" block
-                show_menu "$chat_id"
+            case "$STATE" in
+                WAIT_BLOCK)
+                    STATE=""
+                    run_and_send_output "$chat_id" /usr/local/bin/service/userblock.sh "$username" "block"
+                    show_menu "$chat_id"
                 ;;
-            WAIT_UNBLOCK)
-                STATE=""
-                run_and_send_output "$chat_id" /usr/local/bin/service/userblock.sh "$username" unblock
-                show_menu "$chat_id"
+                WAIT_UNBLOCK)
+                    STATE=""
+                    run_and_send_output "$chat_id" /usr/local/bin/service/userblock.sh "$username" "unblock"
+                    show_menu "$chat_id"
                 ;;
-            WAIT_DELETE)
-                STATE=""
-                run_and_send_output "$chat_id" /usr/local/bin/service/userdel.sh "$username"
-                show_menu "$chat_id"
+                WAIT_DELETE)
+                    STATE=""
+                    run_and_send_output "$chat_id" /usr/local/bin/service/userdel.sh "$username"
+                    show_menu "$chat_id"
                 ;;
-            WAIT_SHOW)
-                STATE=""
-                run_and_send_output "$chat_id" /usr/local/bin/service/userinfo.sh "$username"
-                show_menu "$chat_id"
+                WAIT_SHOW)
+                    STATE=""
+                    run_and_send_output "$chat_id" /usr/local/bin/service/userinfo.sh "$username"
+                    show_menu "$chat_id"
                 ;;
-            WAIT_TR)
-                STATE=""
-                run_and_send_output "$chat_id" /usr/local/bin/service/traffic_unblock.sh "$username"
-                show_menu "$chat_id"
+                WAIT_TR)
+                    STATE=""
+                    run_and_send_output "$chat_id" /usr/local/bin/service/traffic_unblock.sh "$username"
+                    show_menu "$chat_id"
                 ;;
-        esac
+            esac
         ;;
+        WAIT_REBOOT|WAIT_RESTART)
+            local answer="$norm"
+            
+            case "$STATE" in
+                WAIT_REBOOT)  action="Server reboot." ;;
+                WAIT_RESTART) action="Xray restart." ;;
+            esac
 
-    WAIT_REBOOT|WAIT_RESTART)
-        local answer="$norm"
-        
-        case "$STATE" in
-            WAIT_REBOOT)  action="Server reboot." ;;
-            WAIT_RESTART) action="Xray restart." ;;
-        esac
-
-        if ! valid_arg_answer "$answer"; then
-            send_message "$chat_id" "❌ Error: only yes or /cancel is valid input.\n${action}\nEnter yes or /cancel:"
-            return
-        fi
-        
-        case "$STATE" in
-        WAIT_REBOOT)
-            STATE=""
-            run_and_send_output "$chat_id" echo "Server reboot started"
-            show_menu "$chat_id"
-            run_and_send_output "$chat_id" systemctl reboot || \
-            run_and_send_output "$chat_id" echo "Server fail to reboot"
+            if ! valid_arg "$answer" "answer"; then
+                send_message "$chat_id" "${action}\n❌ Error: only yes [or /cancel] is valid input.\nEnter yes [or /cancel]:"
+                return
+            fi
+            
+            case "$STATE" in
+            WAIT_REBOOT)
+                STATE=""
+                run_and_send_output "$chat_id" reboot_server
             ;;
-        WAIT_RESTART)
-            STATE=""
-            run_and_send_output "$chat_id" restart_xray || \
-            run_and_send_output "$chat_id" echo "Xray fail to restart"
-            show_menu "$chat_id"
+            WAIT_RESTART)
+                STATE=""
+                run_and_send_output "$chat_id" restart_xray
             ;;
-        esac
+            esac
         ;;
-
         WAIT_ADD|WAIT_EXP)
             local a b action
             read -r a b _ <<<"$norm"
@@ -439,69 +420,69 @@ handle_message() {
             esac
 
             if [[ -z "${a:-}" || -z "${b:-}" ]]; then
-                send_message "$chat_id" "❌ Error: need 2 argument. Format: username number.\n${action}\nEnter username and number of days, separated by a space/line break or /cancel:"
+                send_message "$chat_id" "${action}\n❌ Error: need 2 arguments.\nEnter username and number of days, separated by a space [or /cancel]:"
                 return
             fi
 
-            if ! valid_arg "$a"; then
-                send_message "$chat_id" "❌ Error: username must be 1..30 characters long and contain only '-', letters, and numbers.\n${action}\nEnter username and number of days, separated by a space/line break or /cancel:"
+            if ! valid_arg "$a" "username"; then
+                send_message "$chat_id" "${action}\n❌ Error: username must be 1..30 characters long and contain only '-', letters, and numbers.\nEnter username and number of days, separated by a space [or /cancel]:"
                 return
             fi
 
-            if ! valid_arg_num "$b"; then
-                send_message "$chat_id" "❌ Error: number must be 1..10 characters long and contain only numbers.\n${action}\nEnter username and number of days, separated by a space/line break or /cancel:"
+            if ! valid_arg "$b" "number"; then
+                send_message "$chat_id" "${action}\n❌ Error: number must be 1..10 characters long and contain only numbers.\nEnter username and number of days, separated by a space [or /cancel]:"
                 return
             fi
 
-        case "$STATE" in
-            WAIT_ADD)
-                STATE=""
-                run_and_send_output "$chat_id" /usr/local/bin/service/useradd.sh "$a" "$b"
-                show_menu "$chat_id"
-                ;;
-            WAIT_EXP)
-                STATE=""
-                run_and_send_output "$chat_id" /usr/local/bin/service/time_unblock.sh "$a" "$b"
-                show_menu "$chat_id"
-                ;;
-            esac
-            ;;
+            case "$STATE" in
+                WAIT_ADD)
+                    STATE=""
+                    run_and_send_output "$chat_id" /usr/local/bin/service/useradd.sh "$a" "$b"
+                    show_menu "$chat_id"
+                    ;;
+                WAIT_EXP)
+                    STATE=""
+                    run_and_send_output "$chat_id" /usr/local/bin/service/time_unblock.sh "$a" "$b"
+                    show_menu "$chat_id"
+                    ;;
+                esac
+        ;;
         *)
             STATE=""
             show_menu "$chat_id"
-            ;;
+        ;;
     esac
 }
 
 main_loop() {
-  while true; do
-    # Long polling
-    local resp
-    resp="$(curl -sS --max-time 70 \
-      --data-urlencode "timeout=${TIMEOUT}" \
-      --data-urlencode "offset=${OFFSET}" \
-      "${API}/getUpdates")" || {
-        sleep 1
-        continue
-      }
+    while true; do
+        # Long polling
+        local resp
+        resp="$(curl -sS --max-time 70 \
+            --data-urlencode "timeout=${TIMEOUT}" \
+            --data-urlencode "offset=${OFFSET}" \
+            "https://api.telegram.org/bot${BOT_TOKEN}/getUpdates")" || {
+                sleep 1
+                continue
+            }
 
-    local ok
-    ok="$(jq -r '.ok' <<<"$resp" 2>/dev/null || echo "false")"
-    [[ "$ok" == "true" ]] || { sleep 1; continue; }
+        local ok
+        ok="$(jq -r '.ok' <<<"$resp" 2>/dev/null || echo "false")"
+        [[ "$ok" == "true" ]] || { sleep 1; continue; }
 
-    # Iterate updates in the same shell (avoid subshell OFFSET issues)
-    while IFS= read -r upd; do
-      local uid
-      uid="$(jq -r '.update_id' <<<"$upd")"
-      OFFSET=$((uid + 1))
+        # Iterate updates in the same shell (avoid subshell OFFSET issues)
+        while IFS= read -r upd; do
+            local uid
+            uid="$(jq -r '.update_id' <<<"$upd")"
+            OFFSET=$((uid + 1))
 
-      if jq -e '.callback_query' >/dev/null <<<"$upd"; then
-        handle_callback "$upd"
-      elif jq -e '.message' >/dev/null <<<"$upd"; then
-        handle_message "$upd"
-      fi
-    done < <(jq -c '.result[]' <<<"$resp")
-  done
+            if jq -e '.callback_query' >/dev/null <<<"$upd"; then
+                handle_callback "$upd"
+            elif jq -e '.message' >/dev/null <<<"$upd"; then
+                handle_message "$upd"
+            fi
+        done < <(jq -c '.result[]' <<<"$resp")
+    done
 }
 
 main_loop

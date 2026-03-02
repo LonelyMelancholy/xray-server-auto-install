@@ -1,0 +1,12 @@
+[Unit]
+Description=Precreate shared lock files in /run/lock
+After=local-fs.target
+Before=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/service/precreate_lockfiles.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

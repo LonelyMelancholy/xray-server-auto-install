@@ -36,7 +36,7 @@ trap 'end_log' EXIT
 [[ $EUID -ne 0 ]] && { echo "Error: you are not the root user, exit" >&2; exit 1; }
 
 # check another instance of the script is not running
-exec {fd}> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
+exec {fd}< "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
 flock -n ${fd} || { echo "Error: another instance is running, exit" >&2; exit 1; }
 
 # source Telegram func library
@@ -113,6 +113,7 @@ update_and_upgrade "update packages list" apt-get update || { FAIL_STEP="apt-get
 update_and_upgrade "upgrade" unattended-upgrade || { FAIL_STEP="unattended-upgrade"; check_fail; }
 
 # parse package changes from dpkg.log for name+version, not use unattended log because he dont have version
+readonly TODAY="$(date +%Y-%m-%d)"
 CHANGES="$(awk -v d="$TODAY" '
   function numver(v,    m) {
     sub(/^[0-9]+:/, "", v)

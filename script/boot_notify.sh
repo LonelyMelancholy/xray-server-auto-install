@@ -34,7 +34,7 @@ trap 'end_log' EXIT
 [[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
 
 # check another instanсe of the script is not running
-exec {fd}> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
+exec {fd}< "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
 flock -n ${fd} || { echo "Error: another instance is running, exit" >&2; exit 1; }
 
 # function section

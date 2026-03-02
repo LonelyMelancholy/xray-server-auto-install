@@ -1,13 +1,14 @@
 [Unit]
-Description=Telegram notify journald error level err-crit-alert-emerg
+Description=Telegram high cpu usage alert
 After=network-online.target
 Wants=network-online.target
+Requires=precreate-lockfiles.service
+After=precreate-lockfiles.service
 
 [Service]
 Type=simple
 User=telegram_gateway
-SupplementaryGroups=systemd-journal
-ExecStart=/usr/local/bin/telegram/journald_notify.sh
+ExecStart=/usr/local/bin/telegram/cpu_alert.sh
 Restart=always
 RestartSec=10
 

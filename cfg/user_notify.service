@@ -1,5 +1,7 @@
 [Unit]
 Description=Service for running a script Telegram notify [user server traffic + remaining days], start via timer
+Requires=precreate-lockfiles.service
+After=precreate-lockfiles.service
 
 [Service]
 Type=oneshot
