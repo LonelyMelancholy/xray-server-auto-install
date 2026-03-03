@@ -4,6 +4,7 @@
 
 # main variables
 LOCK_FILE="/run/lock/precreate_lockfiles.lock"
+RC=1
 
 # export path just in case
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -18,7 +19,7 @@ echo "precreate_lockfiles started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 # exit logging message function
 # shellcheck disable=SC2329
 end_log() {
-    if [[ "$RC_M" -eq "0" ]]; then
+    if [[ "$RC" -eq "0" ]]; then
         echo "precreate lockfiles ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     else
         echo "precreate lockfiles failed - $(date '+%Y-%m-%d %H:%M:%S')" >&2
@@ -60,9 +61,15 @@ LOCK_GROUP=root
 for lock in "${LOCK_FILES[@]}"; do
     # if exist, delete and install new, else just install
     if [[ -e "$lock" ]]; then
-        rm -rf "$lock"
-        install -m "$LOCK_MODE" -o "$LOCK_OWNER" -g "$LOCK_GROUP" "/dev/null" "$lock"
+        rm -rf "$lock" || { echo "Error: cannot be deleted '$lock', exit" >&2; exit 1; }
+        install -m "$LOCK_MODE" -o "$LOCK_OWNER" -g "$LOCK_GROUP" "/dev/null" "$lock" || \
+        { echo "Error: cannot be installed '$lock', exit" >&2; exit 1; }
     else
-        install -m "$LOCK_MODE" -o "$LOCK_OWNER" -g "$LOCK_GROUP" "/dev/null" "$lock"
+        install -m "$LOCK_MODE" -o "$LOCK_OWNER" -g "$LOCK_GROUP" "/dev/null" "$lock" || \
+        { echo "Error: cannot be installed '$lock', exit" >&2; exit 1; }
     fi
 done
+
+RC=0
+
+exit $RC

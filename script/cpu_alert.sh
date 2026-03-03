@@ -4,7 +4,7 @@
 
 # main variables
 readonly THRESHOLD=80
-readonly INTERVAL=10
+readonly INTERVAL=60
 readonly LOCK_FILE="/run/lock/cpu_alert.lock"
 # export path just in case
 PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"

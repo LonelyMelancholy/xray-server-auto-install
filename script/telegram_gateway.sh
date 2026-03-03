@@ -148,6 +148,9 @@ valid_arg() {
             # yes,Yes,YES accept
             [[ "$arg" =~ ^[Yy][Ee][Ss]$ ]] || return 1
         ;;
+        *)
+            return 1
+        ;;
     esac
 }
 
@@ -183,24 +186,6 @@ run_and_send_output() {
     done
     # send the rest (including empty)
     send_message "$chat_id" "$text"
-}
-
-reboot_server() {
-    run_and_send_output "$chat_id" echo "Server reboot started"
-    show_menu "$chat_id"
-    if ! systemctl reboot; then
-        echo "Server fail to reboot"
-        show_menu "$chat_id"
-    fi
-}
-
-restart_xray() {
-    if systemctl restart xray.service; then
-        echo "Xray restarted"
-    else
-        echo "Xray fail to restart"
-    fi
-    show_menu "$chat_id"
 }
 
 handle_callback() {
@@ -402,11 +387,18 @@ handle_message() {
             case "$STATE" in
             WAIT_REBOOT)
                 STATE=""
-                run_and_send_output "$chat_id" reboot_server
+                    run_and_send_output "$chat_id" echo "Server reboot started"
+                    show_menu "$chat_id"
+                    systemctl reboot || { run_and_send_output "$chat_id" echo "Server fail to reboot"; show_menu "$chat_id"; }
             ;;
             WAIT_RESTART)
                 STATE=""
-                run_and_send_output "$chat_id" restart_xray
+                    if systemctl restart xray.service; then
+                        run_and_send_output "$chat_id" echo "Xray restarted"
+                    else
+                        run_and_send_output "$chat_id" echo "Xray fail to restart"
+                    fi
+                    show_menu "$chat_id"
             ;;
             esac
         ;;
