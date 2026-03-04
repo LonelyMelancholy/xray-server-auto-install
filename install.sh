@@ -714,16 +714,23 @@ security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chro
 $(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$XRAY_NAME")-$(uri_encode "$REALITY_SNI")-IP6"
 fi
 
+# get link for domain
+VLESS_URI_DOMAIN="vless://${UUID}@$(uri_encode "$REALITY_SNI"):${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
+security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
+$(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$XRAY_NAME")-$(uri_encode "$REALITY_SNI")"
+
 # print result to URI_DB
 if [ -n "$IP_6" ]; then
     tee "$URI_DB" > /dev/null <<EOF
 name: $XRAY_NAME, vless ip_4 link: $VLESS_URI_IP4
 name: $XRAY_NAME, vless ip_6 link: $VLESS_URI_IP6
+name: $XRAY_NAME, vless DOMAIN link: $VLESS_URI_DOMAIN
 
 EOF
 else
     tee "$URI_DB" > /dev/null <<EOF
 name: $XRAY_NAME, vless ip_4 link: $VLESS_URI_IP4
+name: $XRAY_NAME, vless DOMAIN link: $VLESS_URI_DOMAIN
 
 EOF
 fi
@@ -798,7 +805,7 @@ install_scr_xray_statistics() {
     install -m 644 -o root -g root "cfg/xray_statistics.service" "/etc/systemd/system/xray_statistics.service" || return 1
     install -m 755 -o root -g root "script/xray_statistics.sh" "/usr/local/bin/service/xray_statistics.sh" || return 1
     systemctl daemon-reload || return 1
-    systemctl enable --now xray_statistics.timer || return 1
+    systemctl enable -q --now xray_statistics.timer || return 1
 }
 run_and_check "xray statistic service installation" install_scr_xray_statistics
 
@@ -810,7 +817,7 @@ install_scr_user_notify() {
     install -m 644 -o root -g root "cfg/user_notify.service" "/etc/systemd/system/user_notify.service" || return 1
     install -m 755 -o root -g root "script/user_notify.sh" "/usr/local/bin/telegram/user_notify.sh" || return 1
     systemctl daemon-reload || return 1
-    systemctl enable --now user_notify.timer || return 1
+    systemctl enable -q --now user_notify.timer || return 1
 }
 run_and_check "user daily report service installation" install_scr_user_notify
 
@@ -822,7 +829,7 @@ install_scr_time_block() {
     install -m 644 -o root -g root "cfg/time_block.service" "/etc/systemd/system/time_block.service" || return 1
     install -m 755 -o root -g root "script/time_block.sh" "/usr/local/bin/service/time_block.sh" || return 1
     systemctl daemon-reload || return 1
-    systemctl enable --now time_block.timer || return 1
+    systemctl enable -q --now time_block.timer || return 1
 }
 run_and_check "time block expired user service installation" install_scr_time_block
 
@@ -834,7 +841,7 @@ install_scr_traffic_block() {
     install -m 644 -o root -g root "cfg/traffic_block.service" "/etc/systemd/system/traffic_block.service" || return 1
     install -m 755 -o root -g root "script/traffic_block.sh" "/usr/local/bin/service/traffic_block.sh" || return 1
     systemctl daemon-reload || return 1
-    systemctl enable --now traffic_block.timer || return 1
+    systemctl enable -q --now traffic_block.timer || return 1
 }
 run_and_check "traffic block service installation" install_scr_traffic_block
 
@@ -846,7 +853,7 @@ install_scr_xray_backup() {
     install -m 644 -o root -g root "cfg/xray_backup.service" "/etc/systemd/system/xray_backup.service" || return 1
     install -m 755 -o root -g root "script/xray_backup.sh" "/usr/local/bin/service/xray_backup.sh" || return 1
     systemctl daemon-reload || return 1
-    systemctl enable --now xray_backup.timer || return 1
+    systemctl enable -q --now xray_backup.timer || return 1
 }
 run_and_check "xray backup service installation" install_scr_xray_backup
 
@@ -858,7 +865,7 @@ install_scr_xray_update() {
     install -m 644 -o root -g root "cfg/xray_update.service" "/etc/systemd/system/xray_update.service" || return 1
     install -m 755 -o root -g root "script/xray_update.sh" "/usr/local/bin/service/xray_update.sh" || return 1
     systemctl daemon-reload || return 1
-    systemctl enable --now xray_update.timer || return 1
+    systemctl enable -q --now xray_update.timer || return 1
 }
 run_and_check "xray and geo*.dat update service installation" install_scr_xray_update
 
@@ -870,7 +877,7 @@ install_scr_un_up() {
     install -m 644 -o root -g root "cfg/unattended_upgrade.service" "/etc/systemd/system/unattended_upgrade.service" || return 1
     install -m 755 -o root -g root "script/unattended_upgrade.sh" "/usr/local/bin/service/unattended_upgrade.sh" || return 1
     systemctl daemon-reload || return 1
-    systemctl enable --now unattended_upgrade.timer || return 1
+    systemctl enable -q --now unattended_upgrade.timer || return 1
 }
 run_and_check "unattended update service installation" install_scr_un_up
 

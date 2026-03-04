@@ -1,7 +1,7 @@
 [Unit]
 Description=Service for running a script who update Xray and geo*.dat
-Requires=precreate-lockfiles.service
-After=precreate-lockfiles.service
+Requires=precreate_lockfiles.service
+After=precreate_lockfiles.service
 
 [Service]
 Type=oneshot

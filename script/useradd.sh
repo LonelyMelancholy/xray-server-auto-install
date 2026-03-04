@@ -114,11 +114,13 @@ install_new_uri_db() {
         tee -a "$URI_DB" > /dev/null <<EOF
 name: $USERNAME, vless ip_4 link: $VLESS_URI_IP4
 name: $USERNAME, vless ip_6 link: $VLESS_URI_IP6
+name: $USERNAME, vless DOMAIN link: $VLESS_URI_DOMAIN
 
 EOF
     else
     tee -a "$URI_DB" > /dev/null <<EOF
 name: $USERNAME, vless ip_4 link: $VLESS_URI_IP4
+name: $USERNAME, vless DOMAIN link: $VLESS_URI_DOMAIN
 
 EOF
     fi
@@ -238,6 +240,11 @@ if [ -n "$IP_6" ]; then
 security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
 $(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$USERNAME")-$(uri_encode "$REALITY_SNI")-IP6"
 fi
+
+# get link for domain
+VLESS_URI_DOMAIN="vless://${UUID}@$(uri_encode "$REALITY_SNI"):${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
+security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
+$(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$USERNAME")-$(uri_encode "$REALITY_SNI")"
 
 # backup old uri_db
 run_and_check "backup old URI_DB '$URI_DB_BACKUP'" cp -a "$URI_DB" "$URI_DB_BACKUP"

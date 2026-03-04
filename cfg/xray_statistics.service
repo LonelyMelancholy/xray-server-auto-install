@@ -1,7 +1,7 @@
 [Unit]
 Description=Service for running a script who collect Xray traffic statistics
-Requires=precreate-lockfiles.service
-After=precreate-lockfiles.service
+Requires=precreate_lockfiles.service
+After=precreate_lockfiles.service
 
 [Service]
 Type=oneshot

@@ -2,8 +2,8 @@
 Description=Telegram notify after boot
 Wants=network-online.target
 After=network-online.target
-Requires=precreate-lockfiles.service
-After=precreate-lockfiles.service
+Requires=precreate_lockfiles.service
+After=precreate_lockfiles.service
 
 [Service]
 User=telegram_gateway
