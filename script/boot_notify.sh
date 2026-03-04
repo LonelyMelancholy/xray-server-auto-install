@@ -68,14 +68,14 @@ daemon_status() {
 source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
 
 # main logic start here
-# wait for all service started 5m
-sleep 300
+# wait for all service started 10m
+sleep 600
 
 # internet check 2m, exit if offline
 if wait_internet; then
     echo "Success: internet is available"
 else
-    echo "Error: no internet after 7 min, exit" >&2
+    echo "Error: no internet after 12 min from server boot, exit" >&2
     exit 1
 fi
 

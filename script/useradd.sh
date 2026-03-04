@@ -114,13 +114,13 @@ install_new_uri_db() {
         tee -a "$URI_DB" > /dev/null <<EOF
 name: $USERNAME, vless ip_4 link: $VLESS_URI_IP4
 name: $USERNAME, vless ip_6 link: $VLESS_URI_IP6
-name: $USERNAME, vless DOMAIN link: $VLESS_URI_DOMAIN
+name: $USERNAME, vless domain link: $VLESS_URI_DOMAIN
 
 EOF
     else
     tee -a "$URI_DB" > /dev/null <<EOF
 name: $USERNAME, vless ip_4 link: $VLESS_URI_IP4
-name: $USERNAME, vless DOMAIN link: $VLESS_URI_DOMAIN
+name: $USERNAME, vless domain link: $VLESS_URI_DOMAIN
 
 EOF
     fi
@@ -257,5 +257,6 @@ echo "✅ Success: name: $USERNAME, added"
 echo "✅ Success: time, created: $TODAY, days: $DAYS, expiration: $EXP"
 echo "✅ Success: vless ip_4 link: $VLESS_URI_IP4"
 [ -n "$IP_6" ] && { echo "✅ Success: vless ip_6 link: $VLESS_URI_IP6"; }
+echo "✅ Success: vless domain link: $VLESS_URI_DOMAIN"
 
 exit 0

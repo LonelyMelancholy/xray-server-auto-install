@@ -724,13 +724,13 @@ if [ -n "$IP_6" ]; then
     tee "$URI_DB" > /dev/null <<EOF
 name: $XRAY_NAME, vless ip_4 link: $VLESS_URI_IP4
 name: $XRAY_NAME, vless ip_6 link: $VLESS_URI_IP6
-name: $XRAY_NAME, vless DOMAIN link: $VLESS_URI_DOMAIN
+name: $XRAY_NAME, vless domain link: $VLESS_URI_DOMAIN
 
 EOF
 else
     tee "$URI_DB" > /dev/null <<EOF
 name: $XRAY_NAME, vless ip_4 link: $VLESS_URI_IP4
-name: $XRAY_NAME, vless DOMAIN link: $VLESS_URI_DOMAIN
+name: $XRAY_NAME, vless domain link: $VLESS_URI_DOMAIN
 
 EOF
 fi
@@ -924,23 +924,41 @@ conf_tg_gateway() {
     systemctl daemon-reload || return 1
     systemctl enable -q --now telegram_gateway.service || return 1
 }
-run_and_check " Telegram gateway service installation" conf_tg_gateway
+run_and_check "Telegram gateway service installation" conf_tg_gateway
 
 
 # final output
-echo "#################[ SSH USERNAME - PORT ]#################"
+echo "############################[ SSH USERNAME - PORT ]############################"
 echo ""
 echo "$SECOND_USER - $SSH_PORT"
 echo ""
-echo "#####################[ PRIVATE KEY ]#####################"
+echo "################################[ PRIVATE KEY ]################################"
 echo ""
 echo "$PRIV_KEY"
 echo ""
-echo "#############[ PUBLIC KEY - $PUB_KEY_PATH ]##############"
+echo "################################[ PUBLIC KEY ]#################################"
 echo ""
 cat "$PUB_KEY_PATH"
 echo ""
-echo "#####################[ VLESS LINK ]######################"
+echo "################################[ VLESS LINK ]#################################"
 echo ""
 cat "$URI_DB"
-echo "#########################################################"
+echo "###############################################################################"
+
+
+# function countdown before reboot
+countdown() {
+    local sec=$1
+    while [[ "$sec" -gt 0 ]]; do
+        printf "\r✅ Success: system will reboot after %2d sec, Ctrl+C to interrupt" "$sec"
+        sleep 1
+        ((sec--))
+    done
+    printf "\r✅ Success: launch server reboot                                      \n"
+}
+
+# countdown before reboot
+countdown 60
+
+# reboot after pause
+reboot &> /dev/null || { echo "❌ Error: reboot command failed, exit"; exit 1; }

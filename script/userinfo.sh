@@ -238,6 +238,27 @@ USER_VLESS_LINK_6="$(
     ' "$URI_DB"
 )"
 
+# search for
+# name: <username>, vless link: ip_* <link>
+# print "<link>", all matches
+USER_VLESS_LINK_DOMAIN="$(
+    awk -v user="$USERNAME" '
+        BEGIN { found=0 }
+            {
+                if (match($0, /^name:[[:space:]]*([^,]+),[[:space:]]*vless domain link:[[:space:]]*(.+)$/, m)) {
+                    name = m[1]
+                    link = m[2]
+                    # print 100% matches only
+                    if (name == user) {
+                        print link
+                        found=1
+                    }
+                }
+            }
+        END { if (!found) exit }
+    ' "$URI_DB"
+)"
+
 # convert limit bytes to human read traffic limit
 MAX_TR_H="$(numfmt --to=iec --suffix=B "$MAX_TR")"
 
@@ -254,5 +275,6 @@ echo "📊 Traffic annual: $TOTAL_Y"
 echo "📝 IP: $IP_USER"
 echo "🛠 Vless ip_4 link: $USER_VLESS_LINK_4"
 echo "🛠 Vless ip_6 link: $USER_VLESS_LINK_6"
+echo "🛠 Vless domain link: $USER_VLESS_LINK_DOMAIN"
 
 exit 0
