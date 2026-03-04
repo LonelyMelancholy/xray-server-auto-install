@@ -49,38 +49,12 @@
             "type": "none"
           }
         }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": [
-            "http",
-            "tls",
-            "quic"
-        ],
-        "metadataOnly": false,
-        "routeOnly": true
       }
     }
   ],
   "routing": {
-    "domainStrategy": "IPOnDemand",
-    "rules": [
-      {
-        "type": "field",
-        "outboundTag": "blocked",
-        "ip": [
-            "geoip:private",
-            "geoip:ru"
-        ]
-      },
-      {
-        "type": "field",
-        "outboundTag": "blocked",
-        "protocol": [
-            "bittorrent"
-        ]
-      }
-    ]
+    "domainStrategy": "AsIs",
+    "rules": []
   },
   "outbounds": [
     {

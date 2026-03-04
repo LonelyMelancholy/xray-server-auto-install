@@ -14,9 +14,9 @@ TMP_TR_DB_M="$(mktemp)" || { echo "❌ Error: create temp file failed, exit"; ex
 # shellcheck disable=SC2329
 rm_tmp() {
     if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null && rm -f "$TMP_TR_DB_M" 2> /dev/null; then
-        echo "✅ Success: delete tmp config file"
+        echo "✅ Success: delete tmp files"
     else
-        echo "❌ Error: delete tmp config file"
+        echo "❌ Error: delete tmp files"
     fi
 }
 

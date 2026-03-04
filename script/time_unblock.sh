@@ -15,9 +15,9 @@ DAYS="$2"
 # shellcheck disable=SC2329
 rm_tmp() {
     if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null; then
-        echo "✅ Success: delete tmp config file"
+        echo "✅ Success: delete tmp files"
     else
-        echo "❌ Error: delete tmp config file"
+        echo "❌ Error: delete tmp files"
     fi
 }
 

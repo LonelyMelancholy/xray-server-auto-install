@@ -16,9 +16,9 @@ TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp fil
 # shellcheck disable=SC2329
 rm_tmp() {
     if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null; then
-        echo "✅ Success: delete tmp config file"
+        echo "✅ Success: delete tmp files"
     else
-        echo "❌ Error: delete tmp config file"
+        echo "❌ Error: delete tmp files"
     fi
 }
 
@@ -78,7 +78,7 @@ make_new_config() {
         --arg dflow "$DEFAULT_FLOW" '
         (.inbounds[] | select(.tag==$tag) | .settings.clients[0].flow // $dflow) as $flow
         | .inbounds = (.inbounds | map(
-            if .tag == $tag and .protocol == "vless" then
+            if .tag == $tag then
             .settings.clients += [{
                 "email": $email,
                 "id": $id,
@@ -157,7 +157,7 @@ fi
 
 # check inbound
 HAS_INBOUND="$(jq --arg tag "$INBOUND_TAG" '
-    any(.inbounds[]?; .tag == $tag and .protocol == "vless")
+    any(.inbounds[]?; .tag == $tag)
 ' "$XRAY_CONFIG")"
 
 # if not have inbound, exit

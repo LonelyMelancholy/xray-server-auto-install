@@ -1,0 +1,30 @@
+    {
+      "tag": "Bridge-to-next-hop",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "HOST-NEXT-HOP",
+            "port": 443,
+            "users": [
+              {
+                "email": "EMAIL",
+                "id": "ID",
+                "flow": "xtls-rprx-vision",
+                "encryption": "none"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "fingerprint": "chrome",
+          "serverName": "HOST_NEXT_HOP",
+          "publicKey": "PUBKEY",
+          "shortId": "SHORTID"
+        }
+      }
+    },

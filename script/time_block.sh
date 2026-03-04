@@ -34,10 +34,10 @@ end_log() {
 rm_tmp() {
     echo "cleaning start - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     if rm -f "$TMP_XRAY_CONFIG" > /dev/null; then
-        echo "Success: delete tmp config file"
+        echo "Success: delete tmp files"
         echo "cleaning ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     else
-        echo "Error: delete tmp config file" >&2
+        echo "Error: delete tmp files" >&2
         echo "cleaning failed - $(date '+%Y-%m-%d %H:%M:%S')" >&2
     fi
 }

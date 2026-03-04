@@ -37,10 +37,10 @@ end_log() {
 rm_tmp() {
     echo "cleaning start - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     if rm -f "$TMP_TR_DB_COMMON" "$TMP_TR_DB_M_OLD" "$TMP_TR_DB_Y_OLD" "$TMP_TR_DB_M_NEW" "$TMP_TR_DB_Y_NEW" > /dev/null; then
-        echo "Success: delete tmp TR_DB file"
+        echo "Success: delete tmp files"
         echo "cleaning ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     else
-        echo "Error: delete tmp TR_DB file" >&2
+        echo "Error: delete tmp files" >&2
         echo "cleaning failed - $(date '+%Y-%m-%d %H:%M:%S')" >&2
     fi
 }

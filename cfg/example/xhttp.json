@@ -16,46 +16,51 @@
     "tag": "api",
     "listen": "127.0.0.1:8080",
     "services": [
-        "StatsService"
+      "StatsService"
     ]
   },
   "inbounds": [
     {
-      "tag": "Vless",
-      "listen": "0.0.0.0",
+      "tag": "Vless-XHTTP",
+      "listen": "HOST-ADRESS-HERE",
       "port": 443,
       "protocol": "vless",
       "settings": {
-        "decryption": "none",
+        "decryption": "HERE-DECRYPTION-PASS",
         "clients": [
+          {
+            "email": "EMAIL-HERE",
+            "id": "WRITE-ID-HERE",
+            "flow": "xtls-rprx-vision"
+          }
         ]
       },
       "streamSettings": {
-        "network": "tcp",
+        "network": "xhttp",
         "security": "reality",
         "realitySettings": {
           "xver": 1,
           "dest": "127.0.0.1:8443",
-          "privateKey": "",
+          "privateKey": "PRIVATE-KEY-HERE",
           "serverNames": [
+            "SNI-HOST.COM"
           ],
           "shortIds": [
+            "SHORT-ID-HERE"
           ],
           "show": false
         },
-        "tcpSettings": {
-          "acceptProxyProtocol": false,
-          "header": {
-            "type": "none"
-          }
+        "xhttpSettings": {
+          "path": "/WRITE-RANDOM-PATH-HERE",
+          "mode": "auto"
         }
       },
       "sniffing": {
         "enabled": true,
         "destOverride": [
-            "http",
-            "tls",
-            "quic"
+          "http",
+          "tls",
+          "quic"
         ],
         "metadataOnly": false,
         "routeOnly": true
@@ -69,15 +74,15 @@
         "type": "field",
         "outboundTag": "blocked",
         "ip": [
-            "geoip:private",
-            "geoip:ru"
+          "geoip:private",
+          "geoip:ru"
         ]
       },
       {
         "type": "field",
         "outboundTag": "blocked",
         "protocol": [
-            "bittorrent"
+          "bittorrent"
         ]
       }
     ]
