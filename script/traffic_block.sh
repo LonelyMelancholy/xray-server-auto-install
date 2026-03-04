@@ -197,7 +197,8 @@ done <<< "$USERS_TRAFFIC_TOTAL"
 # check traffic in array, if empty value - exit
 if (( ${#TOTAL_BYTES_BY_USERS[@]} == 0 )); then
     echo "Success: in $TR_DB_M not found user>>>...>>>traffic>>>uplink/downlink with value, exit"
-    exit 0
+    RC=0
+    exit $RC
 fi
 
 # per user, check traffic limit, ifexceeded add to array to block
