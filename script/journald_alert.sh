@@ -76,6 +76,9 @@ while IFS= read -r json; do
     echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
     echo "$MESSAGE"
     
+    # sleep for message frequency reduction
+    sleep 1
+
     # send message
     telegram_message
 done
