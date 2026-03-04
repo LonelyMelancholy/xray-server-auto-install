@@ -186,6 +186,10 @@ while IFS=$'\t' read -r name value; do
     user_full="${user_full%%>>>traffic*}"
     # get username|
     username="${user_full%%|*}"
+
+    # skip empty strings
+    [[ -z "$username" ]] && continue
+    
     # add value to array, if array value empty set to 0 and add value
     TOTAL_BYTES_BY_USERS["$username"]=$(( ${TOTAL_BYTES_BY_USERS["$username"]:-0} + value ))
 done <<< "$USERS_TRAFFIC_TOTAL"
