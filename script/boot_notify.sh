@@ -68,14 +68,14 @@ daemon_status() {
 source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
 
 # main logic start here
-# wait for all service started 10m
-sleep 600
+# wait for all service started 1m
+sleep 60
 
 # internet check 2m, exit if offline
 if wait_internet; then
     echo "Success: internet is available"
 else
-    echo "Error: no internet after 12 min from server boot, exit" >&2
+    echo "Error: no internet after 3 min from server boot, exit" >&2
     exit 1
 fi
 
@@ -93,7 +93,7 @@ XRAY_STATUS="$(daemon_status xray.service xray)" || COMMON_STATUS=1
 NFTABLES_STATUS="$(daemon_status nftables.service nftables)" || COMMON_STATUS=1
 
 # start collecting message parts
-if [[  $COMMON_STATUS == 0 && "$SYSTEM_STATUS" == "running" ]]; then
+if [[  $COMMON_STATUS == 0 ]] && [[ "$SYSTEM_STATUS" == "running" || "$SYSTEM_STATUS" == "starting" ]]; then
     MESSAGE_TITLE="✅ <b>Server up, all services are running</b>"
     SYSTEM_STATUS="☑️ <b>Init system:</b> $SYSTEM_STATUS"
 elif [[ $COMMON_STATUS == 0 ]]; then

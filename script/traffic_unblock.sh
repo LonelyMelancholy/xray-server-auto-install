@@ -34,12 +34,15 @@ if [[ "$#" -ne 1 || "$USERNAME" == "--help" ]]; then
 fi
 
 if [[ ! $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
-    echo "❌ Error: only letters, numbers and - in username, exit"
+    echo "❌ Error: only letters, numbers and - in name, exit"
     exit 1
 fi
 
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
+
+# xray running check
+xray_status_check "console"
 
 # lock check
 run_lock_check "xray" "console"
@@ -145,9 +148,9 @@ if [[ ${#EMAILS[@]} -gt 1 ]]; then
     echo "❌ Error: '$USERNAME' to many match in clients inbound '$INBOUND_TAG', edit config manually, exit"
     exit 1
 elif [[ ${#EMAILS[@]} -eq 1 ]]; then
-    echo "✅ Success: found client with username '$USERNAME' in inbound tag '$INBOUND_TAG'"
+    echo "✅ Success: found client with name '$USERNAME' in inbound tag '$INBOUND_TAG'"
 else
-    echo "❌ Error: not found client with username '$USERNAME' in inbound tag '$INBOUND_TAG', exit"
+    echo "❌ Error: not found client with name '$USERNAME' in inbound tag '$INBOUND_TAG', exit"
     exit 1
 fi
 
@@ -157,12 +160,12 @@ if [[ ${#EMAILS[@]} -gt 1 ]]; then
     echo "❌ Error: '$USERNAME' to many match in ruleTag '$TRAFFIC_BLOCK_TAG', edit config manually, exit"
     exit 1
 elif [[ ${#EMAILS[@]} -eq 1 ]]; then
-    echo "✅ Success: found client for unblock username '$USERNAME' in ruleTag '$TRAFFIC_BLOCK_TAG'"
+    echo "✅ Success: found client for unblock name '$USERNAME' in ruleTag '$TRAFFIC_BLOCK_TAG'"
     # convert email to json
     EMAILS_JSON="$(printf '%s\n' "${EMAILS[@]}" | jq -R . | jq -s .)"
 
     # run func for remove user in block rule
-    run_and_check "make new tmp xray config" make_new_conf
+    run_and_check "unblock user '$USERNAME', ruleTag '$TRAFFIC_BLOCK_TAG'" make_new_conf
 
     # checking new config
     run_and_check "checking new tmp xray config" xray run -test -config "$TMP_XRAY_CONFIG"
@@ -176,7 +179,7 @@ elif [[ ${#EMAILS[@]} -eq 1 ]]; then
     # restart xray
     run_and_check "restart xray service" systemctl restart xray.service
 
-    echo "xray config updated for '$USERNAME'"
+    echo "✅ Success: xray config updated for '$USERNAME'"
 else
     echo "✅ Success: blocked rule not found"
     echo "✅ Success: xray config not changed"
@@ -184,7 +187,7 @@ fi
 
 
 # reset user traffic to 0 in tmp file
-run_and_check "reset user traffic in new tmp TR_DB_M for username '$USERNAME'" reset_user_traffic "$USERNAME"
+run_and_check "reset user traffic in new tmp TR_DB_M for name '$USERNAME'" reset_user_traffic "$USERNAME"
 
 if ! jq empty "$TMP_TR_DB_M" &> /dev/null; then
     cp -f "$TMP_TR_DB_M" "${TR_DB_M}.bad_new_${TS}.json" 

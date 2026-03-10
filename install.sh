@@ -696,16 +696,20 @@ fi
 IP_4="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
 IP_6="$(ip -6 route get 2606:4700:4700::1111 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
 
-# if not get ip set host as hostname
-[ -z "$IP_4" ] && { IP_4="$(hostname)"; }
-
 # make uri link
 uri_encode() { printf '%s' "$1" | jq -sRr @uri; }
 
-# get link
-VLESS_URI_IP4="vless://${UUID}@${IP_4}:${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
+# get link for domain
+VLESS_URI_DOMAIN="vless://${UUID}@$(uri_encode "$REALITY_SNI"):${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
+security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
+$(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$XRAY_NAME")-$(uri_encode "$REALITY_SNI")"
+
+# if not get ip4, skip make vless ip4 link
+if [ -n "$IP_4" ]; then
+    VLESS_URI_IP4="vless://${UUID}@${IP_4}:${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
 security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
 $(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$XRAY_NAME")-$(uri_encode "$REALITY_SNI")-IP4"
+fi
 
 # if not get ip6, skip make vless ip6 link
 if [ -n "$IP_6" ]; then
@@ -714,23 +718,24 @@ security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chro
 $(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$XRAY_NAME")-$(uri_encode "$REALITY_SNI")-IP6"
 fi
 
-# get link for domain
-VLESS_URI_DOMAIN="vless://${UUID}@$(uri_encode "$REALITY_SNI"):${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
-security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
-$(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$XRAY_NAME")-$(uri_encode "$REALITY_SNI")"
-
 # print result to URI_DB
-if [ -n "$IP_6" ]; then
+if [ -n "$IP_4" ] && [ -n "$IP_6" ]; then
     tee "$URI_DB" > /dev/null <<EOF
+name: $XRAY_NAME, vless domain link: $VLESS_URI_DOMAIN
 name: $XRAY_NAME, vless ip_4 link: $VLESS_URI_IP4
 name: $XRAY_NAME, vless ip_6 link: $VLESS_URI_IP6
-name: $XRAY_NAME, vless domain link: $VLESS_URI_DOMAIN
 
 EOF
-else
+elif [ -n "$IP_4" ]; then
     tee "$URI_DB" > /dev/null <<EOF
-name: $XRAY_NAME, vless ip_4 link: $VLESS_URI_IP4
 name: $XRAY_NAME, vless domain link: $VLESS_URI_DOMAIN
+name: $XRAY_NAME, vless ip_4 link: $VLESS_URI_IP4
+
+EOF
+elif [ -n "$IP_6" ]; then
+    tee "$URI_DB" > /dev/null <<EOF
+name: $XRAY_NAME, vless domain link: $VLESS_URI_DOMAIN
+name: $XRAY_NAME, vless ip_6 link: $VLESS_URI_IP6
 
 EOF
 fi
@@ -932,7 +937,7 @@ echo "############################[ SSH USERNAME - PORT ]#######################
 echo ""
 echo "$SECOND_USER - $SSH_PORT"
 echo ""
-echo "################################[ PRIVATE KEY ]################################"
+echo "###############################[ PRIVATE KEY ]#################################"
 echo ""
 echo "$PRIV_KEY"
 echo ""

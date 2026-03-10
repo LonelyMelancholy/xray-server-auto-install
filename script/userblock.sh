@@ -41,6 +41,9 @@ fi
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
 
+# xray running check
+xray_status_check "console"
+
 # lock check
 run_lock_check "xray" "console"
 

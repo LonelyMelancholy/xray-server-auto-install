@@ -35,9 +35,15 @@ trap 'end_log' EXIT
 # root check
 [[ $EUID -ne 0 ]] && { echo "Error: you are not the root user, exit" >&2; exit 1; }
 
-# check another instance of the script is not running
-exec {fd}< "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
-flock -n ${fd} || { echo "Error: another instance is running, exit" >&2; exit 1; }
+# source library for run_lock and file permission cheking
+# shellcheck source=share/run_lock.lib.sh
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit" >&2; exit 1; }
+
+# check another instanсe of the script is not running
+run_lock_check "$LOCK_FILE"
+
+# check another update script not running and wait for exit
+run_lock_wait "common_update"
 
 # source Telegram func library
 # shellcheck source=share/telegram.lib.sh

@@ -48,6 +48,7 @@ LOCK_FILES=(
     "/run/lock/xray_backup.lock"
     "/run/lock/xray_statistics.lock"
     "/run/lock/xray_update.lock"
+    "/run/lock/common_update.lock"
     "/run/lock/xray.lock"
     "/run/lock/uri_db.lock"
     "/run/lock/tr_db.lock"

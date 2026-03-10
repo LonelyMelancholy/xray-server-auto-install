@@ -11,6 +11,9 @@ source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to
 # shellcheck source=share/run_lock.lib.sh
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
 
+# xray running check
+xray_status_check "console"
+
 # lock check
 run_lock_check "tr_db" "console"
 
@@ -136,8 +139,8 @@ IP_4="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="s
 IP_6="$(ip -6 route get 2606:4700:4700::1111 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
 
 # if ip empty, print "none" value
-[[ -z $IP_4 ]] && IP_4=none
-[[ -z $IP_6 ]] && IP_6=none
+[[ -z $IP_4 ]] && IP_4="[not available]"
+[[ -z $IP_6 ]] && IP_6="[not available]"
 
 # get traffic base
 RAW_M="$(cat "$TR_DB_M")"
@@ -188,10 +191,10 @@ echo "🧑🏿‍💻 Online users: ${ONLINE_USERS}"
 echo "📱 Online devices: ${ONLINE_DEVICES}"
 echo "📈 Load average (1/5/15m): ${LOAD_1} ${LOAD_5} ${LOAD_15}"
 echo "🧠 Mem total: ${MEM_TOTAL_MB} MB"
-echo "🗃 Mem available: ${MEM_AVAILABLE_MB} MB"
+echo "🧮 Mem load: ${MEM_LOAD_MB} MB (${MEM_LOAD_PCT}%)"
 echo "🆓 Mem free: ${MEM_FREE_MB} MB"
 echo "🗂️ Mem buff+cache: ${BUFF_CACH_MB} MB"
-echo "🧮 Mem load: ${MEM_LOAD_MB} MB (${MEM_LOAD_PCT}%)"
+echo "🗃 Mem available: ${MEM_AVAILABLE_MB} MB"
 echo "📁 Storage total: ${TOTAL_SPACE_GB} GB"
 echo "📂 Storage free: ${FREE_SPACE_GB} GB"
 echo "📅 Host annual traffic: ${TFAFFIC_Y}"

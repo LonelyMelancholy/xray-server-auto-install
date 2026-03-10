@@ -124,6 +124,9 @@ install_new_conf() { cat "$1" > "$2" || return 1; }
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
 
+# xray running check
+xray_status_check "console"
+
 # lock check
 run_lock_check "xray" "console"
 
@@ -217,7 +220,7 @@ fi
 
 # main logic start here
 # make new config, add time and delete blocked user
-run_and_check "make new tmp xray config" make_new_tmp_config
+run_and_check "change time for user '$USERNAME'" make_new_tmp_config
 
 # if not changed, exit
 if cmp -s "$XRAY_CONFIG" "$TMP_XRAY_CONFIG"; then

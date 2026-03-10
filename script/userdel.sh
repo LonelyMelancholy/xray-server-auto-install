@@ -38,6 +38,9 @@ fi
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
 
+# xray running check
+xray_status_check "console"
+
 # lock check
 run_lock_check "xray" "console"
 run_lock_check "uri_db" "console"
@@ -187,17 +190,17 @@ fi
 
 # if user removed need to remove user from uri file
 if [[ "$REMOVED" -gt 0 && -f "$URI_DB" ]]; then
-    # clear username from uri_db
-    run_and_check "delete xray user and make new URI_DB" make_new_uri
-
     # backup old conf
     run_and_check "backup old URI_DB '$URI_DB_BACKUP'" cp -a "$URI_DB" "$URI_DB_BACKUP"
+
+    # clear username from uri_db
+    run_and_check "delete xray user and make new URI_DB" make_new_uri
 
     # write from tmp to uri
     run_and_check "install new URI_DB" install_new_conf "$TMP_URI_DB" "$URI_DB"
 
     # echo result
-    echo "✅ Success: removed $REMOVED client(s) for '$USERNAME' from URI database"
+    echo "✅ Success: removed '$REMOVED' client(s) for '$USERNAME' from URI database"
 fi
 
 exit 0

@@ -110,6 +110,7 @@ run_and_check "packed backup archive" tar -C "$TMPDIR" -czf "$FILE_PATH" .
 # send message and file or just file
 if [[ "$ONLY_ARCHIVE" == 1 ]]; then
     telegram_file
+    echo "The backup was sent to the notification channel"
 else
     # start collecting message
     MESSAGE="📢<b> Scheduled backup</b> 

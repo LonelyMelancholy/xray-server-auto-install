@@ -9,6 +9,25 @@
 # for use permission check - read_check "file", read_and_write_check "file"
 # for output with emoji read_check "file" console, read_and_write_check "file" console
 # no external variable, only local
+#
+# for use xray status check - xray_status_check
+# for emoji output - xray_status_check "console"
+#
+# for long run lock waiting (60m) run_lock_wait "file"
+# for emoji output run_lock_wait "file" "console"
+
+# check status xray for script who need xray interaction
+xray_status_check() {
+    local output_variant="$1"
+    local error
+
+    case "$output_variant" in
+        console) error="❌ Error" ;;
+              *) error="Error" ;;
+    esac
+
+    systemctl is-active -q xray || { echo "$error: Xray not running, exit" >&2; exit 1; }
+}
 
 # checking read file rights and its existence
 read_check() {
@@ -85,4 +104,21 @@ run_lock_retry_check() {
             exit 1
         fi
     done
+}
+
+run_lock_wait() {
+    local lock="$1"
+    local output_variant="$2"
+    local lock_file="/run/lock/${lock}.lock"
+    local error fd info
+
+    case "$output_variant" in
+        console) error="❌ Error"; info="📢 Info" ;;
+              *) error="Error"; info="Info" ;;
+    esac
+
+    exec {fd}< "$lock_file" || { echo "$error: cannot open lock file '$lock_file', exit" >&2; exit 1; }
+    echo "$info: wait for lock '$lock_file'"
+    flock -w 3600 "$fd" || { echo "$error: after 1 hour lock is not taken '$lock_file', exit" >&2; exit 1; }
+    echo "$info: '$lock_file' locked, continue work"
 }

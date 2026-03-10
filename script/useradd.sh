@@ -48,6 +48,9 @@ fi
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
 
+# xray running check
+xray_status_check "console"
+
 # lock check
 run_lock_check "xray" "console"
 run_lock_check "uri_db" "console"
@@ -226,13 +229,17 @@ fi
 IP_4="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
 IP_6="$(ip -6 route get 2606:4700:4700::1111 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
 
-# if not get ip set host as hostname
-[ -z "$IP_4" ] && { IP_4="$(hostname)"; }
+# get link for domain
+VLESS_URI_DOMAIN="vless://${UUID}@$(uri_encode "$REALITY_SNI"):${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
+security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
+$(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$USERNAME")-$(uri_encode "$REALITY_SNI")"
 
-# get link
-VLESS_URI_IP4="vless://${UUID}@${IP_4}:${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
+# if not get ip4, skip make vless ip4 link
+if [ -n "$IP_4" ]; then
+    VLESS_URI_IP4="vless://${UUID}@${IP_4}:${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
 security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
 $(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$USERNAME")-$(uri_encode "$REALITY_SNI")-IP4"
+fi
 
 # if not get ip6, skip make vless ip6 link
 if [ -n "$IP_6" ]; then
@@ -241,11 +248,6 @@ security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chro
 $(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$USERNAME")-$(uri_encode "$REALITY_SNI")-IP6"
 fi
 
-# get link for domain
-VLESS_URI_DOMAIN="vless://${UUID}@$(uri_encode "$REALITY_SNI"):${XRAY_PORT}/?encryption=none&flow=$(uri_encode "$FLOW")&\
-security=reality&type=tcp&sni=$(uri_encode "$REALITY_SNI")&fp=$(uri_encode "chrome")&pbk=\
-$(uri_encode "$PUBLIC_KEY")&sid=$(uri_encode "$SHORT_ID")#$(uri_encode "$USERNAME")-$(uri_encode "$REALITY_SNI")"
-
 # backup old uri_db
 run_and_check "backup old URI_DB '$URI_DB_BACKUP'" cp -a "$URI_DB" "$URI_DB_BACKUP"
 
@@ -253,10 +255,10 @@ run_and_check "backup old URI_DB '$URI_DB_BACKUP'" cp -a "$URI_DB" "$URI_DB_BACK
 run_and_check "add user in URI_DB" install_new_uri_db
 
 # print result
-echo "✅ Success: name: $USERNAME, added"
+echo "✅ Success: added name: $USERNAME"
 echo "✅ Success: time, created: $TODAY, days: $DAYS, expiration: $EXP"
-echo "✅ Success: vless ip_4 link: $VLESS_URI_IP4"
-[ -n "$IP_6" ] && { echo "✅ Success: vless ip_6 link: $VLESS_URI_IP6"; }
 echo "✅ Success: vless domain link: $VLESS_URI_DOMAIN"
+[ -n "$IP_4" ] && { echo "✅ Success: vless ip_4 link: $VLESS_URI_IP4"; }
+[ -n "$IP_6" ] && { echo "✅ Success: vless ip_6 link: $VLESS_URI_IP6"; }
 
 exit 0

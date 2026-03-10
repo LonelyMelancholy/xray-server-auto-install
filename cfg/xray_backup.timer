@@ -1,10 +1,9 @@
 [Unit]
-Description=Timer for run xray_backup.service monthly on day 1 at 01:01
+Description=Timer for run xray_backup.service monthly on day 1 at 00:03
 
 [Timer]
-OnCalendar=*-*-01 01:01:00
+OnCalendar=*-*-01 00:03:00
 Persistent=true
-AccuracySec=1s
 RandomizedDelaySec=0
 
 [Install]

@@ -6,7 +6,7 @@
 # if sending failed, RC_F not changed, if sending success RC_F=0
 # RC_F - file sender return code
 # external variable - $MESSAGE, $FILE_PATH, $FILE_NAME, $RC_M, $RC_F.
-# external file /usr/local/etc/telegram/secrets.env [root:telegram_gateway 640] with $BOT_TOKEN and $GROUP_ID
+# external file /usr/local/etc/telegram/secrets.env [root:telegram_gateway 640] with $BOT_TOKEN, $CHAT_ID and $GROUP_ID
 
 # check secret file, if the file have right permissions, we source it.
 readonly ENV_FILE="/usr/local/etc/telegram/secrets.env"

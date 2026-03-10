@@ -74,6 +74,9 @@ byte_to_human(){ numfmt --to=iec --suffix=B "$1"; }
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit" >&2; exit 1; }
 
+# xray running check
+xray_status_check
+
 # lock check
 run_lock_retry_check "xray"
 run_lock_retry_check "tr_db"

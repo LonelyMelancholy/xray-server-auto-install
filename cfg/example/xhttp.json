@@ -73,6 +73,15 @@
       {
         "type": "field",
         "outboundTag": "blocked",
+        "domain": [
+          "domain:api.ipify.org",
+          "domain:ifconfig.me",
+          "domain:checkip.amazonaws.com"
+        ]
+      },
+      {
+        "type": "field",
+        "outboundTag": "blocked",
         "ip": [
           "geoip:private",
           "geoip:ru"

@@ -30,6 +30,9 @@ fi
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
 
+# xray running check
+xray_status_check "console"
+
 # lock check
 run_lock_check "xray" "console"
 run_lock_check "uri_db" "console"
@@ -259,6 +262,10 @@ USER_VLESS_LINK_DOMAIN="$(
     ' "$URI_DB"
 )"
 
+[[ -z $IP_USER ]] && IP_USER="[not available]"
+[[ -z $USER_VLESS_LINK_4 ]] && USER_VLESS_LINK_4="[not available]"
+[[ -z $USER_VLESS_LINK_6 ]] && USER_VLESS_LINK_6="[not available]"
+
 # convert limit bytes to human read traffic limit
 MAX_TR_H="$(numfmt --to=iec --suffix=B "$MAX_TR")"
 
@@ -273,8 +280,8 @@ echo "📱 Devices: $USER_DEVICE_COUNT"
 echo "📊 Traffic monthly: $TOTAL_M/$MAX_TR_H"
 echo "📊 Traffic annual: $TOTAL_Y"
 echo "📝 IP: $IP_USER"
+echo "🛠 Vless domain link: $USER_VLESS_LINK_DOMAIN"
 echo "🛠 Vless ip_4 link: $USER_VLESS_LINK_4"
 echo "🛠 Vless ip_6 link: $USER_VLESS_LINK_6"
-echo "🛠 Vless domain link: $USER_VLESS_LINK_DOMAIN"
 
 exit 0
