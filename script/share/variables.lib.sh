@@ -39,3 +39,5 @@ readonly BLOCK_OUTBOUND_TAG="blocked"
 readonly MANUAL_BLOCK_TAG="manual-block-users"
 readonly EXPIRED_BLOCK_TAG="autoblock-expired-users"
 readonly TRAFFIC_BLOCK_TAG="autoblock-traffic-users"
+
+readonly TARGET_USER="telegram_gateway"

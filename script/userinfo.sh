@@ -5,6 +5,14 @@
 # shellcheck source=share/variables.lib.sh
 source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit"; exit 1; }
 
+# restart script for target user if have sudo without password
+if [ "$(id -un)" != "$TARGET_USER" ]; then
+    if ! exec sudo -n -u "$TARGET_USER" -- "$0" "$@"; then
+        echo "❌ Error: failed to restart the script as user '$TARGET_USER'"
+        exit 1
+    fi
+fi
+
 # main variables
 USERNAME="$1"
 # reset user status and count device
@@ -13,7 +21,7 @@ USER_DEVICE_COUNT=0
 IP_USER=""
 
 # user check
-[[ "$(whoami)" != "telegram_gateway" ]] && { echo "❌ Error: you are not the telegram_gateway user, exit"; exit 1; }
+[[ "$(whoami)" != "$TARGET_USER" ]] && { echo "❌ Error: you are not the '$TARGET_USER' user, exit"; exit 1; }
 
 # argument check
 if [[ $# -ne 1 || $USERNAME == "--help" ]]; then
