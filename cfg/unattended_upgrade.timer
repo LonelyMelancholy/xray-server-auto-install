@@ -1,10 +1,10 @@
 [Unit]
-Description=Timer for run unattended_upgrade.service monthly on day 1 at 01:00-05:00
+Description=Timer for run unattended_upgrade.service monthly on day 1 at 05:00-06:00
 
 [Timer]
-OnCalendar=*-*-01 01:00:00
+OnCalendar=*-*-01 05:00:00
 Persistent=true
-RandomizedDelaySec=4h
+RandomizedDelaySec=1h
 
 [Install]
 WantedBy=timers.target

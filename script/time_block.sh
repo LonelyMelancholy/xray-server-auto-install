@@ -177,15 +177,15 @@ source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to sour
 # shellcheck source=share/run_lock.lib.sh
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit" >&2; exit 1; }
 
-# xray running check
-# shellcheck disable=SC2119
-xray_status_check
-
 # lock check
 run_lock_retry_check "xray"
 
 # read and write conf check
 read_and_write_check "$XRAY_CONFIG"
+
+# xray running check
+# shellcheck disable=SC2119
+xray_status_check
 
 # main logic start here
 # parse old conf for exp email

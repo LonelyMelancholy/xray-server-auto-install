@@ -16,7 +16,9 @@
 # for long run lock waiting (60m) run_lock_wait "file"
 # for emoji output run_lock_wait "file" "console"
 
-# check status xray for script who need xray interaction
+# check status xray for script who need xray api interaction
+# we launch it after locking all files, so as not to exit 
+# if another script is already running and is currently restarting xray.
 xray_status_check() {
     local output_variant="$1"
     local error
@@ -59,7 +61,7 @@ read_and_write_check() {
     [[ ! -r "$file" || ! -w "$file" ]] && { echo "$error: check '$file' it's missing or you do not have read or write permissions, exit" >&2; exit 1; }
 }
 
-# lock file with random file descriptor, no waiting
+# lock file with random file descriptor, no waiting, for check another instance already working 
 run_lock_check() {
     local lock="$1"
     local output_variant="$2"
@@ -76,6 +78,7 @@ run_lock_check() {
 }
 
 # lock file with random file descriptor, waiting random time 10-60sec, 3 times try
+# to lock shared files between scripts with multiple attempts
 run_lock_retry_check() {
     local lock="$1"
     local output_variant="$2"
@@ -84,7 +87,7 @@ run_lock_retry_check() {
     # shellcheck disable=SC2155
     local wait_sec="$(shuf -i "10-60" -n 1)"
     local attempt
-    local max_attempt=3
+    local max_attempt=10
 
     case "$output_variant" in
         console) error="❌ Error"; info="📢 Info" ;;
@@ -106,6 +109,7 @@ run_lock_retry_check() {
     done
 }
 
+# lock for long waiting common lock file for update script
 run_lock_wait() {
     local lock="$1"
     local output_variant="$2"

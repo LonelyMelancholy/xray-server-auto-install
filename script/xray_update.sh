@@ -6,7 +6,6 @@
 # main variables
 readonly DATE="$(date '+%F')"
 DATE_START=$(date '+%Y-%m-%d %H:%M:%S')
-readonly LOCK_FILE="/run/lock/xray_update.lock"
 readonly ASSET_DIR="/usr/local/share/xray"
 readonly XRAY_DIR="/usr/local/bin"
 readonly GEOIP_URL="https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat"
@@ -62,20 +61,12 @@ source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to sour
 # error exit log message for end log
 trap 'on_exit; exit_cleanup;' EXIT
 
-# check another instanсe of the script is not running
-exec {fd}< "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
-flock -n ${fd} || { echo "Error: another instance working on backup, exit" >&2; exit 1; }
-
 # source library for run_lock and file permission cheking
 # shellcheck source=share/run_lock.lib.sh
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit" >&2; exit 1; }
 
-# xray running check
-# shellcheck disable=SC2119
-xray_status_check
-
 # check another instanсe of the script is not running
-run_lock_check "$LOCK_FILE"
+run_lock_check "xray_update"
 
 # check another update script not running and wait for exit
 run_lock_wait "common_update"
@@ -84,6 +75,10 @@ run_lock_wait "common_update"
 run_lock_retry_check "xray"
 run_lock_retry_check "uri_db"
 run_lock_retry_check "tr_db"
+
+# xray running check
+# shellcheck disable=SC2119
+xray_status_check
 
 # cleanup old backup and log
 cleanup_old() {

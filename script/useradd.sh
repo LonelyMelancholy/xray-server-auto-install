@@ -48,9 +48,6 @@ fi
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
 
-# xray running check
-xray_status_check "console"
-
 # lock check
 run_lock_check "xray" "console"
 run_lock_check "uri_db" "console"
@@ -58,6 +55,9 @@ run_lock_check "uri_db" "console"
 # read and write conf check
 read_and_write_check "$XRAY_CONFIG" "console"
 read_and_write_check "$URI_DB" "console"
+
+# xray running check
+xray_status_check "console"
 
 # helper func
 run_and_check() {
@@ -113,16 +113,28 @@ uri_encode() { printf '%s' "$1" | jq -sRr @uri; }
 # function for update URI_DB
 # shellcheck disable=SC2329
 install_new_uri_db() {
-    if [ -n "$IP_6" ]; then
+    if [ -n "$IP_4" ] && [ -n "$IP_6" ]; then
         tee -a "$URI_DB" > /dev/null <<EOF
+name: $USERNAME, vless domain link: $VLESS_URI_DOMAIN
 name: $USERNAME, vless ip_4 link: $VLESS_URI_IP4
 name: $USERNAME, vless ip_6 link: $VLESS_URI_IP6
+
+EOF
+    elif [ -n "$IP_4" ]; then
+        tee -a "$URI_DB" > /dev/null <<EOF
 name: $USERNAME, vless domain link: $VLESS_URI_DOMAIN
+name: $USERNAME, vless ip_4 link: $VLESS_URI_IP4
+
+EOF
+    elif [ -n "$IP_6" ]; then
+        tee -a "$URI_DB" > /dev/null <<EOF
+name: $USERNAME, vless domain link: $VLESS_URI_DOMAIN
+name: $USERNAME, vless ip_6 link: $VLESS_URI_IP6
+
 
 EOF
     else
-    tee -a "$URI_DB" > /dev/null <<EOF
-name: $USERNAME, vless ip_4 link: $VLESS_URI_IP4
+        tee -a "$URI_DB" > /dev/null <<EOF
 name: $USERNAME, vless domain link: $VLESS_URI_DOMAIN
 
 EOF

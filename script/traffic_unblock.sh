@@ -41,9 +41,6 @@ fi
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
 
-# xray running check
-xray_status_check "console"
-
 # lock check
 run_lock_check "xray" "console"
 run_lock_check "tr_db" "console"
@@ -51,6 +48,9 @@ run_lock_check "tr_db" "console"
 # read and write conf check
 read_and_write_check "$XRAY_CONFIG" "console"
 read_and_write_check "$TR_DB_M" "console"
+
+# xray running check
+xray_status_check "console"
 
 # helper function
 run_and_check() {

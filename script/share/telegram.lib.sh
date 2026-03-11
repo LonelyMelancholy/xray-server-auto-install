@@ -40,7 +40,7 @@ _tg_m() {
 # Telegram message with final result logging and retry on failure
 telegram_message() {
     local attempt=1
-    local max_attempt=3
+    local max_attempt=10
     local wait_sec=60
     while true; do
         if ! _tg_m; then
@@ -74,7 +74,7 @@ _tg_f() {
 # Telegram send file with final result logging and retry on failure
 telegram_file() {
     local attempt=1
-    local max_attempt=3
+    local max_attempt=10
     local wait_sec=60
     while true; do
         if ! _tg_f; then

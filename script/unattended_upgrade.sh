@@ -4,7 +4,6 @@
 # exit codes work to tell systemd about success
 
 # main variables
-readonly LOCK_FILE="/run/lock/unattended_upgrade.lock"
 RC="1"
 REBOOT="0"
 
@@ -40,7 +39,7 @@ trap 'end_log' EXIT
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit" >&2; exit 1; }
 
 # check another instanсe of the script is not running
-run_lock_check "$LOCK_FILE"
+run_lock_check "unattended_upgrade"
 
 # check another update script not running and wait for exit
 run_lock_wait "common_update"

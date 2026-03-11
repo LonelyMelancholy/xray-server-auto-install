@@ -738,6 +738,11 @@ name: $XRAY_NAME, vless domain link: $VLESS_URI_DOMAIN
 name: $XRAY_NAME, vless ip_6 link: $VLESS_URI_IP6
 
 EOF
+else
+    tee "$URI_DB" > /dev/null <<EOF
+name: $XRAY_NAME, vless domain link: $VLESS_URI_DOMAIN
+
+EOF
 fi
 
 

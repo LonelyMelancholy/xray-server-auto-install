@@ -30,9 +30,6 @@ fi
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
 
-# xray running check
-xray_status_check "console"
-
 # lock check
 run_lock_check "xray" "console"
 run_lock_check "uri_db" "console"
@@ -43,6 +40,9 @@ read_check "$URI_DB" "console"
 read_check "$XRAY_CONFIG" "console"
 read_check "$TR_DB_M" "console"
 read_check "$TR_DB_Y" "console"
+
+# xray running check
+xray_status_check "console"
 
 # function for extract field value from FULL_EMAIL like "...|created=2026-01-15|days=10|exp=2026-01-25"
 extract_field() {
