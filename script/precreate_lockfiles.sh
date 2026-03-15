@@ -1,14 +1,6 @@
 #!/bin/bash
 # for pred install all lock file, before other script start
-# run from systemd
-
-# main variables
-LOCK_FILE="/run/lock/precreate_lockfiles.lock"
-RC=1
-
-# export path just in case
-PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-export PATH
+# run from systemd, exit code work to tell systemd about success creating files
 
 # enable logging
 exec > >(systemd-cat -t precreate_lockfiles -p info) 2> >(systemd-cat -t precreate_lockfiles -p err) 5> >(systemd-cat -t precreate_lockfiles -p notice)
@@ -29,36 +21,19 @@ end_log() {
 # trap for the end log message for the end log
 trap 'end_log' EXIT
 
+# common variables source
+# shellcheck source=share/variables.lib.sh
+source "/usr/local/lib/service/variables.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit" >&2; exit 1; }
+
 # root checking
 [[ $EUID -ne 0 ]] && { echo "Error: you are not the root user, exit" >&2; exit 1; }
 
 # check another instanсe of the script is not running
+LOCK_FILE="/run/lock/precreate_lockfiles.lock"
 exec {fd}> "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
 flock -n ${fd} || { echo "Error: another instance is running, exit" >&2; exit 1; }
 
-# lock file list
-LOCK_FILES=(
-    "/run/lock/boot_notify.lock"
-    "/run/lock/cpu_alert.lock"
-    "/run/lock/journald_alert.lock"
-    "/run/lock/telegram_gateway.lock"
-    "/run/lock/time_block.lock"
-    "/run/lock/traffic_block.lock"
-    "/run/lock/unattended_upgrade.lock"
-    "/run/lock/xray_backup.lock"
-    "/run/lock/xray_statistics.lock"
-    "/run/lock/xray_update.lock"
-    "/run/lock/common_update.lock"
-    "/run/lock/xray.lock"
-    "/run/lock/uri_db.lock"
-    "/run/lock/tr_db.lock"
-)
-
-# permission only for read
-LOCK_MODE=0644
-LOCK_OWNER=root
-LOCK_GROUP=root
-
+# main logic start here
 for lock in "${LOCK_FILES[@]}"; do
     # if exist, delete and install new, else just install
     if [[ -e "$lock" ]]; then
@@ -71,6 +46,8 @@ for lock in "${LOCK_FILES[@]}"; do
     fi
 done
 
+# if we here, all files installed, no error
 RC=0
 
+# exit with file creating status
 exit $RC

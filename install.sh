@@ -16,13 +16,13 @@ flock -n ${fd} || { echo "❌ Error: another instance is running, exit"; exit 1;
 
 
 # main variables
-MAX_ATTEMPTS=3
 export NEEDRESTART_SUSPEND=1
 
 # install helping function
 install_with_retry() {
     local action="$1"
     local attempt=1
+    local max_attempts=3
     shift 1
 
     while true; do
@@ -31,7 +31,7 @@ install_with_retry() {
             echo "✅ Success: $action, after ${attempt} attempts"
             return 0
         fi
-        if [[ "$attempt" -lt "$MAX_ATTEMPTS" ]]; then
+        if [[ "$attempt" -lt "$max_attempts" ]]; then
             sleep 60
             ((attempt++))
             continue
@@ -187,12 +187,11 @@ USER_GROUP="$(id -gn "$SECOND_USER")"
 
 # key generation for ssh
 install_sshd_key() {
-    mkdir -p "$SSH_DIR" || return 1
+    install -d -m 700 "$SSH_DIR" || return 1
     rm -f "$PRIV_KEY_PATH" || return 1
     ssh-keygen -t ed25519 -N "" -f "$PRIV_KEY_PATH" -q || return 1
     PRIV_KEY="$(cat "$PRIV_KEY_PATH")" || return 1
     rm -f "$PRIV_KEY_PATH" || return 1
-    chmod 700 "$SSH_DIR" || return 1
     chmod 600 "$PUB_KEY_PATH" || return 1
     chown -R "$SECOND_USER:$USER_GROUP" "$SSH_DIR" || return 1
 }
@@ -356,39 +355,26 @@ readonly URI_DB="/usr/local/etc/xray/URI_DB"
 
 install_xray_dir() {
     # create log dir, xray group can read, step in, write exist file but not create new and not get upper permission
-    # reset log file if exist
-    mkdir -p /var/log/xray || return 1
-    chmod 750 /var/log/xray || return 1
-    chown root:${XRAY_READ_WRITE_GROUP} /var/log/xray || return 1
-    echo > /var/log/xray/error.log || return 1
-    chmod 660 /var/log/xray/error.log || return 1
-    chown root:${XRAY_READ_WRITE_GROUP} /var/log/xray/error.log || return 1
-    echo > /var/log/xray/access.log || return 1
-    chmod 660 /var/log/xray/access.log || return 1
-    chown root:${XRAY_READ_WRITE_GROUP} /var/log/xray/access.log || return 1
-    
+    install -d -m 750 -o root -g ${XRAY_READ_WRITE_GROUP} "/var/log/xray" || return 1
+
+    # reset log file if exist and set permission and owner
+    install -m 660 -o root -g ${XRAY_READ_WRITE_GROUP} "/dev/null" "/var/log/xray/error.log" || return 1
+    install -m 660 -o root -g ${XRAY_READ_WRITE_GROUP} "/dev/null" "/var/log/xray/access.log" || return 1
+
     # create data dir, xray group and others only can read and step in
-    mkdir -p /usr/local/share/xray || return 1
-    chmod 755 /usr/local/share/xray || return 1
+    install -d -m 755 -o root -g root "/usr/local/share/xray" || return 1
 
     # create /etc, $XRAY_READ_WRITE_GROUP can write, read, step in and create new file
-    mkdir -p /usr/local/etc/xray || return 1
-    chmod 770 /usr/local/etc/xray || return 1
-    chown root:${XRAY_READ_WRITE_GROUP} "/usr/local/etc/xray" || return 1
+    install -d -m 770 -o root -g ${XRAY_READ_WRITE_GROUP} "/usr/local/etc/xray" || return 1
 
     # create TR_DB file and reset if exist, telegram_gateway can read, write, but not get upper permission to file
-    echo > /usr/local/etc/xray/TR_DB_M || return 1
-    chmod 660 "/usr/local/etc/xray/TR_DB_M" || return 1
-    chown root:telegram_gateway "/usr/local/etc/xray/TR_DB_M" || return 1
-    echo > /usr/local/etc/xray/TR_DB_Y || return 1
-    chmod 660 "/usr/local/etc/xray/TR_DB_Y" || return 1
-    chown root:telegram_gateway "/usr/local/etc/xray/TR_DB_Y" || return 1
+    install -m 660 -o root -g telegram_gateway "/dev/null" "/usr/local/etc/xray/TR_DB_M" || return 1
+    install -m 660 -o root -g telegram_gateway "/dev/null" "/usr/local/etc/xray/TR_DB_Y" || return 1
 
     # create URI_DB file and reset if exist, telegram_gateway can read, write, but not get upper permission to file
-    echo > "$URI_DB"
-    chmod 660 "$URI_DB"
-    chown root:telegram_gateway "$URI_DB"
-    
+    install -m 660 -o root -g telegram_gateway "/dev/null" "$URI_DB" || return 1
+
+    # make tmp dir for install
     TMP_DIR=$(mktemp -d) || return 1
     readonly TMP_DIR
 }
@@ -403,11 +389,12 @@ _dl_with_retry() {
     local outfile="$2"
     local label="$3"
     local attempt=1
+    local max_attempts=3
 
     while true; do
         echo "📢 Info: download ${label}, attempt ${attempt}, please wait"
         if ! _dl "$url" "$outfile"; then
-            if [ "$attempt" -ge "$MAX_ATTEMPTS" ]; then
+            if [ "$attempt" -ge "$max_attempts" ]; then
                 echo "❌ Error: download ${label} after ${attempt} attempts, exit"
                 return 1
             fi
@@ -429,7 +416,6 @@ download_and_verify() {
     local sha256sum_file="${outfile}.sha256sum"
     local dgst_file="${outfile}.dgst"
     local expected_sha actual_sha
-    UNPACK_DIR="$TMP_DIR/xray-unpacked"
 
     # download main file
     _dl_with_retry "$url" "$outfile" "$name" || exit 1
@@ -443,10 +429,10 @@ download_and_verify() {
         _dl_with_retry "${url}.sha256sum" "$sha256sum_file" "${name}.sha256sum" || exit 1
     fi
 
-# extract sha256sum from .dgst or .sha256sum depending on the name there are two ways
-# reset sha
+    # extract sha256sum from .dgst or .sha256sum depending on the name there are two ways
+    # reset sha
     expected_sha=""
-# extract sha256sum from .dgst if name xray
+    # extract sha256sum from .dgst if name xray
         if [ "$name" = "xray" ]; then
             expected_sha="$(awk '/^SHA2-256/ {print $2}' "$dgst_file")"
             if [ -z "$expected_sha" ]; then
@@ -455,7 +441,7 @@ download_and_verify() {
             else
                 echo "✅ Success: parse SHA256 from ${dgst_file}"
             fi
-# extract sha256sum from .sha256sum if other name (geoip.dat, geosite.dat)
+        # extract sha256sum from .sha256sum if other name (geoip.dat, geosite.dat)
         else
             expected_sha="$(awk '{print $1}' "$sha256sum_file" 2>/dev/null)"
             if [ -z "$expected_sha" ]; then
@@ -466,8 +452,8 @@ download_and_verify() {
             fi
         fi
 
-# extract actual sha256sum from .zip or .dat
-# reset sha
+        # extract actual sha256sum from .zip or .dat
+        # reset sha
         actual_sha=""
             actual_sha="$(sha256sum "$outfile" 2>/dev/null | awk '{print $1}')"
             if [ -z "$actual_sha" ]; then
@@ -504,20 +490,14 @@ download_and_verify() {
     if [ "$name" = "xray" ]; then
 
 # unpack archive
-        if ! mkdir -p "$UNPACK_DIR"; then
-            echo "❌ Error: create directory for unpacking ${outfile}, exit"
-            exit 1
-        else
-            echo "✅ Success: directory for unpacking ${outfile} has been created"
-        fi
-        if ! unzip -o "$outfile" -d "$UNPACK_DIR" &> /dev/null; then
+        if ! unzip -o "$outfile" -d "$TMP_DIR" &> /dev/null; then
             echo "❌ Error: extract ${outfile}, exit"
             exit 1
         else
             echo "✅ Success: ${outfile} successfully extracted"
         fi
 # check xray binary
-        if [ ! -f "$UNPACK_DIR/xray" ]; then
+        if [ ! -f "$TMP_DIR/xray" ]; then
             echo "❌ Error: xray binary is missing from folder after unpacking ${outfile}, exit"
             exit 1
         else
@@ -536,7 +516,7 @@ download_and_verify "$XRAY_URL" "$TMP_DIR/xray-linux-64.zip" "xray"
 download_and_verify "$GEOIP_URL" "$TMP_DIR/geoip.dat" "geoip.dat"
 download_and_verify "$GEOSITE_URL" "$TMP_DIR/geosite.dat" "geosite.dat"
 
-run_and_check "install xray binary" install -m 755 -o root -g root "$UNPACK_DIR/xray" "/usr/local/bin/xray"
+run_and_check "install xray binary" install -m 755 -o root -g root "$TMP_DIR/xray" "/usr/local/bin/xray"
 run_and_check "install geoip.dat" install -m 644 -o root -g root "$TMP_DIR/geoip.dat" "/usr/local/share/xray/geoip.dat"
 run_and_check "install geosite.dat" install -m 644 -o root -g root "$TMP_DIR/geosite.dat" "/usr/local/share/xray/geosite.dat"
 
@@ -744,6 +724,14 @@ name: $XRAY_NAME, vless domain link: $VLESS_URI_DOMAIN
 
 EOF
 fi
+
+
+# function for enable xray logrotate
+# shellcheck disable=SC2329
+xray_logrotate() {
+    install -m 644 -o root -g root "cfg/xray.logrotate" "/etc/logrotate.d/xray" || return 1
+}
+run_and_check "enable logrotate for xray" xray_logrotate
 
 
 # maintance script install and add link to home dir service_user_********

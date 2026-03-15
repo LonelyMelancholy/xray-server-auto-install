@@ -13,15 +13,11 @@ if [ "$(id -un)" != "$TARGET_USER" ]; then
     fi
 fi
 
-# main variables
-USERNAME="$1"
-# reset user status and count device
-USER_ONLINE_STATUS="offline"
-USER_DEVICE_COUNT=0
-IP_USER=""
-
 # user check
-[[ "$(whoami)" != "$TARGET_USER" ]] && { echo "❌ Error: you are not the '$TARGET_USER' user, exit"; exit 1; }
+[[ "$(id -un)" != "$TARGET_USER" ]] && { echo "❌ Error: you are not the '$TARGET_USER' user, exit"; exit 1; }
+
+# main variables
+readonly USERNAME="$1"
 
 # argument check
 if [[ $# -ne 1 || $USERNAME == "--help" ]]; then
@@ -52,11 +48,28 @@ read_check "$TR_DB_Y" "console"
 # xray running check
 xray_status_check "console"
 
+# function section
 # function for extract field value from FULL_EMAIL like "...|created=2026-01-15|days=10|exp=2026-01-25"
 extract_field() {
     local key="$1" s="$2"
     # Prints value or empty
     sed -n "s/.*|${key}=\\([^|]*\\).*/\\1/p" <<<"$s" | head -n1
+}
+
+# function for extract link from URI_DB
+get_links() {
+    local username="$1"
+    local field_name="$2"
+
+    awk -v user="$username" -v field="$field_name" '
+        {
+            pattern = "^name:[[:space:]]*([^,]+),[[:space:]]*" field ":[[:space:]]*(.+)$"
+            if (match($0, pattern, m) && m[1] == user) {
+                print m[2]
+                exit
+            }
+        }
+    ' "$URI_DB"
 }
 
 # main logic start here
@@ -156,8 +169,13 @@ if ! [[ -z "$XRAY_API_JSON" || "$XRAY_API_JSON" == "{}" ]]; then
     # get device number if error reset to 0
     json="$(xray api statsonline --email "$FULL_EMAIL" 2>/dev/null)"
     USER_DEVICE_COUNT="$(jq -r '.stat.value // 0' <<<"$json")"
-    [[ ! $USER_DEVICE_COUNT =~ ^-?[0-9]+$ ]] && USER_DEVICE_COUNT=0
 fi
+
+# in any case check device count end if not valid reset to 0
+[[ ! $USER_DEVICE_COUNT =~ ^-?[0-9]+$ ]] && USER_DEVICE_COUNT=0
+
+# check online status and if empty or not online set offline
+[[ $USER_ONLINE_STATUS != "online" ]] && USER_ONLINE_STATUS="offline"
 
 # get user ip if he online
 if [[ $USER_ONLINE_STATUS == "online" ]]; then
@@ -210,65 +228,9 @@ fi
 # search for
 # name: <username>, vless ip_* link: <link>
 # print "<link>", all matches
-USER_VLESS_LINK_4="$(
-    awk -v user="$USERNAME" '
-        BEGIN { found=0 }
-            {
-                if (match($0, /^name:[[:space:]]*([^,]+),[[:space:]]*vless ip_4 link:[[:space:]]*(.+)$/, m)) {
-                    name = m[1]
-                    link = m[2]
-                    # print 100% matches only
-                    if (name == user) {
-                        print link
-                        found=1
-                    }
-                }
-            }
-        END { if (!found) exit }
-    ' "$URI_DB"
-)"
-
-# search for
-# name: <username>, vless link: ip_* <link>
-# print "<link>", all matches
-USER_VLESS_LINK_6="$(
-    awk -v user="$USERNAME" '
-        BEGIN { found=0 }
-            {
-                if (match($0, /^name:[[:space:]]*([^,]+),[[:space:]]*vless ip_6 link:[[:space:]]*(.+)$/, m)) {
-                    name = m[1]
-                    link = m[2]
-                    # print 100% matches only
-                    if (name == user) {
-                        print link
-                        found=1
-                    }
-                }
-            }
-        END { if (!found) exit }
-    ' "$URI_DB"
-)"
-
-# search for
-# name: <username>, vless link: ip_* <link>
-# print "<link>", all matches
-USER_VLESS_LINK_DOMAIN="$(
-    awk -v user="$USERNAME" '
-        BEGIN { found=0 }
-            {
-                if (match($0, /^name:[[:space:]]*([^,]+),[[:space:]]*vless domain link:[[:space:]]*(.+)$/, m)) {
-                    name = m[1]
-                    link = m[2]
-                    # print 100% matches only
-                    if (name == user) {
-                        print link
-                        found=1
-                    }
-                }
-            }
-        END { if (!found) exit }
-    ' "$URI_DB"
-)"
+USER_VLESS_LINK_4="$(get_links "$USERNAME" "vless ip_4 link")"
+USER_VLESS_LINK_6="$(get_links "$USERNAME" "vless ip_6 link")"
+USER_VLESS_LINK_DOMAIN="$(get_links "$USERNAME" "vless domain link")"
 
 [[ -z $IP_USER ]] && IP_USER="[not available]"
 [[ -z $USER_VLESS_LINK_4 ]] && USER_VLESS_LINK_4="[not available]"

@@ -13,30 +13,23 @@ if [ "$(id -un)" != "$TARGET_USER" ]; then
     fi
 fi
 
-# main variables
-readonly OPTION="$1"
-declare -A FULL_USERNAMES=()
-declare -A DAYS_LEFT_BY_USER=()
-declare -A STATUS_BY_USER=()
-declare -A ONLINE_BY_USER=()
-declare -A DEVICES_BY_USER=()
-declare -A TRAFFIC_BY_USER=()
-
 # user check
-[[ "$(whoami)" != "$TARGET_USER" ]] && { echo "❌ Error: you are not the '$TARGET_USER' user, exit"; exit 1; }
+[[ "$(id -un)" != "$TARGET_USER" ]] && { echo "❌ Error: you are not the '$TARGET_USER' user, exit"; exit 1; }
 
 # function for print help
 helper_f() {
-    echo "Use for show user from xray config and URI_DB, run: $0 <option>"
+    echo "Use for show user from xray config and URI_DB"
+    echo "run: $0 link|all"
     echo "links - all user link and expiration info"
     echo "all - table: username (online/offline), devices, (blocked/expired/enable), traffic, days left"
     exit 0
 }
 
+# main variables
+readonly OPTION="$1"
+
 # argument check
-if [[ "$#" -ne 1 || "$OPTION" == "--help" ]]; then
-    helper_f
-fi
+[[ "$#" -ne 1 || "$OPTION" == "--help" ]] && helper_f
 
 # check another instanсe of the script is not running
 # shellcheck source=share/run_lock.lib.sh
@@ -55,6 +48,7 @@ read_check "$TR_DB_M" "console"
 # xray running check
 xray_status_check "console"
 
+# function section
 # run helping function for logging
 run_and_check() {
     local action="$1"

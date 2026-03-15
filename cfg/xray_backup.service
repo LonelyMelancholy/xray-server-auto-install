@@ -6,4 +6,4 @@ After=precreate_lockfiles.service
 [Service]
 Type=oneshot
 User=telegram_gateway
-ExecStart=/usr/local/bin/service/xray_backup.sh
+ExecStart=/usr/local/bin/service/xray_backup.sh "auto"

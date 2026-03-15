@@ -1,7 +1,7 @@
 #!/bin/bash
-# script for xray backup via systemd timer every first day month, 1:01 night time
+# script for xray backup via systemd timer every first day month, 0:03 night time
 # all errors are logged in journald, see journalctl -t xray_backup
-# exit codes work to tell systemd about success
+# exit codes work to tell systemd about success sending file
 
 # common variables source
 # shellcheck source=share/variables.lib.sh
@@ -15,17 +15,7 @@ if [ "$(id -un)" != "$TARGET_USER" ]; then
     fi
 fi
 
-# main variables
-ONLY_ARCHIVE="$1"
-RC_F=1
-readonly LOCK_FILE="/run/lock/xray_backup.lock"
-readonly FILES=("$XRAY_CONFIG" "$URI_DB" "$TR_DB_M" "$TR_DB_Y")
-readonly FILE_NAME="xray_backup_$(hostname)_$(date '+%Y-%m-%d_%H-%M-%S').tar.gz"
-readonly FILE_PATH="/tmp/${FILE_NAME}"
-# make tmp directory
-TMPDIR="$(mktemp -d)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
-
-# umask for not allow anyone read backup
+# umask for not allow anyone read backup or file copy
 umask 077
 
 # enable logging
@@ -48,7 +38,7 @@ end_log() {
 # shellcheck disable=SC2329
 rm_tmp() {
     echo "cleaning start - $(date '+%Y-%m-%d %H:%M:%S')" >&5
-    if rm -rf "$TMPDIR" "$FILE_PATH" > /dev/null; then
+    if rm -rf "$TMPDIR" "$BACKUP_FILE_PATH" > /dev/null; then
         echo "Success: delete tmp files"
         echo "cleaning ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     else
@@ -60,28 +50,37 @@ rm_tmp() {
 # trap for the end log message for the end log and cleanup
 trap 'end_log; rm_tmp;' EXIT
 
+# make tmp directory
+TMPDIR="$(mktemp -d)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
+
 # user check
-[[ "$(whoami)" != "$TARGET_USER" ]] && { echo "Error: you are not the '$TARGET_USER' user, exit"; exit 1; } >&2
+[[ "$(id -un)" != "$TARGET_USER" ]] && { echo "Error: you are not the '$TARGET_USER' user, exit" >&2; exit 1; }
+
+# main variables
+readonly ONLY_ARCHIVE="$1"
 
 # check arguments
-if [[ "$ONLY_ARCHIVE" != 1 && "$ONLY_ARCHIVE" != 0 ]]; then
-    echo "Use for backup xray, run: $0 0|1"
-    echo "0 - for auto backup with message"
-    echo "1 - for only archive to Telegram, no message"
+if [[ "$ONLY_ARCHIVE" != "manual" && "$ONLY_ARCHIVE" != "auto" || $# -ne 1 ]]; then
+    echo "Use for backup xray"
+    echo "run: $0 auto|manual"
+    echo "auto - for auto backup with message"
+    echo "manual - for only archive to Telegram, no message"
     exit 0
 fi
 
-# check another instanсe of the script is not running
-exec {fd}< "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
-flock -n ${fd} || { echo "Error: another instance working on backup, exit" >&2; exit 1; }
+# source Telegram func library
+source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
 
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit" >&2; exit 1; }
 
+# check another instanсe of the script is not running
+run_lock_check "xray_backup"
+
 # lock check
-run_lock_retry_check "xray"
-run_lock_retry_check "uri_db"
-run_lock_retry_check "tr_db"
+run_lock_wait "xray" "600"
+run_lock_wait "uri_db" "600"
+run_lock_wait "tr_db" "600"
 
 # read permission check
 read_check "$XRAY_CONFIG"
@@ -89,9 +88,7 @@ read_check "$URI_DB"
 read_check "$TR_DB_M"
 read_check "$TR_DB_Y"
 
-# source Telegram func library
-source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
-
+# function section
 # helper func
 # shellcheck disable=SC2329
 run_and_check() {
@@ -108,15 +105,15 @@ run_and_check() {
 # main logic start here
 # copy each file from arrray to temp directory
 # save parents directory sctucture
-for file in "${FILES[@]}"; do
+for file in "${FILES_TO_BACKUP[@]}"; do
     run_and_check "copy $file to tmp directory" cp --parents -f "$file" "$TMPDIR/"
 done
 
 # packed
-run_and_check "packed backup archive" tar -C "$TMPDIR" -czf "$FILE_PATH" .
+run_and_check "packed backup archive" tar -C "$TMPDIR" -czf "$BACKUP_FILE_PATH" .
 
 # send message and file or just file
-if [[ "$ONLY_ARCHIVE" == 1 ]]; then
+if [[ "$ONLY_ARCHIVE" == "manual" ]]; then
     if telegram_file; then
         echo "✅ Success: backup was sent to the notification channel"
     else
@@ -127,7 +124,7 @@ else
     # start collecting message
     MESSAGE="📢<b> Scheduled backup</b> 
 
-🖥️ <b>Host:</b> $(hostname)
+🖥️ <b>Host:</b> ${HOST_TAG}
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 💾 <b>Backup log:</b> journalctl -t xray_backup"
 
@@ -136,10 +133,16 @@ else
     echo "$MESSAGE"
 
     # send message
-    telegram_message
+    telegram_message "$MESSAGE"
     
     # send file
-    telegram_file
+    telegram_file "$BACKUP_FILE_PATH" "$BACKUP_FILE_NAME"
 fi
 
+# if backup successuful send, delete all old backups
+if [[ $RC_F == 0 ]]; then
+    run_and_check "delete all old '.bak' files" rm -f -- /usr/local/etc/xray/*.bak.*
+fi
+
+# exit with file delivery status
 exit $RC_F

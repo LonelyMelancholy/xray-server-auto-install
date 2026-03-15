@@ -2,8 +2,7 @@
 set -u
 
 # main variables
-readonly LOCK_FILE="/run/lock/telegram_gateway.lock"
-readonly TIMEOUT=50
+readonly TIMEOUT=60
 OFFSET=0
 
 # export path just in case
@@ -27,13 +26,16 @@ trap 'end_log' EXIT
 # user check
 [[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
 
-# check another instanсe of the script is not running
-exec {fd}< "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
-flock -n ${fd} || { echo "Error: another instance is running, exit" >&2; exit 1; }
-
 # source Telegram func library
 # shellcheck source=share/telegram.lib.sh
 source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
+
+# source library for run_lock and file permission cheking
+# shellcheck source=share/run_lock.lib.sh
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit" >&2; exit 1; }
+
+# check another instanсe of the script is not running
+run_lock_check "telegram_gateway"
 
 # Track bot messages so we can delete old output/menu and keep only the latest.
 # (Single admin chat assumed.)
@@ -216,7 +218,7 @@ handle_callback() {
             show_menu "$chat_id"
         ;;
         SEND_BACKUP)
-            run_and_send_output "$chat_id" /usr/local/bin/service/xray_backup.sh 1
+            run_and_send_output "$chat_id" /usr/local/bin/service/xray_backup.sh "manual"
             show_menu "$chat_id"
         ;;
         SHOW_ALL)

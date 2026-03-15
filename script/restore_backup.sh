@@ -1,15 +1,11 @@
 #!/bin/bash
 # script for restore server backup from archive
 
-# main variables
-ARCHIVE="$1"
-
-# common variables source
-# shellcheck source=share/variables.lib.sh
-source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit"; exit 1; }
-
 # root checking
 [[ $EUID -ne 0 ]] && { echo "❌ Error: you are not the root user, exit"; exit 1; }
+
+# main variables
+ARCHIVE="$1"
 
 # argument checking
 if [[ $# -ne 1 || "$ARCHIVE" == "--help" ]]; then
@@ -17,6 +13,10 @@ if [[ $# -ne 1 || "$ARCHIVE" == "--help" ]]; then
     echo "run: $0 archive_path"
     exit 0
 fi
+
+# common variables source
+# shellcheck source=share/variables.lib.sh
+source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit"; exit 1; }
 
 # source library for run_lock and file permission cheking
 # shellcheck source=share/run_lock.lib.sh
@@ -27,6 +27,7 @@ run_lock_check "xray" "console"
 run_lock_check "uri_db" "console"
 run_lock_check "tr_db" "console"
 
+# function section
 # help function
 run_and_check() {
     local action="$1"
@@ -70,8 +71,12 @@ fi
 # check path
 read_check "$ARCHIVE" "console"
 
+# unpac and copy
 run_and_check "unpack archive and copy files" unpack_archive
+
+# set permission to file 
 run_and_check "set permissions to files" chmod_out_file
+
 echo "✅ Success: backup restored"
 
 exit 0

@@ -13,7 +13,7 @@ if [ "$(id -un)" != "$TARGET_USER" ]; then
 fi
 
 # user check
-[[ "$(whoami)" != "$TARGET_USER" ]] && { echo "❌ Error: you are not the '$TARGET_USER' user, exit"; exit 1; }
+[[ "$(id -un)" != "$TARGET_USER" ]] && { echo "❌ Error: you are not the '$TARGET_USER' user, exit"; exit 1; }
 
 # source library for run_lock and file permission cheking
 # shellcheck source=share/run_lock.lib.sh
@@ -180,11 +180,11 @@ NFTABLES_STATUS="$(daemon_status nftables.service nftables)"
 TOTAL_SPACE_GB=$(df -B1 --output=size / | awk 'NR==2 { printf "%.2f", $1/1024/1024/1024 }')
 FREE_SPACE_GB=$(df -B1 --output=avail / | awk 'NR==2 { printf "%.2f", $1/1024/1024/1024 }')
 
-# collect network stat
+# collect network stat 10sec wait
 NETWORK_STAT="$(network_stat)"
 
 # Output
-echo "🖥️ Hostname: $(hostname)"
+echo "🖥️ Hostname: ${HOST_TAG}"
 echo "🌐 IPv4: ${IP_4}"
 echo "🌐 IPv6: ${IP_6}"
 echo "⏱️ Uptime server: ${UPTIME_STRING}"

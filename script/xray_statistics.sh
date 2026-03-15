@@ -7,15 +7,6 @@
 # shellcheck source=share/variables.lib.sh
 source "/usr/local/lib/service/variables.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit" >&2; exit 1; }
 
-# main variable
-RC=1
-TMP_TR_DB_COMMON="$(mktemp)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
-TMP_TR_DB_M_OLD="$(mktemp)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
-TMP_TR_DB_Y_OLD="$(mktemp)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
-TMP_TR_DB_M_NEW="$(mktemp)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
-TMP_TR_DB_Y_NEW="$(mktemp)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
-readonly LOCK_FILE="/run/lock/xray_statistics.lock"
-
 # enable logging
 exec > >(systemd-cat -t xray_statistics -p info) 2> >(systemd-cat -t xray_statistics -p err) 5> >(systemd-cat -t xray_statistics -p notice)
 
@@ -48,18 +39,24 @@ rm_tmp() {
 # trap for the end log message for the end log
 trap 'end_log; rm_tmp;' EXIT
 
-# user check
-[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
+# main variable
+TMP_TR_DB_COMMON="$(mktemp)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
+TMP_TR_DB_M_OLD="$(mktemp)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
+TMP_TR_DB_Y_OLD="$(mktemp)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
+TMP_TR_DB_M_NEW="$(mktemp)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
+TMP_TR_DB_Y_NEW="$(mktemp)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
 
-# check another instanсe of the script is not running
-exec {fd}< "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
-flock -n ${fd} || { echo "Error: another instance is running, exit" >&2; exit 1; }
+# user check
+[[ "$(id -un)" != "$TARGET_USER" ]] && { echo "Error: you are not the '$TARGET_USER' user, exit" >&2; exit 1; }
 
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit" >&2; exit 1; }
 
+# check another instanсe of the script is not running
+run_lock_check "xray_statistics"
+
 # lock check
-run_lock_retry_check "tr_db"
+run_lock_wait "tr_db" "600"
 
 # read and write conf check
 read_and_write_check "$TR_DB_M"
@@ -68,6 +65,7 @@ read_and_write_check "$TR_DB_Y"
 # xray running check
 xray_status_check
 
+# function section
 # helper func
 run_and_check() {
     local action="$1"
@@ -168,11 +166,16 @@ else
     run_and_check "old stat not valid or empty, set stat to 0 in TMP_TR_DB_Y_OLD file" reset_stat_file "$TMP_TR_DB_Y_OLD"
 fi
 
+# merge
 run_and_check "merge TMP_TR_DB_M file" merge_old_new "$TMP_TR_DB_M_OLD" "$TMP_TR_DB_COMMON" "$TMP_TR_DB_M_NEW"
 run_and_check "merge TMP_TR_DB_Y file" merge_old_new "$TMP_TR_DB_Y_OLD" "$TMP_TR_DB_COMMON" "$TMP_TR_DB_Y_NEW"
 
+# install
 run_and_check "install new TR_DB_M file" install_new_tr_db "$TMP_TR_DB_M_NEW" "$TR_DB_M"
 run_and_check "install new TR_DB_Y file" install_new_tr_db "$TMP_TR_DB_Y_NEW" "$TR_DB_Y"
 
+# if we get here, no error in script made
 RC=0
+
+# exit with success code
 exit $RC

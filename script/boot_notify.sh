@@ -3,14 +3,6 @@
 # all errors are logged in journald, see journalctl -t boot_notify
 # exit codes work to tell systemd about success sending message
 
-# main variables
-RC_M=1
-readonly LOCK_FILE="/run/lock/boot_notify.lock"
-
-# export path just in case
-PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-export PATH
-
 # enable logging
 exec > >(systemd-cat -t boot_notify -p info) 2> >(systemd-cat -t boot_notify -p err) 5> >(systemd-cat -t boot_notify -p notice)
 
@@ -30,12 +22,23 @@ end_log() {
 # trap for the end log message for the end log
 trap 'end_log' EXIT
 
+# common variables source
+# shellcheck source=share/variables.lib.sh
+source "/usr/local/lib/service/variables.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit" >&2; exit 1; }
+
 # user check
-[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
+[[ "$(id -un)" != "$TARGET_USER" ]] && { echo "Error: you are not the '$TARGET_USER' user, exit" >&2; exit 1; }
+
+# source Telegram func library
+# shellcheck source=share/telegram.lib.sh
+source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
+
+# source library for run_lock and file permission cheking
+# shellcheck source=share/run_lock.lib.sh
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit" >&2; exit 1; }
 
 # check another instanсe of the script is not running
-exec {fd}< "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
-flock -n ${fd} || { echo "Error: another instance is running, exit" >&2; exit 1; }
+run_lock_check "boot_notify"
 
 # function section
 # wait for internet access function
@@ -63,10 +66,6 @@ daemon_status() {
     fi
 }
 
-# source Telegram func library
-# shellcheck source=share/telegram.lib.sh
-source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
-
 # main logic start here
 # wait for all service started 1m
 sleep 60
@@ -82,9 +81,6 @@ fi
 # init system status
 SYSTEM_STATUS="$(systemctl is-system-running)"
 
-# common status critical service
-COMMON_STATUS=0
-
 # critical daemon status
 SSH_STATUS="$(daemon_status ssh.socket ssh)" || COMMON_STATUS=1
 FAIL2BAN_STATUS="$(daemon_status fail2ban.service fail2ban)" || COMMON_STATUS=1
@@ -93,10 +89,10 @@ XRAY_STATUS="$(daemon_status xray.service xray)" || COMMON_STATUS=1
 NFTABLES_STATUS="$(daemon_status nftables.service nftables)" || COMMON_STATUS=1
 
 # start collecting message parts
-if [[  $COMMON_STATUS == 0 ]] && [[ "$SYSTEM_STATUS" == "running" || "$SYSTEM_STATUS" == "starting" ]]; then
+if [[ $COMMON_STATUS != 1 ]] && [[ "$SYSTEM_STATUS" == "running" || "$SYSTEM_STATUS" == "starting" ]]; then
     MESSAGE_TITLE="✅ <b>Server up, all services are running</b>"
     SYSTEM_STATUS="☑️ <b>Init system:</b> $SYSTEM_STATUS"
-elif [[ $COMMON_STATUS == 0 ]]; then
+elif [[ $COMMON_STATUS != 1 ]]; then
     MESSAGE_TITLE="⚠️ <b>Server up, non-critical service down</b>"
     SYSTEM_STATUS="⚠️ <b>Init system:</b> $SYSTEM_STATUS"
 else 
@@ -107,7 +103,7 @@ fi
 # collecting full message
 MESSAGE="$MESSAGE_TITLE
 
-🖥️ <b>Host:</b> $(hostname)
+🖥️ <b>Host:</b> ${HOST_TAG}
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 $SYSTEM_STATUS
 $SSH_STATUS
@@ -122,6 +118,7 @@ echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
 echo "$MESSAGE"
 
 # sending message
-telegram_message
+telegram_message "$MESSAGE"
 
+# exit with message delivery status
 exit $RC_M

@@ -1,5 +1,5 @@
 #!/bin/bash
-# script for manyally add user time in xray config
+# script for manyally changing user time in xray config
 
 # common variables source
 # shellcheck source=share/variables.lib.sh
@@ -13,31 +13,17 @@ if [ "$(id -un)" != "$TARGET_USER" ]; then
     fi
 fi
 
+# user check
+[[ "$(id -un)" != "$TARGET_USER" ]] && { echo "❌ Error: you are not the '$TARGET_USER' user, exit"; exit 1; }
+
 # main variables
 readonly USERNAME="$1"
-# make tmp config
-TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
 DAYS="$2"
-
-# exit rm tmp file function
-# shellcheck disable=SC2329
-rm_tmp() {
-    if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null; then
-        echo "✅ Success: delete tmp files"
-    else
-        echo "❌ Error: delete tmp files"
-    fi
-}
-
-# set trap for tmp removing and exit message
-trap 'rm_tmp' EXIT
-
-# user check
-[[ "$(whoami)" != "$TARGET_USER" ]] && { echo "❌ Error: you are not the '$TARGET_USER' user, exit"; exit 1; }
 
 # argument check
 if [[ "$#" -ne 2 || "$USERNAME" == "--help" ]]; then
-    echo "Use for add time for user in xray config, run: $0 <username> <days>"
+    echo "Use for changing time for user in xray config and unblock"
+    echo "run: $0 username days"
     echo "days 0 - infinity days"
     exit 0
 fi
@@ -52,6 +38,36 @@ if [[ ! "$DAYS" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 
+# exit rm tmp file function
+# shellcheck disable=SC2329
+rm_tmp() {
+    if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null; then
+        echo "✅ Success: delete tmp files"
+    else
+        echo "❌ Error: delete tmp files"
+    fi
+}
+
+# set trap for tmp removing and exit message
+trap 'rm_tmp' EXIT
+
+# make tmp config
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
+
+# source library for run_lock and file permission cheking
+# shellcheck source=share/run_lock.lib.sh
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
+
+# lock check
+run_lock_check "xray" "console"
+
+# read and write conf check
+read_and_write_check "$XRAY_CONFIG" "console"
+
+# xray running check
+xray_status_check "console"
+
+# function section
 # helper function
 run_and_check() {
     local action="$1"
@@ -128,18 +144,6 @@ make_new_tmp_config() {
 # function for install new config (original permission saved)
 # shellcheck disable=SC2329
 install_new_conf() { cat "$1" > "$2" || return 1; }
-
-# source library for run_lock and file permission cheking
-source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
-
-# lock check
-run_lock_check "xray" "console"
-
-# read and write conf check
-read_and_write_check "$XRAY_CONFIG" "console"
-
-# xray running check
-xray_status_check "console"
 
 # main logic start here
 # write new username

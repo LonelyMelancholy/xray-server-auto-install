@@ -12,11 +12,23 @@ if [ "$(id -un)" != "$TARGET_USER" ]; then
     fi
 fi
 
+# user check
+[[ "$(id -un)" != "$TARGET_USER" ]] && { echo "❌ Error: you are not the '$TARGET_USER' user, exit"; exit 1; }
+
 # main variable
 readonly USERNAME="$1"
-# make tmp config and tr_db
-TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
-TMP_TR_DB_M="$(mktemp)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
+
+# argument check
+if [[ "$#" -ne 1 || "$USERNAME" == "--help" ]]; then
+    echo "Use for reset traffic for user and unblock"
+    echo "run: $0 username"
+    exit 0
+fi
+
+if [[ ! $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
+    echo "❌ Error: only letters, numbers and - in name, exit"
+    exit 1
+fi
 
 # exit rm tmp file function
 # shellcheck disable=SC2329
@@ -31,22 +43,12 @@ rm_tmp() {
 # set trap for tmp removing and exit message
 trap 'rm_tmp' EXIT
 
-# user check
-[[ "$(whoami)" != "$TARGET_USER" ]] && { echo "❌ Error: you are not the '$TARGET_USER' user, exit"; exit 1; }
-
-# argument check
-if [[ "$#" -ne 1 || "$USERNAME" == "--help" ]]; then
-    echo "Use for reset traffic for user"
-    echo "run: $0 <username>"
-    exit 0
-fi
-
-if [[ ! $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
-    echo "❌ Error: only letters, numbers and - in name, exit"
-    exit 1
-fi
+# make tmp config and tr_db
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
+TMP_TR_DB_M="$(mktemp)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
 
 # source library for run_lock and file permission cheking
+# shellcheck source=share/run_lock.lib.sh
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
 
 # lock check
@@ -60,6 +62,7 @@ read_and_write_check "$TR_DB_M" "console"
 # xray running check
 xray_status_check "console"
 
+# function section
 # helper function
 run_and_check() {
     local action="$1"

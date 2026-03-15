@@ -1,18 +1,17 @@
 #!/bin/bash
 # script for notify ssh login/unlogin via PAM
-# exit 0 to avoid bothering PAM with an incorrect error code
+# first instance exit 0 to avoid bothering PAM with an incorrect error code
+# and run next instance, where PAM not see exit code
 # all errors are logged in journald, see journalctl -t ssh_pam_notify
 
 # main variables
-RC_M="1"
-readonly TARGET_USER="telegram_gateway"
 readonly IP="$PAM_RHOST"
 readonly USER="$PAM_USER"
 readonly SESSION="$PAM_TYPE"
 
-# export path just in case
-PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-export PATH
+# common variables source
+# shellcheck source=share/variables.lib.sh
+source "/usr/local/lib/service/variables.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit" >&2; exit 1; }
 
 # sends the script to the background from telegram_gateway, without delaying pam and send exit 0 to pam
 if [[ -z "${TG_BG:-}" ]]; then
@@ -50,7 +49,7 @@ end_log() {
 trap 'end_log' EXIT
 
 # user check
-[[ "$(whoami)" != "$TARGET_USER" ]] && { echo "Error: you are not the $TARGET_USER user, exit" >&2; exit 1; }
+[[ "$(id -un)" != "$TARGET_USER" ]] && { echo "Error: you are not the $TARGET_USER user, exit" >&2; exit 1; }
 
 # source Telegram func library
 # shellcheck source=share/telegram.lib.sh
@@ -76,7 +75,7 @@ esac
 # collecting full message
 MESSAGE="${MESSAGE_TITLE}
 
-🖥️ <b>Host:</b> $(hostname)
+🖥️ <b>Host:</b> ${HOST_TAG}
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 ${MESSAGE_ACTION}
 💾 <b>Auth log:</b> /var/log/auth.log
@@ -87,6 +86,7 @@ echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
 echo "$MESSAGE"
 
 # sending message
-telegram_message
+telegram_message "$MESSAGE"
 
+# exit with message delivery status
 exit $RC_M

@@ -1,21 +1,7 @@
 #!/usr/bin/env bash
 # script for autoblock user who download traffic limit via systemd timer every 10m
 # all errors are logged in journald, see journalctl -t traffic_block
-# exit codes work to tell systemd about success
-
-# common variables source
-# shellcheck source=share/variables.lib.sh
-source "/usr/local/lib/service/variables.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit" >&2; exit 1; }
-
-# main variables
-readonly LOCK_FILE="/run/lock/traffic_block.lock"
-# make tmp config
-TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
-declare -A TOTAL_BYTES_BY_USERS
-declare -a FULL_EMAILS=()
-declare -a FULL_EMAILS_TO_BLOCK=()
-declare -a USERNAME_TO_BLOCK=()
-RC=1
+# exit codes work to tell systemd about success complete work, message status not matter
 
 # enable logging
 exec > >(systemd-cat -t traffic_block -p info) 2> >(systemd-cat -t traffic_block -p err) 5> >(systemd-cat -t traffic_block -p notice)
@@ -49,19 +35,28 @@ rm_tmp() {
 # set trap for tmp removing and exit message
 trap 'end_log; rm_tmp;' EXIT
 
-# user check
-[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
+# make tmp config
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "Error: create temp file failed, exit" >&2; exit 1; }
 
-# check another instanсe of the script is not running
-exec {fd}< "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
-flock -n ${fd} || { echo "Error: another instance is running, exit" >&2; exit 1; }
+# common variables source
+# shellcheck source=share/variables.lib.sh
+source "/usr/local/lib/service/variables.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit" >&2; exit 1; }
+
+# user check
+[[ "$(id -un)" != "$TARGET_USER" ]] && { echo "Error: you are not the '$TARGET_USER' user, exit" >&2; exit 1; }
+
+# source Telegram function library
+# shellcheck source=share/telegram.lib.sh
+source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
 
 # source library for run_lock and file permission cheking
+# shellcheck source=share/run_lock.lib.sh
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit" >&2; exit 1; }
 
 # lock check
-run_lock_retry_check "xray"
-run_lock_retry_check "tr_db"
+run_lock_check "traffic_block"
+run_lock_wait "xray" "600"
+run_lock_wait "tr_db" "600"
 
 # read and write conf check
 read_and_write_check "$XRAY_CONFIG"
@@ -70,9 +65,7 @@ read_check "$TR_DB_M"
 # xray running check
 xray_status_check
 
-# source Telegram function library
-source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
-
+# function section
 # helper function
 run_and_check() {
     local action="$1"
@@ -276,8 +269,6 @@ if systemctl restart xray.service; then
     echo "Success: restart xray"
 else
     XRAY_STATUS="❌ <b>Xray status:</b> fail"
-    XR_ST=1
-    RC=1
     echo "Error: restart xray" >&2
 fi
 
@@ -292,7 +283,7 @@ fi
 # make upper message body
 MESSAGE="$TITLE
 
-🖥️ <b>Host:</b> $(hostname)
+🖥️ <b>Host:</b> ${HOST_TAG}
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 $XRAY_STATUS"
 
@@ -309,13 +300,14 @@ else
 fi
 
 # add log section
-MESSAGE+=$'\n'"💾 <b>Time block log:</b> journalctl -t traffic_block"
+MESSAGE+=$'\n'"💾 <b>Traffic block log:</b> journalctl -t traffic_block"
 
 # logging message
 echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
 echo "$MESSAGE"
 
 # sending message
-telegram_message
+telegram_message "$MESSAGE"
 
+# exit with work success status
 exit $RC

@@ -54,7 +54,7 @@ install_and_update() {
     local log="$2"
     shift 2
     local attempt=1
-    local max_attempt=3
+    local max_attempts=3
 
     while true; do
         echo "📢 Info: ${action}, attempt $attempt, please wait"
@@ -63,7 +63,7 @@ install_and_update() {
             echo "✅ Success: $action completed"
             return 0
         fi
-        if [[ "$attempt" -lt "$max_attempt" ]]; then
+        if [[ "$attempt" -lt "$max_attempts" ]]; then
             sleep 60
             echo "📢 Info: $action failed, trying again"
             ((attempt++))

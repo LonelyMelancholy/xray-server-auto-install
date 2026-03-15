@@ -1,19 +1,18 @@
 #!/bin/bash
 # script for notify ban/unban via ssh fail2ban action
 # arguments: <action> <ip> <bantime_sec>
-# exit 0 to avoid bothering fail2ban with an incorrect error code
+# first instance exit 0 to avoid bothering fail2ban with an incorrect error code
+# and run next instance, where fail2ban not see exit code
 # all errors are logged in journald, see journalctl -t ssh_f2b_notify
 
 # main variables
-RC_M=1
 readonly ACTION="${1:-unknown}"
 readonly IP="${2:-unknown}"
 readonly BANTIME_SEC="${3:-0}"
-readonly TARGET_USER="telegram_gateway"
 
-# export path just in case
-PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-export PATH
+# common variables source
+# shellcheck source=share/variables.lib.sh
+source "/usr/local/lib/service/variables.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit" >&2; exit 1; }
 
 # sends the script to the background from telegram_gateway, without delaying pam and send exit 0 to pam
 if [[ -z "${TG_BG:-}" ]]; then
@@ -51,8 +50,13 @@ end_log() {
 trap 'end_log' EXIT
 
 # user check
-[[ "$(whoami)" != "$TARGET_USER" ]] && { echo "Error: you are not the $TARGET_USER user, exit" >&2; exit 1; }
+[[ "$(id -un)" != "$TARGET_USER" ]] && { echo "Error: you are not the $TARGET_USER user, exit" >&2; exit 1; }
 
+# source Telegram func library
+# shellcheck source=share/telegram.lib.sh
+source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
+
+# function section
 # function to calculate human readable values ban time
 duration_human() {
     local -i total="$1"
@@ -75,10 +79,6 @@ duration_human() {
         echo "unknown time"
     fi
 }
-
-# source Telegram func library
-# shellcheck source=share/telegram.lib.sh
-source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
 
 # main logic start here
 # converting seconds to human readable values
@@ -103,7 +103,7 @@ esac
 # collecting full message
 MESSAGE="${MESSAGE_TITLE}
 
-🖥️ <b>Host:</b> $(hostname)
+🖥️ <b>Host:</b> ${HOST_TAG}
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 ${MESSAGE_ACTION}
 💾 <b>Fail2ban log:</b> /var/log/fail2ban.log
@@ -114,6 +114,7 @@ echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
 echo "$MESSAGE"
 
 # sending message
-telegram_message
+telegram_message "$MESSAGE"
 
+# exit with message delivery status
 exit $RC_M

@@ -13,12 +13,30 @@ if [ "$(id -un)" != "$TARGET_USER" ]; then
     fi
 fi
 
+# user check
+[[ "$(id -un)" != "$TARGET_USER" ]] && { echo "❌ Error: you are not the '$TARGET_USER' user, exit"; exit 1; }
+
 # main variables
-readonly DEFAULT_FLOW="xtls-rprx-vision"
 readonly USERNAME="$1"
 DAYS="$2"
-# make tmp file
-TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
+
+# argument check
+if [[ "$#" -ne 2 || "$USERNAME" == "--help" ]]; then
+    echo "Use for add user in xray config"
+    echo "run: $0 username days"
+    echo "days 0 - infinity days"
+    exit 0
+fi
+
+if ! [[ $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
+    echo "❌ Error: only letters, numbers and - in name, exit"
+    exit 1
+fi
+
+if ! [[ "$DAYS" =~ ^[0-9]+$ ]]; then
+    echo "❌ Error: days must be non negative number, exit"
+    exit 1
+fi
 
 # exit rm tmp file function
 # shellcheck disable=SC2329
@@ -33,25 +51,8 @@ rm_tmp() {
 # set trap for tmp removing and exit message
 trap 'rm_tmp' EXIT
 
-# user check
-[[ "$(whoami)" != "$TARGET_USER" ]] && { echo "❌ Error: you are not the '$TARGET_USER' user, exit"; exit 1; }
-
-# argument check
-if [[ "$#" -ne 2 || "$USERNAME" == "--help" ]]; then
-    echo "Use for add user in xray config, run: $0 <username> <days>"
-    echo "days 0 - infinity days"
-    exit 0
-fi
-
-if ! [[ $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
-    echo "❌ Error: only letters, numbers and - in name, exit"
-    exit 1
-fi
-
-if ! [[ "$DAYS" =~ ^[0-9]+$ ]]; then
-    echo "❌ Error: days must be non negative number, exit"
-    exit 1
-fi
+# make tmp file
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
 
 # source library for run_lock and file permission cheking
 # shellcheck source=share/run_lock.lib.sh
@@ -68,6 +69,7 @@ read_and_write_check "$URI_DB" "console"
 # xray running check
 xray_status_check "console"
 
+# function section
 # helper func
 run_and_check() {
     local action="$1"

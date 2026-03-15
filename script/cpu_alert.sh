@@ -2,14 +2,6 @@
 # script for cpu monitoring and send alert via Telegram
 # all errors are logged in journald, see journalctl -t cpu_alert
 
-# main variables
-readonly THRESHOLD=80
-readonly INTERVAL=60
-readonly LOCK_FILE="/run/lock/cpu_alert.lock"
-# export path just in case
-PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-export PATH
-
 # enable logging
 exec > >(systemd-cat -t cpu_alert -p info) 2> >(systemd-cat -t cpu_alert -p err) 5> >(systemd-cat -t cpu_alert -p notice)
 
@@ -21,19 +13,27 @@ echo "cpu alert started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 end_log() {
     echo "cpu alert stopped - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 }
+
 # trap for the end log message for the end log
 trap 'end_log' EXIT
 
-# user check
-[[ "$(whoami)" != "telegram_gateway" ]] && { echo "Error: you are not the telegram_gateway user, exit" >&2; exit 1; }
+# common variables source
+# shellcheck source=share/variables.lib.sh
+source "/usr/local/lib/service/variables.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/variables.lib.sh', exit" >&2; exit 1; }
 
-# check another instanсe of the script is not running
-exec {fd}< "$LOCK_FILE" || { echo "Error: cannot open lock file '$LOCK_FILE', exit" >&2; exit 1; }
-flock -n ${fd} || { echo "Error: another instance is running, exit" >&2; exit 1; }
+# user check
+[[ "$(id -un)" != "$TARGET_USER" ]] && { echo "Error: you are not the '$TARGET_USER' user, exit" >&2; exit 1; }
 
 # source Telegram func library
 # shellcheck source=share/telegram.lib.sh
 source "/usr/local/lib/service/telegram.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/telegram.lib.sh', exit" >&2; exit 1; }
+
+# source library for run_lock and file permission cheking
+# shellcheck source=share/run_lock.lib.sh
+source "/usr/local/lib/service/run_lock.lib.sh" || { echo "Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit" >&2; exit 1; }
+
+# check another instanсe of the script is not running
+run_lock_check "cpu_alert"
 
 # function for ger cpu usage from /proc/stat
 get_cpu_usage() {
@@ -70,16 +70,16 @@ get_cpu_usage() {
 while true; do
     CPU=$(get_cpu_usage)
 
-    if [ "$CPU" -ge "$THRESHOLD" ]; then
+    if [ "$CPU" -ge "$CPU_THRESHOLD" ]; then
         # get top 3 process
         PROCESS=$(ps -eo pid=,comm=,%cpu= --sort=-%cpu | head -n 3)
 
         # make message
         MESSAGE="🚨 <b>High cpu usage alert</b> 
 
-🖥️ <b>Host:</b> $(hostname)
+🖥️ <b>Host:</b> ${HOST_TAG}
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
-📈 <b>Treshold:</b> ${THRESHOLD}%
+📈 <b>Treshold:</b> ${CPU_THRESHOLD}%
 🚨 <b>Usage:</b> ${CPU}%
 📉 <b>Top 1:</b> $(awk 'NR==1{printf "PID=%s CMD=%s CPU=%s%%\n",$1,$2,$3; exit}' <<< "$PROCESS")
 📉 <b>Top 2:</b> $(awk 'NR==2{printf "PID=%s CMD=%s CPU=%s%%\n",$1,$2,$3; exit}' <<< "$PROCESS")
@@ -91,8 +91,8 @@ while true; do
         echo "$MESSAGE"
         
         # send message
-        telegram_message
+        telegram_message "$MESSAGE"
     fi
 
-    sleep "$INTERVAL"
+    sleep "$CHECKING_FREQUENCY"
 done

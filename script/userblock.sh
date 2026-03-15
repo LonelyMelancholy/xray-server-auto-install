@@ -13,11 +13,24 @@ if [ "$(id -un)" != "$TARGET_USER" ]; then
     fi
 fi
 
+# user check
+[[ "$(id -un)" != "$TARGET_USER" ]] && { echo "❌ Error: you are not the '$TARGET_USER' user, exit"; exit 1; }
+
 # main variables
 readonly USERNAME="$1"
 readonly ACTION="$2"
-# make tmp file
-TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
+
+# argument check
+if [[ ! "$#" -eq 2 || "$USERNAME" == "--help" ]]; then
+    echo "Use for block user in xray config"
+    echo "run: $0 username block|unblock"
+    exit 1
+fi
+
+if ! [[ $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
+    echo "❌ Error: only letters, numbers and - in name, exit"
+    exit 1
+fi
 
 # exit rm tmp file function
 # shellcheck disable=SC2329
@@ -32,19 +45,8 @@ rm_tmp() {
 # set trap for tmp removing and exit message
 trap 'rm_tmp' EXIT
 
-# user check
-[[ "$(whoami)" != "$TARGET_USER" ]] && { echo "❌ Error: you are not the '$TARGET_USER' user, exit"; exit 1; }
-
-# argument check
-if [[ ! "$#" -eq 2 || "$USERNAME" == "--help" ]]; then
-    echo "Use for block user in xray config, run: $0 <username> <block|unblock>"
-    exit 1
-fi
-
-if ! [[ $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
-    echo "❌ Error: only letters, numbers and - in name, exit"
-    exit 1
-fi
+# make tmp file
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
 
 # source library for run_lock and file permission cheking
 # shellcheck source=share/run_lock.lib.sh
@@ -59,6 +61,7 @@ read_and_write_check "$XRAY_CONFIG" "console"
 # xray running check
 xray_status_check "console"
 
+# function section
 # helper func
 run_and_check() {
     local action="$1"
@@ -112,9 +115,7 @@ jq_apply_users() {
 
 # function for install config with save permission
 # shellcheck disable=SC2329
-install_new_conf() {
-    cat "$TMP_XRAY_CONFIG" > "$XRAY_CONFIG" || return 1
-}
+install_new_conf() { cat "$TMP_XRAY_CONFIG" > "$XRAY_CONFIG" || return 1; }
 
 # variable for ensure:
 # outbounds contains {"tag":"blocked","protocol":"blackhole"}

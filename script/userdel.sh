@@ -13,16 +13,25 @@ if [ "$(id -un)" != "$TARGET_USER" ]; then
     fi
 fi
 
+# user check
+[[ "$(id -un)" != "$TARGET_USER" ]] && { echo "❌ Error: you are not the '$TARGET_USER' user, exit"; exit 1; }
+
 # main variables
 readonly USERNAME="$1"
-# make tmp file for uri and config
-TMP_URI_DB="$(mktemp)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
-TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
+
+# argument check
+if [[ "$#" -ne 1 || "$USERNAME" == "--help" ]]; then
+    echo "Use for delete user from xray config"
+    echo "run: $0 username"
+    exit 0
+fi
+
+[[ $USERNAME =~ ^[A-Za-z0-9-]+$ ]] || { echo "❌ Error: only letters, numbers and - in name, exit"; exit 1; }
 
 # exit rm tmp file function
 # shellcheck disable=SC2329
 rm_tmp() {
-    if rm -f "$TMP_XRAY_CONFIG" 2> /dev/null && rm -f "$TMP_URI_DB" 2> /dev/null; then
+    if rm -f "$TMP_XRAY_CONFIG" "$TMP_URI_DB" 2> /dev/null; then
         echo "✅ Success: delete tmp files"
     else
         echo "❌ Error: delete tmp files"
@@ -32,16 +41,9 @@ rm_tmp() {
 # set trap for tmp removing and exit message
 trap 'rm_tmp' EXIT
 
-# user check
-[[ "$(whoami)" != "$TARGET_USER" ]] && { echo "❌ Error: you are not the '$TARGET_USER' user, exit"; exit 1; }
-
-# argument check
-if [[ "$#" -ne 1 || "$USERNAME" == "--help" ]]; then
-    echo "Use for del user in xray config, run: $0 <username>"
-    exit 0
-fi
-
-[[ $USERNAME =~ ^[A-Za-z0-9-]+$ ]] || { echo "❌ Error: only letters, numbers and - in name, exit"; exit 1; }
+# make tmp file for uri and config
+TMP_URI_DB="$(mktemp)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
+TMP_XRAY_CONFIG="$(mktemp --suffix=.json)" || { echo "❌ Error: create temp file failed, exit"; exit 1; }
 
 # source library for run_lock and file permission cheking
 source "/usr/local/lib/service/run_lock.lib.sh" || { echo "❌ Error: failed to source '/usr/local/lib/service/run_lock.lib.sh', exit"; exit 1; }
@@ -57,6 +59,7 @@ read_and_write_check "$URI_DB" "console"
 # xray running check
 xray_status_check "console"
 
+# function section
 # helper func
 run_and_check() {
     local action="$1"

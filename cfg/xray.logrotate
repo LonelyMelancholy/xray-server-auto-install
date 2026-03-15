@@ -1,0 +1,9 @@
+/var/log/xray/*.log {
+    daily
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    create 0660 chown root xray_read_write_group
+}
