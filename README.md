@@ -1,4 +1,4 @@
-# xray-server-auto-install
+# Автоматический инсталлер xray-core с автонастройкой сервера и управлением через Telegram бота
 По всем вопросам телеграмм [@lonely_melancholy](https://t.me/lonely_melancholy)
 
 ### О проекте.
