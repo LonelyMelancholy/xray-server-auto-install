@@ -122,7 +122,7 @@ if [[ "$ONLY_ARCHIVE" == "manual" ]]; then
     fi
 else
     # start collecting message
-    MESSAGE="📢<b> Scheduled backup</b> 
+    MESSAGE="📢 <b>Scheduled backup</b>
 
 🖥️ <b>Host:</b> ${HOST_TAG}
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')

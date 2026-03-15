@@ -201,10 +201,10 @@ download_and_verify() {
         fi
         # check xray binary
         if [ ! -f "$TMP_DIR/xray" ]; then
-            echo "Error: xray binary is missing from folder after unpacking ${outfile}" >&2
+            echo "Error: xray is missing from folder after unpacking ${outfile}" >&2
             return 1
         else
-            echo "Success: xray binary exists in the folder after unpacking ${outfile}"
+            echo "Success: xray exists in the folder after unpacking ${outfile}"
         fi
     fi
 
@@ -231,7 +231,7 @@ _install() {
             echo "Success: $name installed"
         else
             echo "Error: $name not installed, trying rollback" >&2
-            run_and_check "rollback $name" cp -p "${install_dest}.${TS}.bak" "$install_dest"
+            run_and_check "rollback $name" cp -p "${install_dest}.bak.${TS}" "$install_dest"
             _xray_start_on_fail
             return 1
         fi
@@ -291,9 +291,9 @@ install_xray() {
 
     # install bin and geo*.dat
     if [ "$XRAY_UP_TO_DATE" = "0" ]; then
-        _install "755" "${TMP_DIR}/xray"  "$XRAY_BIN"     "xray binary" || return 1
+        _install "755" "${TMP_DIR}/xray"  "$XRAY_BIN"     "xray" || return 1
     else
-        echo "Info: xray binary installation skipped"
+        echo "Info: xray installation skipped"
     fi
 
     _install "644" "${TMP_DIR}/geoip.dat"    "$GEOIP_DAT"    "geoip.dat" || return 1
@@ -330,9 +330,9 @@ telegram_message "$MESSAGE"
 # download xray
 if ! download_and_verify "$XRAY_URL" "$TMP_DIR/xray-linux-64.zip" "xray"; then
     XRAY_DOWNLOAD=0
-    STATUS_XRAY_DOWNLOAD="❌ xray download failed"
+    STATUS_XRAY_DOWNLOAD="❌ <b>Error:</b> xray download"
 else
-    STATUS_XRAY_DOWNLOAD="☑️ xray binary download success"
+    STATUS_XRAY_DOWNLOAD="☑️ <b>Success:</b> xray download"
     XRAY_DOWNLOAD=1
 fi
 
@@ -340,66 +340,68 @@ fi
 if [[ "$XRAY_DOWNLOAD" == 1 ]]; then
     if ! download_and_verify "$GEOIP_URL" "$TMP_DIR/geoip.dat" "geoip.dat"; then
         GEOIP_DOWNLOAD=0
-        STATUS_GEOIP_DOWNLOAD="❌ geoip.dat download failed"
+        STATUS_GEOIP_DOWNLOAD="❌ <b>Error:</b> geoip.dat download"
     else
-        STATUS_GEOIP_DOWNLOAD="☑️ xray geoip.dat download success"
+        STATUS_GEOIP_DOWNLOAD="☑️ <b>Success:</b> geoip.dat download"
         GEOIP_DOWNLOAD=1
     fi
 else
     GEOIP_DOWNLOAD=0
-    STATUS_GEOIP_DOWNLOAD="⚠️ geoip.dat download skip"
+    STATUS_GEOIP_DOWNLOAD="⚠️ <b>Skip:</b> geoip.dat download"
 fi
 
 # download geosite if geoip success
 if [[ "$XRAY_DOWNLOAD" == 1 && "$GEOIP_DOWNLOAD" == 1 ]]; then
     if ! download_and_verify "$GEOSITE_URL" "$TMP_DIR/geosite.dat" "geosite.dat"; then
         GEOSITE_DOWNLOAD=0
-        STATUS_GEOSITE_DOWNLOAD="❌ geosite.dat download failed"
+        STATUS_GEOSITE_DOWNLOAD="❌ <b>Error:</b> geosite.dat download"
     else
-        STATUS_GEOSITE_DOWNLOAD="☑️ xray geosite.dat download success"
+        STATUS_GEOSITE_DOWNLOAD="☑️ <b>Success:</b> geosite.dat download"
         GEOSITE_DOWNLOAD=1
     fi
 else
     GEOSITE_DOWNLOAD=0
-    STATUS_GEOSITE_DOWNLOAD="⚠️ geosite.dat download skip"
+    STATUS_GEOSITE_DOWNLOAD="⚠️ <b>Skip:</b> geosite.dat download"
 fi
 
 # if all downlad success, install
 if [[ "$XRAY_DOWNLOAD" == 1 && "$GEOIP_DOWNLOAD" == 1 && "$GEOSITE_DOWNLOAD" == 1 ]]; then
     if ! install_xray; then
-        STATUS_XRAY_GEODAT_INSTALL="❌ xray and geo*.dat install failed"
+        STATUS_XRAY_GEODAT_INSTALL="❌ <b>Error:</b> xray and geo*.dat install"
         XRAY_GEODAT_INSTALL=0
     else
         if [[ "$XRAY_UP_TO_DATE" == 1 ]]; then
-            STATUS_XRAY_GEODAT_INSTALL="☑️ geo*.dat install success"$'\n'
-            STATUS_XRAY_GEODAT_INSTALL+="☑️ xray already up to date $XRAY_OLD_VER"
+            STATUS_XRAY_GEODAT_INSTALL="☑️ <b>Success:</b> geo*.dat install"$'\n'
+            STATUS_XRAY_GEODAT_INSTALL+="☑️ <b>Success:</b> xray already updated $XRAY_OLD_VER"
             XRAY_GEODAT_INSTALL=1
         else
-            STATUS_XRAY_GEODAT_INSTALL="☑️ xray and geo*.dat install success"$'\n'
-            STATUS_XRAY_GEODAT_INSTALL+="☑️ xray updated from $XRAY_OLD_VER to $XRAY_NEW_VER"
+            STATUS_XRAY_GEODAT_INSTALL="☑️ <b>Success:</b> xray and geo*.dat install"$'\n'
+            STATUS_XRAY_GEODAT_INSTALL+="☑️ <b>Success:</b> xray updated from $XRAY_OLD_VER to $XRAY_NEW_VER"
             XRAY_GEODAT_INSTALL=1
         fi
     fi
 else
     XRAY_GEODAT_INSTALL=0
-    STATUS_XRAY_GEODAT_INSTALL="⚠️ xray and geo*.dat install skip"
+    STATUS_XRAY_GEODAT_INSTALL="⚠️ <b>Skip:</b> xray and geo*.dat install"
 fi
 
 # check final xray status
 if systemctl is-active --quiet xray.service; then
-    STATUS_XRAY_RUNNING="☑️ Success: xray.service is running"
+    STATUS_XRAY_RUNNING="☑️ <b>Success:</b> xray.service is running"
     XRAY_RUNNING=1
 else
-    STATUS_XRAY_RUNNING="❌ Error: xray.service does not start"
+    STATUS_XRAY_RUNNING="❌ <b>Error:</b> xray.service does not start"
     XRAY_RUNNING=0
 fi
 
 # select a title for the telegram message
 if [[ "$XRAY_GEODAT_INSTALL" == 1 && "$XRAY_RUNNING" == 1 ]]; then
-    MESSAGE_TITLE="<b>✅ Scheduled xray update</b>"
+    MESSAGE_TITLE="✅ <b>Scheduled xray update</b>"
+    STATUS_UPDATE="☑️ <b>Action:</b> update success"
     RC=0
 else
-    MESSAGE_TITLE="<b>❌ Scheduled xray update</b>"
+    MESSAGE_TITLE="❌ <b>Scheduled xray update</b>"
+    STATUS_UPDATE="☑️ <b>Action:</b> update failed"
 fi
 
 # collecting report for telegram message
@@ -407,6 +409,7 @@ MESSAGE="$MESSAGE_TITLE
 
 🖥️ <b>Host:</b> ${HOST_TAG}
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
+${STATUS_UPDATE}
 ${STATUS_XRAY_DOWNLOAD}
 ${STATUS_GEOIP_DOWNLOAD}
 ${STATUS_GEOSITE_DOWNLOAD}
@@ -423,7 +426,7 @@ telegram_message "$MESSAGE"
 
 # if update successuful, delete all old backups
 if [[ $RC == 0 ]]; then
-    run_and_check "delete all old '.bak' files" rm -f -- /usr/local/bin/*.bak.*
+    run_and_check "delete all old '.bak' files" rm -f -- /usr/local/bin/xray.bak.* /usr/local/share/xray/*.bak.*
 fi
 
 # exit with work success status

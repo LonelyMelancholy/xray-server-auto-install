@@ -74,14 +74,14 @@ update_and_upgrade() {
 # function for checking fail in update/upgrade step
 check_fail() {
     if [[ -n "${FAIL_STEP:-}" ]]; then
-        MESSAGE="❌ <b>Scheduled security updates</b>
+        MESSAGE="❌ <b>Scheduled security update</b>
 
 🖥️ <b>Host:</b> ${HOST_TAG}
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
-❌ <b>Action:</b> updgrade failed
+❌ <b>Action:</b> upgrade failed
 ❌ <b>Step:</b> ${FAIL_STEP}
 💾 <b>UN-UP log:</b> /var/log/unattended-upgrades/unattended-upgrades.log
-💾 <b>Upgrade log:</b> journalctl -t unattended_upgrade
+💾 <b>Update log:</b> journalctl -t unattended_upgrade
 💾 <b>Dpkg log:</b> /var/log/dpkg.log"
 
         # logging message
@@ -96,11 +96,11 @@ check_fail() {
 
 # main logic start here
 # send start update message
-MESSAGE="⚠️ <b>Scheduled security upgrade</b>
+MESSAGE="⚠️ <b>Scheduled security update</b>
 
 🖥️ <b>Host:</b> ${HOST_TAG}
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
-☑️ <b>Action:</b> upgrade started"
+☑️ <b>Action:</b> update started"
 
 # logging message
 echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
@@ -141,14 +141,14 @@ $CHANGES"
 fi
 
 # start collecting final message
-MESSAGE="<b>✅ Scheduled security updates</b>
+MESSAGE="<b>✅ Scheduled security update</b>
 
 🖥️ <b>Host:</b> ${HOST_TAG}
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
-☑️ <b>Action:</b> upgrade success
+☑️ <b>Action:</b> update success
 $CHANGE_SUMMARY
 💾 <b>UN-UP log:</b> /var/log/unattended-upgrades/unattended-upgrades.log
-💾 <b>Upgrade log:</b> journalctl -t unattended_upgrade
+💾 <b>Update log:</b> journalctl -t unattended_upgrade
 💾 <b>Dpkg log:</b> /var/log/dpkg.log"
 
 # logging message
@@ -162,7 +162,7 @@ telegram_message "$MESSAGE"
 if [[ -f /var/run/reboot-required ]]; then
     PKGS_REBOOT="$(cat /var/run/reboot-required.pkgs)"
     PKGS_REBOOT="$(printf '%s\n' "$PKGS_REBOOT" | sed 's/^/[→] /')"
-    MESSAGE="⚠️ <b>Scheduled security upgrade</b>
+    MESSAGE="⚠️ <b>Scheduled security update</b>
 
 🖥️ <b>Host:</b> ${HOST_TAG}
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')

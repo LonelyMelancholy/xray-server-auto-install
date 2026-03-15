@@ -275,9 +275,9 @@ fi
 # start collecting message
 # make title
 if [[ $XR_ST == 0 ]]; then
-    TITLE="⚠️<b> Scheduled traffic block</b>"
+    TITLE="⚠️ <b>Scheduled traffic block</b>"
 else
-    TITLE="❌<b> Scheduled traffic block</b>"
+    TITLE="❌ <b>Scheduled traffic block</b>"
 fi
 
 # make upper message body

@@ -79,12 +79,12 @@ while true; do
 
 🖥️ <b>Host:</b> ${HOST_TAG}
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
-📈 <b>Treshold:</b> ${CPU_THRESHOLD}%
+📈 <b>Threshold:</b> ${CPU_THRESHOLD}%
 🚨 <b>Usage:</b> ${CPU}%
 📉 <b>Top 1:</b> $(awk 'NR==1{printf "PID=%s CMD=%s CPU=%s%%\n",$1,$2,$3; exit}' <<< "$PROCESS")
 📉 <b>Top 2:</b> $(awk 'NR==2{printf "PID=%s CMD=%s CPU=%s%%\n",$1,$2,$3; exit}' <<< "$PROCESS")
 📉 <b>Top 3:</b> $(awk 'NR==3{printf "PID=%s CMD=%s CPU=%s%%\n",$1,$2,$3; exit}' <<< "$PROCESS")
-💾 <b>Notify log:</b> journalctl -t cpu_alert"
+💾 <b>Alert log:</b> journalctl -t cpu_alert"
 
         # logging message
         echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"

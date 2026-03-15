@@ -135,7 +135,7 @@ while IFS= read -r email; do
 done <<< "$USERS_EMAILS_FULL"
 
 # start collecting message
-MESSAGE="📢<b> Daily user report</b> 
+MESSAGE="📢 <b>Daily user report</b>
 
 🖥️ <b>Host:</b> ${HOST_TAG}
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')

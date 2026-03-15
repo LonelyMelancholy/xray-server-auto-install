@@ -55,15 +55,15 @@ while IFS= read -r json; do
     prio=$(jq -r '.PRIORITY // empty' <<<"$json")
 
     # collect message
-    MESSAGE="🚨 <b> Journald error alert</b> 
+    MESSAGE="🚨 <b>Journald error alert</b>
 
 🖥️ <b>Host:</b> ${HOST_TAG}
 ⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
 🚨 <b>Error level:</b> ${ERROR_LEVEL[$prio]}
 ⚙️ <b>Unit:</b> ${unit}
-📑 <b>Messsage:</b> ${msg}
-💾 <b>alert log:</b> journalctl -t journald_alert"
-    
+📑 <b>Message:</b> ${msg}
+💾 <b>Alert log:</b> journalctl -t journald_alert"
+
     # logging message
     echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
     echo "$MESSAGE"
