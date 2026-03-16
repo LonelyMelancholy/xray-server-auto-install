@@ -13,7 +13,7 @@ export PATH
 exec > >(systemd-cat -t telegram_gateway -p info) 2> >(systemd-cat -t telegram_gateway -p err) 5> >(systemd-cat -t telegram_gateway -p notice)
 
 # start logging message
-echo "telegram_gateway started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
+echo "telegram gateway started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 
 # exit logging message function
 # shellcheck disable=SC2329
@@ -139,12 +139,13 @@ valid_arg() {
     local var="$2"
     case "$var" in
         username)
-            # 1..30 chars, only A-Z a-z 0-9 and '-'
-            [[ ${#arg} -ge 1 && ${#arg} -le 30 && "$arg" =~ ^[A-Za-z0-9-]+$ ]] || return 1
+            # 1..64 chars, only A-Z a-z 0-9 and '-_'
+            [[ "$arg" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || return 1
+            [[ "$arg" =~ ^[-_]|[-_]$ ]] && return 1
         ;;
         number)
-            # 1..10 numbers only 0-9
-            [[ ${#arg} -ge 1 && ${#arg} -le 10 && "$arg" =~ ^[0-9]+$ ]] || return 1
+            # 1..10 numbers only positive 0-9
+            [[ "$arg" =~ ^[0-9]{1,10}$ ]] || return 1
         ;;
         answer)
             # yes,Yes,YES accept
@@ -213,7 +214,7 @@ handle_callback() {
     case "$data" in
         SHOW_STAT)
             STATE=""
-            run_and_send_output "$chat_id" echo "Wait 10 sec, network statistic accumulate process"
+            run_and_send_output "$chat_id" echo "Wait 10 sec, network statistics accumulate process"
             run_and_send_output "$chat_id" /usr/local/bin/service/system_info.sh
             show_menu "$chat_id"
         ;;
@@ -341,7 +342,7 @@ handle_message() {
             esac
 
             if ! valid_arg "$username" "username"; then
-                send_message "$chat_id" "${action}\n❌ Error: username must be 1..30 characters long and contain only '-', letters, and numbers.\nEnter username [or /cancel]:"
+                send_message "$chat_id" "${action}\n❌ Error: username must be 1..64 characters long and contain only letters, numbers and '-' or '_'.\nEnter username [or /cancel]:"
                 return
             fi
 
@@ -419,12 +420,12 @@ handle_message() {
             fi
 
             if ! valid_arg "$a" "username"; then
-                send_message "$chat_id" "${action}\n❌ Error: username must be 1..30 characters long and contain only '-', letters, and numbers.\nEnter username and number of days, separated by a space [or /cancel]:"
+                send_message "$chat_id" "${action}\n❌ Error: username must be 1..64 characters long and contain only letters, numbers and '-' or '_'.\nEnter username and number of days, separated by a space [or /cancel]:"
                 return
             fi
 
             if ! valid_arg "$b" "number"; then
-                send_message "$chat_id" "${action}\n❌ Error: number must be 1..10 characters long and contain only numbers.\nEnter username and number of days, separated by a space [or /cancel]:"
+                send_message "$chat_id" "${action}\n❌ Error: number must be 1..10 characters long and contain only non negative numbers.\nEnter username and number of days, separated by a space [or /cancel]:"
                 return
             fi
 

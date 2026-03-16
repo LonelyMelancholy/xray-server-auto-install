@@ -115,7 +115,6 @@ $XRAY_STATUS
 
 # logging message
 echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
-echo "$MESSAGE"
 
 # sending message
 telegram_message "$MESSAGE"

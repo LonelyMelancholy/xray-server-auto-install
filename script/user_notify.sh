@@ -169,7 +169,6 @@ MESSAGE+=$'\n'"💾 <b>Xray error log:</b> /var/log/xray/error.log
 
 # logging message
 echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
-echo "$MESSAGE"
 
 # send message
 telegram_message "$MESSAGE"

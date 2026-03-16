@@ -66,7 +66,6 @@ while IFS= read -r json; do
 
     # logging message
     echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
-    echo "$MESSAGE"
     
     # send message
     telegram_message "$MESSAGE"

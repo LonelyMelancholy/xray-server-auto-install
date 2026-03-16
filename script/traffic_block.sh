@@ -192,7 +192,7 @@ done <<< "$USERS_TRAFFIC_TOTAL"
 
 # check traffic in array, if empty value - exit
 if (( ${#TOTAL_BYTES_BY_USERS[@]} == 0 )); then
-    echo "Success: in $TR_DB_M not found user>>>...>>>traffic>>>uplink/downlink with value, exit"
+    echo "Success: in $TR_DB_M not found user with value, it looks like the database is empty, exit"
     RC=0
     exit $RC
 fi
@@ -239,7 +239,7 @@ run_and_check "make new xray tmp config" make_new_tmp_config
 
 # if conf not change, exit
 if cmp -s "$XRAY_CONFIG" "$TMP_XRAY_CONFIG"; then
-    echo "Success: users exceeded the limit not found, exit"
+    echo "Success: new users exceeded the limit not found, exit (exceeded the limit=${#FULL_EMAILS_TO_BLOCK[@]})"
     RC=0
     exit $RC
 fi
@@ -304,7 +304,6 @@ MESSAGE+=$'\n'"💾 <b>Traffic block log:</b> journalctl -t traffic_block"
 
 # logging message
 echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
-echo "$MESSAGE"
 
 # sending message
 telegram_message "$MESSAGE"

@@ -21,13 +21,18 @@ readonly USERNAME="$1"
 
 # argument check
 if [[ $# -ne 1 || $USERNAME == "--help" ]]; then
-    echo "Use for show individual user info"
+    echo "Used to show individual user info"
     echo "run: $0 username"
     exit 0
 fi
 
-if ! [[ $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
-    echo "❌ Error: only letters, numbers and - in name, exit"
+if ! [[ $USERNAME =~ ^[A-Za-z0-9_-]{1,64}$ ]]; then
+    echo "❌ Error: only letters, numbers and '-' or '_' in username, length 1-64 characters, exit"
+    exit 1
+fi
+
+if [[ "$USERNAME" =~ ^[-_]|[-_]$ ]]; then
+    echo "❌ Error: username must not start or end with '-' or '_', exit"
     exit 1
 fi
 

@@ -29,8 +29,9 @@ flock -n ${fd} || { echo "❌ Error: another instance is running, exit"; exit 1;
 
 # check os version
 [[ -r /etc/os-release ]] || { echo "❌ Error: '/etc/os-release' missing or you do not have read permissions, exit"; exit 1; }
+# shellcheck disable=SC1091
 source /etc/os-release
-if [[ "$ID" != "ubuntu" ]] || [[ "${VERSION_ID%%.*}" -lt 24 ]]; then
+if [[ "$ID" != "ubuntu" || "${VERSION_ID%%.*}" -lt 24 ]]; then
     echo "❌ Error: this script requires Ubuntu 24.04 or higher, exit"
     exit 1
 fi
@@ -103,13 +104,12 @@ else
     echo "✅ Success: new hostname matches the old hostname, changes not needed"
 fi
 
-# utilities check, if missing add to array
-for utility in curl unzip jq openssl ca-certificates ifstat nftables ubuntu-pro-client; do
-    if ! command -v "$utility" &> /dev/null; then
-        MISSING_PACKAGE_LIST+=("$utility")
+# packages check, if missing add to array
+for pkg in curl unzip jq openssl ca-certificates ifstat nftables ubuntu-pro-client; do
+    if ! dpkg-query -W -f='${Status}\n' "$pkg" 2>/dev/null | grep -q '^install ok installed$'; then
+        MISSING_PACKAGE_LIST+=("$pkg")
     fi
 done
-
 # update list packages with logging
 install_and_update "update packages list" "$LOG_UPDATE_LIST" "${CMD_LIST_UPDATE[@]}"
 

@@ -22,13 +22,13 @@ end_log() {
 # exit cleanup and log message function
 # shellcheck disable=SC2329
 rm_tmp() {
-    echo "cleanup started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
+    echo "cleaning started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     if rm -rf "$TMP_DIR"; then
         echo "Success: delete tmp files"
-        echo "cleanup ended - $(date '+%Y-%m-%d %H:%M:%S')"  >&5
+        echo "cleaning ended - $(date '+%Y-%m-%d %H:%M:%S')"  >&5
     else
         echo "Error: delete tmp files" >&2
-        echo "cleanup failed - $(date '+%Y-%m-%d %H:%M:%S')" >&2
+        echo "cleaning failed - $(date '+%Y-%m-%d %H:%M:%S')" >&2
     fi
 }
 
@@ -68,6 +68,19 @@ run_lock_wait "tr_db" "600"
 # xray running check
 # shellcheck disable=SC2119
 xray_status_check
+
+# send start update message
+MESSAGE="⚠️ <b>Scheduled xray update</b>
+
+🖥️ <b>Host:</b> ${HOST_TAG}
+⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
+☑️ <b>Action:</b> update started"
+
+# logging message
+echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
+
+# sending message
+telegram_message "$MESSAGE"
 
 # function section
 # helper function
@@ -313,20 +326,6 @@ install_xray() {
 }
 
 # main logic start here
-# send start update message
-MESSAGE="⚠️ <b>Scheduled xray update</b>
-
-🖥️ <b>Host:</b> ${HOST_TAG}
-⌚ <b>Time:</b> $(date '+%Y-%m-%d %H:%M:%S')
-☑️ <b>Action:</b> update started"
-
-# logging message
-echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
-echo "$MESSAGE"
-
-# sending message
-telegram_message "$MESSAGE"
-
 # download xray
 if ! download_and_verify "$XRAY_URL" "$TMP_DIR/xray-linux-64.zip" "xray"; then
     XRAY_DOWNLOAD=0
@@ -401,7 +400,7 @@ if [[ "$XRAY_GEODAT_INSTALL" == 1 && "$XRAY_RUNNING" == 1 ]]; then
     RC=0
 else
     MESSAGE_TITLE="❌ <b>Scheduled xray update</b>"
-    STATUS_UPDATE="☑️ <b>Action:</b> update failed"
+    STATUS_UPDATE="❌ <b>Action:</b> update failed"
 fi
 
 # collecting report for telegram message
@@ -419,7 +418,6 @@ ${STATUS_XRAY_RUNNING}
 
 # logging message
 echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
-echo "$MESSAGE"
 
 # send result message
 telegram_message "$MESSAGE"

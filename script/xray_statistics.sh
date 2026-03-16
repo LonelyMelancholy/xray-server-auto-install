@@ -1,5 +1,5 @@
 #!/bin/bash
-# script for collecting xray traffic stat via systemd every 5m
+# script for collecting xray traffic statistics via systemd every 5m
 # all errors are logged in journald, see journalctl -t xray_statistics
 # exit codes work to tell systemd about success
 
@@ -11,15 +11,15 @@ source "/usr/local/lib/service/variables.lib.sh" || { echo "Error: failed to sou
 exec > >(systemd-cat -t xray_statistics -p info) 2> >(systemd-cat -t xray_statistics -p err) 5> >(systemd-cat -t xray_statistics -p notice)
 
 # start logging message
-echo "xray stat started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
+echo "xray statistics started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 
 # exit logging message function
 # shellcheck disable=SC2329
 end_log() {
     if [[ "$RC" -eq "0" ]]; then
-        echo "xray stat ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
+        echo "xray statistics ended - $(date '+%Y-%m-%d %H:%M:%S')" >&5
     else
-        echo "xray stat failed - $(date '+%Y-%m-%d %H:%M:%S')" >&2
+        echo "xray statistics failed - $(date '+%Y-%m-%d %H:%M:%S')" >&2
     fi
 }
 
@@ -78,7 +78,7 @@ run_and_check() {
     fi
 }
 
-# function for get xray stat and reset
+# function for get xray statistics and reset
 # shellcheck disable=SC2329
 fresh_stat() { xray api statsquery --reset > "$1"; }
 
@@ -90,7 +90,7 @@ reset_stat_file() { printf '{"stat":[]}\n' > "$1"; }
 # shellcheck disable=SC2329
 install_new_tr_db() { cat "$1" > "$2"; }
 
-# merge json stat old + new -> out
+# merge json statistics old + new -> out
 # shellcheck disable=SC2329
 merge_old_new() {
 jq -s '
@@ -132,38 +132,38 @@ jq -s '
 }
 
 # main logic start here
-# get xray stat and reset
-run_and_check "xray stat request and reset" fresh_stat "$TMP_TR_DB_COMMON"
+# get xray statistics and reset
+run_and_check "xray statistics request and reset" fresh_stat "$TMP_TR_DB_COMMON"
 
-# if empty set tmp stat to 0
+# if empty set tmp statistics to 0
 if [[ ! -s "$TMP_TR_DB_COMMON" ]]; then
-    echo "Error: new xray stat empty, exit" >&2
+    echo "Error: new xray statistics empty, exit" >&2
     exit 1
 fi
 
 # new JSON check valid, if not - save and exit
 if ! jq empty "$TMP_TR_DB_COMMON" &> /dev/null; then
     cp -f "$TMP_TR_DB_COMMON" "${TR_DB_M}.bad_new_${TS}.json" 
-    echo "Error: cannot parse xray new stats JSON; saved raw to ${TR_DB_M}.bad_new_${TS}.json, exit" >&2
+    echo "Error: cannot parse xray new statistics JSON; saved raw to ${TR_DB_M}.bad_new_${TS}.json, exit" >&2
     cp -f "$TMP_TR_DB_COMMON" "${TR_DB_Y}.bad_new_${TS}.json"
-    echo "Error: cannot parse xray new stats JSON; saved raw to ${TR_DB_Y}.bad_new_${TS}.json, exit" >&2
+    echo "Error: cannot parse xray new statistics JSON; saved raw to ${TR_DB_Y}.bad_new_${TS}.json, exit" >&2
     exit 1
 fi
 
-# if old M empty or not valid, start stat from 0
+# if old M empty or not valid, start statistics from 0
 if [[ -s "$TR_DB_M" ]] && jq empty "$TR_DB_M" &> /dev/null; then
-    run_and_check "copy old stat to tmp file" install_new_tr_db "$TR_DB_M" "$TMP_TR_DB_M_OLD"
+    run_and_check "copy old statistics to tmp file" install_new_tr_db "$TR_DB_M" "$TMP_TR_DB_M_OLD"
 else
-    run_and_check "old stat not valid or empty, start stat from 0 in TR_DB_M" reset_stat_file "$TR_DB_M"
-    run_and_check "old stat not valid or empty, set stat to 0 in TMP_TR_DB_M_OLD file" reset_stat_file "$TMP_TR_DB_M_OLD"
+    run_and_check "old statistics not valid or empty, start statistics from 0 in TR_DB_M" reset_stat_file "$TR_DB_M"
+    run_and_check "old statistics not valid or empty, set statistics to 0 in TMP_TR_DB_M_OLD file" reset_stat_file "$TMP_TR_DB_M_OLD"
 fi
 
-# if old Y empty or not valid, start stat from 0
+# if old Y empty or not valid, start statistics from 0
 if [[ -s "$TR_DB_Y" ]] && jq empty "$TR_DB_Y" &> /dev/null; then
-    run_and_check "copy old stat to tmp file" install_new_tr_db "$TR_DB_Y" "$TMP_TR_DB_Y_OLD"
+    run_and_check "copy old statistics to tmp file" install_new_tr_db "$TR_DB_Y" "$TMP_TR_DB_Y_OLD"
 else
-    run_and_check "old stat not valid or empty, start stat from 0 in TR_DB_Y" reset_stat_file "$TR_DB_Y"
-    run_and_check "old stat not valid or empty, set stat to 0 in TMP_TR_DB_Y_OLD file" reset_stat_file "$TMP_TR_DB_Y_OLD"
+    run_and_check "old statistics not valid or empty, start statistics from 0 in TR_DB_Y" reset_stat_file "$TR_DB_Y"
+    run_and_check "old statistics not valid or empty, set statistics to 0 in TMP_TR_DB_Y_OLD file" reset_stat_file "$TMP_TR_DB_Y_OLD"
 fi
 
 # merge

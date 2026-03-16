@@ -1,6 +1,6 @@
 # shellcheck disable=SC2148
 # lock library, for checking running another instance working on file which we also need
-# lock waiting for background script, lock whichout waiting for manualy running script
+# lock waiting for background script, lock whichout waiting for manually running script
 # read and write check, checking permission on file
 #
 # for use run lock - run_lock_check "lock_name", run_lock_wait "lock_name" "time"
@@ -54,7 +54,7 @@ read_and_write_check() {
               *) error="Error" ;;
     esac
 
-    [[ ! -f "$file" ]] && { echo "$error: check '$file' it's not file, exit" >&2; exit 1; }
+    [[ ! -f "$file" ]] && { echo "$error: check '$file' is not a file, exit" >&2; exit 1; }
     [[ ! -r "$file" || ! -w "$file" ]] && { echo "$error: check '$file' it's missing or you do not have read or write permissions, exit" >&2; exit 1; }
 }
 

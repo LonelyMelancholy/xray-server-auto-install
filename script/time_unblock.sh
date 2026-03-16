@@ -22,19 +22,24 @@ DAYS="$2"
 
 # argument check
 if [[ "$#" -ne 2 || "$USERNAME" == "--help" ]]; then
-    echo "Use for changing time for user in xray config and unblock"
+    echo "Used to changing time for user in xray config and unblock"
     echo "run: $0 username days"
     echo "days 0 - infinity days"
     exit 0
 fi
 
-if [[ ! $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
-    echo "❌ Error: only letters, numbers and - in name, exit"
+if ! [[ $USERNAME =~ ^[A-Za-z0-9_-]{1,64}$ ]]; then
+    echo "❌ Error: only letters, numbers and '-' or '_' in username, length 1-64 characters, exit"
     exit 1
 fi
 
-if [[ ! "$DAYS" =~ ^[0-9]+$ ]]; then
-    echo "❌ Error: days must be non negative number, exit"
+if [[ "$USERNAME" =~ ^[-_]|[-_]$ ]]; then
+    echo "❌ Error: username must not start or end with '-' or '_', exit"
+    exit 1
+fi
+
+if ! [[ "$DAYS" =~ ^[0-9]{1,10}$ ]]; then
+    echo "❌ Error: days must be non negative number, lenght 1-10 characters, exit"
     exit 1
 fi
 
@@ -170,7 +175,7 @@ USERNAME_COUNT="$(
 # to many client found, exit
 # if client not found, exit
 if [[ $USERNAME_COUNT -gt 1 ]]; then
-    echo "❌ Error: '$USERNAME' to many match in clients inbound '$INBOUND_TAG', edit config manually, exit"
+    echo "❌ Error: '$USERNAME' too many matches in clients inbound '$INBOUND_TAG', edit config manually, exit"
     exit 1
 elif [[ $USERNAME_COUNT -eq 1 ]]; then
     echo "✅ Success: found client with name '$USERNAME' in inbound tag '$INBOUND_TAG'"
@@ -190,7 +195,7 @@ fi
 
 # exit if have expired block count > 1 user, its mean we have dublicat in rule
 if [[ $EXPIRED_BLOCKED_COUNT -gt 1 ]]; then
-    echo "❌ Error: '$USERNAME' to many match in ruleTag '$EXPIRED_BLOCK_TAG', edit config manually, exit"
+    echo "❌ Error: '$USERNAME' too many matches in ruleTag '$EXPIRED_BLOCK_TAG', edit config manually, exit"
     exit 1
 fi
 
@@ -220,7 +225,7 @@ fi
 
 # exit if have manual block for not changing unic name
 if [[ $MANUALLY_BLOCKED_COUNT -gt 0 ]]; then
-    echo "❌ Error: '$USERNAME' blocked manualy in '$MANUAL_BLOCK_TAG', unblock user first, exit"
+    echo "❌ Error: '$USERNAME' blocked manually in '$MANUAL_BLOCK_TAG', unblock user first, exit"
     exit 1
 fi
 

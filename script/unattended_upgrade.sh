@@ -86,7 +86,6 @@ check_fail() {
 
         # logging message
         echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
-        echo "$MESSAGE"
 
         #sending message and exit with error code
         telegram_message "$MESSAGE"
@@ -104,7 +103,6 @@ MESSAGE="⚠️ <b>Scheduled security update</b>
 
 # logging message
 echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
-echo "$MESSAGE"
 
 # sending message
 telegram_message "$MESSAGE"
@@ -153,7 +151,6 @@ $CHANGE_SUMMARY
 
 # logging message
 echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
-echo "$MESSAGE"
 
 # sending message
 telegram_message "$MESSAGE"
@@ -172,7 +169,6 @@ ${PKGS_REBOOT}"
 
     # logging message
     echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
-    echo "$MESSAGE"
 
     # sending message
     telegram_message "$MESSAGE"

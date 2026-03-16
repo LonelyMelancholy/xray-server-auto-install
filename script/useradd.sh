@@ -22,19 +22,24 @@ DAYS="$2"
 
 # argument check
 if [[ "$#" -ne 2 || "$USERNAME" == "--help" ]]; then
-    echo "Use for add user in xray config"
+    echo "Used to add user in xray config"
     echo "run: $0 username days"
     echo "days 0 - infinity days"
     exit 0
 fi
 
-if ! [[ $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
-    echo "❌ Error: only letters, numbers and - in name, exit"
+if ! [[ $USERNAME =~ ^[A-Za-z0-9_-]{1,64}$ ]]; then
+    echo "❌ Error: only letters, numbers and '-' or '_' in username, length 1-64 characters, exit"
     exit 1
 fi
 
-if ! [[ "$DAYS" =~ ^[0-9]+$ ]]; then
-    echo "❌ Error: days must be non negative number, exit"
+if [[ "$USERNAME" =~ ^[-_]|[-_]$ ]]; then
+    echo "❌ Error: username must not start or end with '-' or '_', exit"
+    exit 1
+fi
+
+if ! [[ "$DAYS" =~ ^[0-9]{1,10}$ ]]; then
+    echo "❌ Error: days must be non negative number, lenght 1-10 characters, exit"
     exit 1
 fi
 

@@ -9,7 +9,7 @@ ARCHIVE="$1"
 
 # argument checking
 if [[ $# -ne 1 || "$ARCHIVE" == "--help" ]]; then
-    echo "Use for restore backup"
+    echo "Used to restore backup"
     echo "run: $0 archive_path"
     exit 0
 fi

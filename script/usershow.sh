@@ -18,7 +18,7 @@ fi
 
 # function for print help
 helper_f() {
-    echo "Use for show user from xray config and URI_DB"
+    echo "Used to show user from xray config and URI_DB"
     echo "run: $0 link|all"
     echo "links - all user link and expiration info"
     echo "all - table: username (online/offline), devices, (blocked/expired/enable), traffic, days left"

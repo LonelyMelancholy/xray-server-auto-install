@@ -88,7 +88,6 @@ while true; do
 
         # logging message
         echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
-        echo "$MESSAGE"
         
         # send message
         telegram_message "$MESSAGE"

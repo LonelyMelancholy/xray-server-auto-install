@@ -61,7 +61,7 @@ readonly ONLY_ARCHIVE="$1"
 
 # check arguments
 if [[ "$ONLY_ARCHIVE" != "manual" && "$ONLY_ARCHIVE" != "auto" || $# -ne 1 ]]; then
-    echo "Use for backup xray"
+    echo "Used to backup xray"
     echo "run: $0 auto|manual"
     echo "auto - for auto backup with message"
     echo "manual - for only archive to Telegram, no message"
@@ -114,7 +114,7 @@ run_and_check "packed backup archive" tar -C "$TMPDIR" -czf "$BACKUP_FILE_PATH" 
 
 # send message and file or just file
 if [[ "$ONLY_ARCHIVE" == "manual" ]]; then
-    if telegram_file; then
+    if telegram_file "$BACKUP_FILE_PATH" "$BACKUP_FILE_NAME"; then
         echo "✅ Success: backup was sent to the notification channel"
     else
         echo "❌ Error: failed to send backup to the notification channel" >&2
@@ -130,7 +130,6 @@ else
 
     # logging message
     echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
-    echo "$MESSAGE"
 
     # send message
     telegram_message "$MESSAGE"

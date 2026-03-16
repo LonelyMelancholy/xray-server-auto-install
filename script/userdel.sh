@@ -21,12 +21,20 @@ readonly USERNAME="$1"
 
 # argument check
 if [[ "$#" -ne 1 || "$USERNAME" == "--help" ]]; then
-    echo "Use for delete user from xray config"
+    echo "Used to delete user from xray config"
     echo "run: $0 username"
     exit 0
 fi
 
-[[ $USERNAME =~ ^[A-Za-z0-9-]+$ ]] || { echo "❌ Error: only letters, numbers and - in name, exit"; exit 1; }
+if ! [[ $USERNAME =~ ^[A-Za-z0-9_-]{1,64}$ ]]; then
+    echo "❌ Error: only letters, numbers and '-' or '_' in username, length 1-64 characters, exit"
+    exit 1
+fi
+
+if [[ "$USERNAME" =~ ^[-_]|[-_]$ ]]; then
+    echo "❌ Error: username must not start or end with '-' or '_', exit"
+    exit 1
+fi
 
 # exit rm tmp file function
 # shellcheck disable=SC2329

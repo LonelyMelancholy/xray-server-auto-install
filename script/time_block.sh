@@ -189,7 +189,7 @@ run_and_check "make new xray tmp config" make_new_tmp_config
 
 # if conf not change, exit
 if cmp -s "$XRAY_CONFIG" "$TMP_XRAY_CONFIG"; then
-    echo "Success: expired email not found, exit (today=$TODAY, expired=${#EXPIRED_EMAILS_FULL[@]})"
+    echo "Success: new expired email not found, exit (today=$TODAY, expired=${#EXPIRED_EMAILS_FULL[@]})"
     XR_ST=0
     RC=0
     exit $RC
@@ -256,7 +256,6 @@ MESSAGE+=$'\n'"💾 <b>Time block log:</b> journalctl -t time_block"
 
 # logging message
 echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
-echo "$MESSAGE"
 
 # sending message
 telegram_message "$MESSAGE"

@@ -6,7 +6,7 @@
 exec > >(systemd-cat -t precreate_lockfiles -p info) 2> >(systemd-cat -t precreate_lockfiles -p err) 5> >(systemd-cat -t precreate_lockfiles -p notice)
 
 # start logging message
-echo "precreate_lockfiles started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
+echo "precreate lockfiles started - $(date '+%Y-%m-%d %H:%M:%S')" >&5
 
 # exit logging message function
 # shellcheck disable=SC2329

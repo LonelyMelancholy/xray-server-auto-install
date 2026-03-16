@@ -1,5 +1,5 @@
 #!/bin/bash
-# script for block/unblock manualy xray user
+# script for block/unblock manually xray user
 
 # common variables source
 # shellcheck source=share/variables.lib.sh
@@ -22,13 +22,18 @@ readonly ACTION="$2"
 
 # argument check
 if [[ ! "$#" -eq 2 || "$USERNAME" == "--help" ]]; then
-    echo "Use for block user in xray config"
+    echo "Used to block user in xray config"
     echo "run: $0 username block|unblock"
     exit 1
 fi
 
-if ! [[ $USERNAME =~ ^[A-Za-z0-9-]+$ ]]; then
-    echo "❌ Error: only letters, numbers and - in name, exit"
+if ! [[ $USERNAME =~ ^[A-Za-z0-9_-]{1,64}$ ]]; then
+    echo "❌ Error: only letters, numbers and '-' or '_' in username, length 1-64 characters, exit"
+    exit 1
+fi
+
+if [[ "$USERNAME" =~ ^[-_]|[-_]$ ]]; then
+    echo "❌ Error: username must not start or end with '-' or '_', exit"
     exit 1
 fi
 
@@ -185,7 +190,7 @@ case "$ACTION" in
         # check client exist or not
         mapfile -t EMAILS < <(get_client_emails)
         if [[ ${#EMAILS[@]} -gt 1 ]]; then
-            echo "❌ Error: '$USERNAME' to many match in clients inbound '$INBOUND_TAG', edit config manually, exit"
+            echo "❌ Error: '$USERNAME' too many matches in clients inbound '$INBOUND_TAG', edit config manually, exit"
             exit 1
         elif [[ ${#EMAILS[@]} -eq 1 ]]; then
             echo "✅ Success: found client with name '$USERNAME' in inbound tag '$INBOUND_TAG'"
@@ -205,7 +210,7 @@ case "$ACTION" in
         # check client exist or not
         mapfile -t EMAILS < <(get_client_emails)
         if [[ ${#EMAILS[@]} -gt 1 ]]; then
-            echo "❌ Error: '$USERNAME' to many match in clients inbound '$INBOUND_TAG', edit config manually, exit"
+            echo "❌ Error: '$USERNAME' too many matches in clients inbound '$INBOUND_TAG', edit config manually, exit"
             exit 1
         elif [[ ${#EMAILS[@]} -eq 1 ]]; then
             echo "✅ Success: found client with name '$USERNAME' in inbound tag '$INBOUND_TAG'"
@@ -217,7 +222,7 @@ case "$ACTION" in
         # check client only in our tagged rule
         mapfile -t EMAILS < <(get_blocked_emails_from_rule)
         if [[ ${#EMAILS[@]} -gt 1 ]]; then
-            echo "❌ Error: '$USERNAME' to many match in ruleTag '$MANUAL_BLOCK_TAG', edit config manually, exit"
+            echo "❌ Error: '$USERNAME' too many matches in ruleTag '$MANUAL_BLOCK_TAG', edit config manually, exit"
             exit 1
         elif [[ ${#EMAILS[@]} -eq 1 ]]; then
             echo "✅ Success: found client for unblock name '$USERNAME' in ruleTag '$MANUAL_BLOCK_TAG'"
