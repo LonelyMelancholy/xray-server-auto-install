@@ -147,7 +147,7 @@ if [[ -z "$XRAY_NAME" ]]; then
     exit 1
 fi
 
-if ! [[ $XRAY_NAME =~ ^[A-Za-z0-9_-]{1,64}$ ]]; then
+if ! [[ "$XRAY_NAME" =~ ^[A-Za-z0-9_-]{1,64}$ ]]; then
     echo "❌ Error: 'Name' for xray can contain only letters, numbers, '-' and '_', length 1-64 characters, exit"
     exit 1
 fi
@@ -166,9 +166,22 @@ if [[ -z "$XRAY_DAYS" ]]; then
     exit 1
 fi
 
-if [[ ! $XRAY_DAYS =~ ^[0-9]{1,10}$ ]]; then
+if [[ ! "$XRAY_DAYS" =~ ^[0-9]{1,10}$ ]]; then
     echo "❌ Error: 'Days' for xray can have only non negative numbers, lengh 1-10 characters, exit"
     exit 1
 else
     echo "✅ Success: 'Days' for xray accepted"
+fi
+
+XRAY_NODE=$(awk -F'"' '/^[[:space:]]*Node/ {print $2}' "$CFG_FILE")
+if [[ -z "$XRAY_NODE" ]]; then
+    echo "❌ Error: 'Node' for xray is empty in '$CFG_FILE', exit"
+    exit 1
+fi
+
+if [[ "$XRAY_NODE" != "OUT" && "$XRAY_NODE" != "IN" ]]; then
+    echo "❌ Error: 'Node' for xray can have only 'OUT' or 'IN' value, exit"
+    exit 1
+else
+    echo "✅ Success: 'Node' for xray accepted"
 fi

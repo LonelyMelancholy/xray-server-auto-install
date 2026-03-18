@@ -71,7 +71,7 @@
         "domain": [
           "domain:api.ipify.org",
           "domain:ifconfig.me",
-          "domain:checkip.amazonaws.com"
+          "full:checkip.amazonaws.com"
         ]
       },
       {

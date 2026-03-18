@@ -521,7 +521,12 @@ run_and_check "install geoip.dat" install -m 644 -o root -g root "$TMP_DIR/geoip
 run_and_check "install geosite.dat" install -m 644 -o root -g root "$TMP_DIR/geosite.dat" "/usr/local/share/xray/geosite.dat"
 
 # configure xray service
-XRAY_CONFIG_SRC="cfg/config.json"
+if [[ "$XRAY_NODE" == "IN" ]]; then
+    XRAY_CONFIG_SRC="cfg/example/in-node.json" 
+else
+    XRAY_CONFIG_SRC="cfg/config.json"
+fi
+
 XRAY_CONFIG_DEST="/usr/local/etc/xray/config.json"
 
 conf_xray() {

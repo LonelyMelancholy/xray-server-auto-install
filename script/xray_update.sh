@@ -1,7 +1,7 @@
 #!/bin/bash
 # auto install xray update and send notify via systemd timer every first day month, 1:00-5:00 night time
 # all errors are logged in journald, see journalctl -t xray_update
-# exit codes work to tell systemd about update success, message status not matter
+# exit codes work to tell systemd about update success, last message status not matter
 
 # enable logging
 exec > >(systemd-cat -t xray_update -p info) 2> >(systemd-cat -t xray_update -p err) 5> >(systemd-cat -t xray_update -p notice)
@@ -80,7 +80,7 @@ MESSAGE="⚠️ <b>Scheduled xray update</b>
 echo "collected message - $(date '+%Y-%m-%d %H:%M:%S')"
 
 # sending message
-telegram_message "$MESSAGE"
+telegram_message "$MESSAGE" || exit 1
 
 # function section
 # helper function
@@ -226,36 +226,43 @@ download_and_verify() {
 
 # function for start xray and check status
 _xray_start_on_fail() {
-    if systemctl start xray.service &> /dev/null; then
-        echo "Success: xray.service started, try updating again later"
+    if systemctl start xray.service &> /dev/null && systemctl is-active --quiet xray.service; then
+        echo "Success: xray.service started"
     else
         echo "Error: xray.service does not start" >&2
+        return 1
     fi
 }
 
-# install function for install bin and dat files
-_install() {
-    local install_mode="$1"
-    local install_src="$2"
-    local install_dest="$3"
-    local name="$4"
+# rollback helper for transactional install
+rollback_xray_install() {
+    local rollback_rc=0
 
-        if install -m "$install_mode" -g root -o root "$install_src" "$install_dest"; then
-            echo "Success: $name installed"
-        else
-            echo "Error: $name not installed, trying rollback" >&2
-            run_and_check "rollback $name" cp -p "${install_dest}.bak.${TS}" "$install_dest"
-            _xray_start_on_fail
-            return 1
-        fi
+    # start full rollback
+    echo "Info: rollback started"
+    if [ "$XRAY_UP_TO_DATE" == 1 ]; then
+        echo "Info: skip rollback xray"
+    else
+        run_and_check "rollback xray" cp -pf "$XRAY_BIN_BACKUP" "$XRAY_BIN" || rollback_rc=1
+    fi
+    run_and_check "rollback geoip.dat" cp -pf "$GEOIP_DAT_BACKUP" "$GEOIP_DAT" || rollback_rc=1
+    run_and_check "rollback geosite.dat" cp -pf "$GEOSITE_DAT_BACKUP" "$GEOSITE_DAT" || rollback_rc=1
+
+    # try start xray after rollback
+    if _xray_start_on_fail; then
+        echo "Success: rollback finished, xray.service is running"
+    else
+        echo "Error: rollback finished, but xray.service is not running" >&2
+        rollback_rc=1
+    fi
+
+    INSTALL_ROLLBACK=$rollback_rc
+    return "$rollback_rc"
 }
 
 # install all files function
 install_xray() {
-    XRAY_NEW_VER=""
-    XRAY_OLD_VER=""
-
-    # check xray version
+    # check new xray version
     if [ -x "$TMP_DIR/xray" ]; then
         XRAY_NEW_VER="$("$TMP_DIR/xray" --version | awk 'NR==1 {print $2; exit}')"
     else
@@ -263,66 +270,57 @@ install_xray() {
         return 1
     fi
 
+    # check old xray version
     if [ -x "$XRAY_BIN" ]; then
         XRAY_OLD_VER="$("$XRAY_BIN" --version | awk 'NR==1 {print $2; exit}')"
     else
-        XRAY_OLD_VER=""
         echo "Error: unknown old xray version" >&2
         return 1
     fi
 
-    if [ -n "$XRAY_NEW_VER" ] && [ -n "$XRAY_OLD_VER" ] && [ "$XRAY_NEW_VER" == "$XRAY_OLD_VER" ]; then
-        echo "Info: xray already up to date $XRAY_NEW_VER, skip xray update"
+    # if xray version not match, backup xray and not set update xray flag
+    if [ -n "$XRAY_NEW_VER" ] && [ -n "$XRAY_OLD_VER" ] && [ "$XRAY_NEW_VER" = "$XRAY_OLD_VER" ]; then
         XRAY_UP_TO_DATE=1
+        echo "Info: xray already update to $XRAY_NEW_VER, only geo*.dat will be refreshed"
+        echo "Info: skip backup xray"
     else
-        echo "Info: current xray version is $XRAY_OLD_VER, latest is $XRAY_NEW_VER, preparing to update"
-        XRAY_UP_TO_DATE=0
-        run_and_check "backup xray" cp -p "$XRAY_BIN" "$XRAY_BIN_BACKUP" || return 1
+        echo "Info: current xray version is $XRAY_OLD_VER, latest is $XRAY_NEW_VER, preparing update"
+        run_and_check "backup xray" cp -pf "$XRAY_BIN" "$XRAY_BIN_BACKUP" || return 1
     fi
 
     # backup geo*.dat
-    run_and_check "backup geoip.dat" cp -p "$GEOIP_DAT"     "$GEOIP_DAT_BACKUP" || return 1
-    run_and_check "backup geosite.dat" cp -p "$GEOSITE_DAT" "$GEOSITE_DAT_BACKUP" || return 1
+    run_and_check "backup geoip.dat" cp -pf "$GEOIP_DAT" "$GEOIP_DAT_BACKUP" || return 1
+    run_and_check "backup geosite.dat" cp -pf "$GEOSITE_DAT" "$GEOSITE_DAT_BACKUP" || return 1
 
-    # stop xray service
-    if [ "$XRAY_UP_TO_DATE" = "0" ]; then
-        if systemctl stop xray.service &> /dev/null; then
-            echo "Success: xray.service stopped, starting the update"
-        else
-            echo "Error: failed to stop xray.service, cancelling update" >&2
-            echo "Info: checking status xray.service"
-            if systemctl is-active --quiet xray.service; then
-                echo "Success: xray.service is running, try updating again later"
-                return 1
-            else
-                echo "Error: xray.service is not running, trying to start" >&2
-                _xray_start_on_fail
-                return 1
-            fi 
-        fi
-    fi
-
-    # install bin and geo*.dat
-    if [ "$XRAY_UP_TO_DATE" = "0" ]; then
-        _install "755" "${TMP_DIR}/xray"  "$XRAY_BIN"     "xray" || return 1
+    # stop xray before update
+    if systemctl stop xray.service &> /dev/null; then
+        echo "Success: xray.service stopped"
     else
+        echo "Error: failed to stop xray.service" >&2
+        _xray_start_on_fail
+        return 1
+    fi
+
+    # install xray and geo*.dat
+    if [ "$XRAY_UP_TO_DATE" == 1 ]; then
         echo "Info: xray installation skipped"
+    else
+        run_and_check "install xray" install -m 755 -g root -o root "${TMP_DIR}/xray" "$XRAY_BIN" || { rollback_xray_install; return 1; }
     fi
 
-    _install "644" "${TMP_DIR}/geoip.dat"    "$GEOIP_DAT"    "geoip.dat" || return 1
-    _install "644" "${TMP_DIR}/geosite.dat"  "$GEOSITE_DAT"  "geosite.dat" || return 1
+    # install geo*.dat
+    run_and_check "install geoip.dat" install -m 644 -g root -o root "${TMP_DIR}/geoip.dat" "$GEOIP_DAT" || { rollback_xray_install; return 1; }
+    run_and_check "install geosite.dat" install -m 644 -g root -o root "${TMP_DIR}/geosite.dat" "$GEOSITE_DAT" || { rollback_xray_install; return 1; }
 
-    # start xray
-    if [ "$XRAY_UP_TO_DATE" = "0" ]; then
-        if systemctl start xray.service > /dev/null 2>&1; then
-            echo "Success: xray.service updated and started"
-        else
-            echo "Error: xray.service does not start" >&2
-            return 1
-        fi
+    # try start xray
+    if _xray_start_on_fail; then
+        echo "Success: install finished"
+        return 0
+    else
+        echo "Error: install failed" >&2
+        rollback_xray_install
+        return 1
     fi
-
-    return 0
 }
 
 # main logic start here
@@ -346,7 +344,7 @@ if [[ "$XRAY_DOWNLOAD" == 1 ]]; then
     fi
 else
     GEOIP_DOWNLOAD=0
-    STATUS_GEOIP_DOWNLOAD="⚠️ <b>Skip:</b> geoip.dat download"
+    STATUS_GEOIP_DOWNLOAD="⚠️ <b>Info:</b> skip geoip.dat download"
 fi
 
 # download geosite if geoip success
@@ -360,13 +358,20 @@ if [[ "$XRAY_DOWNLOAD" == 1 && "$GEOIP_DOWNLOAD" == 1 ]]; then
     fi
 else
     GEOSITE_DOWNLOAD=0
-    STATUS_GEOSITE_DOWNLOAD="⚠️ <b>Skip:</b> geosite.dat download"
+    STATUS_GEOSITE_DOWNLOAD="⚠️ <b>Info:</b> skip geosite.dat download"
 fi
 
 # if all downlad success, install
 if [[ "$XRAY_DOWNLOAD" == 1 && "$GEOIP_DOWNLOAD" == 1 && "$GEOSITE_DOWNLOAD" == 1 ]]; then
     if ! install_xray; then
         STATUS_XRAY_GEODAT_INSTALL="❌ <b>Error:</b> xray and geo*.dat install"
+        if [[ "$INSTALL_ROLLBACK" == 1 ]]; then
+            STATUS_XRAY_GEODAT_INSTALL+=$'\n'"❌ <b>Error:</b> rollback failed"
+        elif [[ "$INSTALL_ROLLBACK" == 0 ]]; then
+            STATUS_XRAY_GEODAT_INSTALL+=$'\n'"☑️ <b>Success:</b> rollback done"
+        else 
+            STATUS_XRAY_GEODAT_INSTALL+=$'\n'"⚠️ <b>Info:</b> skip rollback"
+        fi
         XRAY_GEODAT_INSTALL=0
     else
         if [[ "$XRAY_UP_TO_DATE" == 1 ]]; then
@@ -381,7 +386,7 @@ if [[ "$XRAY_DOWNLOAD" == 1 && "$GEOIP_DOWNLOAD" == 1 && "$GEOSITE_DOWNLOAD" == 
     fi
 else
     XRAY_GEODAT_INSTALL=0
-    STATUS_XRAY_GEODAT_INSTALL="⚠️ <b>Skip:</b> xray and geo*.dat install"
+    STATUS_XRAY_GEODAT_INSTALL="⚠️ <b>Info:</b> skip xray and geo*.dat install"
 fi
 
 # check final xray status
