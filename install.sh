@@ -768,6 +768,7 @@ install_scr_service() {
     ln -sfn "/usr/local/bin/service/restore_backup.sh" "$USER_HOME/restore_backup" || return 1
     ln -sfn "/usr/local/bin/service/userinfo.sh" "$USER_HOME/user_info" || return 1
     ln -sfn "/usr/local/bin/service/traffic_unblock.sh" "$USER_HOME/traffic_unblock" || return 1
+    ln -sfn "/usr/local/bin/service/xray_backup.sh" "$USER_HOME/create_backup" || return 1
 
     find "$USER_HOME" -type l -exec chown -h "$SECOND_USER":"$SECOND_USER" {} +  || return 1
 }

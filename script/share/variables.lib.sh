@@ -130,3 +130,7 @@ readonly BACKUP_FILE_PATH="/tmp/${BACKUP_FILE_NAME}"
 readonly GEOIP_URL="https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat"
 readonly GEOSITE_URL="https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat"
 readonly XRAY_URL="https://github.com/XTLS/xray-core/releases/latest/download/xray-linux-64.zip"
+
+# realpath for restart script under another user
+SCRIPT_FULL_PATH=$(realpath "$0" 2> /dev/null)
+readonly SCRIPT_FULL_PATH

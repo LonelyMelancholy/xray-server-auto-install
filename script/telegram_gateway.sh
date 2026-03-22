@@ -1,5 +1,4 @@
 #!/bin/bash
-set -u
 
 # main variables
 readonly TIMEOUT=60
@@ -142,14 +141,17 @@ valid_arg() {
             # 1..64 chars, only A-Z a-z 0-9 and '-_'
             [[ "$arg" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || return 1
             [[ "$arg" =~ ^[-_]|[-_]$ ]] && return 1
+            return 0
         ;;
         number)
             # 1..10 numbers only positive 0-9
             [[ "$arg" =~ ^[0-9]{1,10}$ ]] || return 1
+            return 0
         ;;
         answer)
             # yes,Yes,YES accept
             [[ "$arg" =~ ^[Yy][Ee][Ss]$ ]] || return 1
+            return 0
         ;;
         *)
             return 1

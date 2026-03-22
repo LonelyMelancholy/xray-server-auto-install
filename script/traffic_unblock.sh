@@ -6,7 +6,7 @@ source "/usr/local/lib/service/variables.lib.sh" || { echo "❌ Error: failed to
 
 # restart script for target user if have sudo without password
 if [ "$(id -un)" != "$TARGET_USER" ]; then
-    if ! exec sudo -n -u "$TARGET_USER" -- "$0" "$@"; then
+    if ! exec sudo -n -u "$TARGET_USER" -- "$SCRIPT_FULL_PATH" "$@"; then
         echo "❌ Error: failed to restart the script as user '$TARGET_USER'"
         exit 1
     fi
