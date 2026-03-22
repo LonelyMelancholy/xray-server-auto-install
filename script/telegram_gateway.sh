@@ -226,7 +226,7 @@ handle_callback() {
         ;;
         SHOW_ALL)
             STATE=""
-            run_and_send_output "$chat_id" /usr/local/bin/service/usershow.sh "all"
+            run_and_send_output "$chat_id" /usr/local/bin/service/user_show.sh "all"
             show_menu "$chat_id"
         ;;
         ASK_SHOW)
@@ -351,22 +351,22 @@ handle_message() {
             case "$STATE" in
                 WAIT_BLOCK)
                     STATE=""
-                    run_and_send_output "$chat_id" /usr/local/bin/service/userblock.sh "$username" "block"
+                    run_and_send_output "$chat_id" /usr/local/bin/service/user_block.sh "$username" "block"
                     show_menu "$chat_id"
                 ;;
                 WAIT_UNBLOCK)
                     STATE=""
-                    run_and_send_output "$chat_id" /usr/local/bin/service/userblock.sh "$username" "unblock"
+                    run_and_send_output "$chat_id" /usr/local/bin/service/user_block.sh "$username" "unblock"
                     show_menu "$chat_id"
                 ;;
                 WAIT_DELETE)
                     STATE=""
-                    run_and_send_output "$chat_id" /usr/local/bin/service/userdel.sh "$username"
+                    run_and_send_output "$chat_id" /usr/local/bin/service/user_delete.sh "$username"
                     show_menu "$chat_id"
                 ;;
                 WAIT_SHOW)
                     STATE=""
-                    run_and_send_output "$chat_id" /usr/local/bin/service/userinfo.sh "$username"
+                    run_and_send_output "$chat_id" /usr/local/bin/service/user_info.sh "$username"
                     show_menu "$chat_id"
                 ;;
                 WAIT_TR)
@@ -434,7 +434,7 @@ handle_message() {
             case "$STATE" in
                 WAIT_ADD)
                     STATE=""
-                    run_and_send_output "$chat_id" /usr/local/bin/service/useradd.sh "$a" "$b"
+                    run_and_send_output "$chat_id" /usr/local/bin/service/user_add.sh "$a" "$b"
                     show_menu "$chat_id"
                     ;;
                 WAIT_EXP)

@@ -748,25 +748,25 @@ install_scr_service() {
     install -m 644 -o root -g root "script/share/telegram.lib.sh" "/usr/local/lib/service/telegram.lib.sh" || return 1
     install -m 644 -o root -g root "script/share/run_lock.lib.sh" "/usr/local/lib/service/run_lock.lib.sh" || return 1
     install -m 644 -o root -g root "script/share/variables.lib.sh" "/usr/local/lib/service/variables.lib.sh" || return 1
-    install -m 755 -o root -g root "script/useradd.sh" "/usr/local/bin/service/useradd.sh" || return 1
-    install -m 755 -o root -g root "script/userdel.sh" "/usr/local/bin/service/userdel.sh" || return 1
-    install -m 755 -o root -g root "script/usershow.sh" "/usr/local/bin/service/usershow.sh" || return 1
-    install -m 755 -o root -g root "script/userinfo.sh" "/usr/local/bin/service/userinfo.sh" || return 1
+    install -m 755 -o root -g root "script/user_add.sh" "/usr/local/bin/service/user_add.sh" || return 1
+    install -m 755 -o root -g root "script/user_delete.sh" "/usr/local/bin/service/user_delete.sh" || return 1
+    install -m 755 -o root -g root "script/user_show.sh" "/usr/local/bin/service/user_show.sh" || return 1
+    install -m 755 -o root -g root "script/user_info.sh" "/usr/local/bin/service/user_info.sh" || return 1
     install -m 755 -o root -g root "script/system_info.sh" "/usr/local/bin/service/system_info.sh" || return 1
     install -m 755 -o root -g root "script/restore_backup.sh" "/usr/local/bin/service/restore_backup.sh" || return 1
-    install -m 755 -o root -g root "script/userblock.sh" "/usr/local/bin/service/userblock.sh" || return 1
+    install -m 755 -o root -g root "script/user_block.sh" "/usr/local/bin/service/user_block.sh" || return 1
     install -m 755 -o root -g root "script/time_unblock.sh" "/usr/local/bin/service/time_unblock.sh" || return 1
     install -m 755 -o root -g root "script/traffic_unblock.sh" "/usr/local/bin/service/traffic_unblock.sh" || return 1
     install -m 755 -o root -g root "script/ssh_f2b_notify.sh" "/usr/local/bin/telegram/ssh_f2b_notify.sh" || return 1
 
-    ln -sfn "/usr/local/bin/service/useradd.sh" "$USER_HOME/user_add" || return 1
-    ln -sfn "/usr/local/bin/service/userdel.sh" "$USER_HOME/user_del" || return 1
+    ln -sfn "/usr/local/bin/service/user_add.sh" "$USER_HOME/user_add" || return 1
+    ln -sfn "/usr/local/bin/service/user_delete.sh" "$USER_HOME/user_delete" || return 1
     ln -sfn "/usr/local/bin/service/time_unblock.sh" "$USER_HOME/time_unblock" || return 1
-    ln -sfn "/usr/local/bin/service/userblock.sh" "$USER_HOME/user_block" || return 1
-    ln -sfn "/usr/local/bin/service/usershow.sh" "$USER_HOME/user_show" || return 1
+    ln -sfn "/usr/local/bin/service/user_block.sh" "$USER_HOME/user_block" || return 1
+    ln -sfn "/usr/local/bin/service/user_show.sh" "$USER_HOME/user_show" || return 1
     ln -sfn "/usr/local/bin/service/system_info.sh" "$USER_HOME/system_info" || return 1
     ln -sfn "/usr/local/bin/service/restore_backup.sh" "$USER_HOME/restore_backup" || return 1
-    ln -sfn "/usr/local/bin/service/userinfo.sh" "$USER_HOME/user_info" || return 1
+    ln -sfn "/usr/local/bin/service/user_info.sh" "$USER_HOME/user_info" || return 1
     ln -sfn "/usr/local/bin/service/traffic_unblock.sh" "$USER_HOME/traffic_unblock" || return 1
     ln -sfn "/usr/local/bin/service/xray_backup.sh" "$USER_HOME/create_backup" || return 1
 
