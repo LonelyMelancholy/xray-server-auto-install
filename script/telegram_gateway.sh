@@ -138,9 +138,8 @@ valid_arg() {
     local var="$2"
     case "$var" in
         username)
-            # 1..64 chars, only A-Z a-z 0-9 and '-_'
-            [[ "$arg" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || return 1
-            [[ "$arg" =~ ^[-_]|[-_]$ ]] && return 1
+            # 3..64 chars, only A-Z a-z 0-9 and '-_'
+            [[ "$arg" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{1,62}[A-Za-z0-9]$ ]] || return 1
             return 0
         ;;
         number)
@@ -344,7 +343,7 @@ handle_message() {
             esac
 
             if ! valid_arg "$username" "username"; then
-                send_message "$chat_id" "${action}\n❌ Error: username must be 1..64 characters long and contain only letters, numbers and '-' or '_'.\nEnter username [or /cancel]:"
+                send_message "$chat_id" "${action}\n❌ Error: username must be 3..64 characters long and contain only letters, numbers and '-' or '_', begin and end with a letter or number.\nEnter username [or /cancel]:"
                 return
             fi
 
@@ -422,12 +421,12 @@ handle_message() {
             fi
 
             if ! valid_arg "$a" "username"; then
-                send_message "$chat_id" "${action}\n❌ Error: username must be 1..64 characters long and contain only letters, numbers and '-' or '_'.\nEnter username and number of days, separated by a space [or /cancel]:"
+                send_message "$chat_id" "${action}\n❌ Error: username must be 3..64 characters long and contain only letters, numbers and '-' or '_', begin and end with a letter or number.\nEnter username and number of days, separated by a space [or /cancel]:"
                 return
             fi
 
             if ! valid_arg "$b" "number"; then
-                send_message "$chat_id" "${action}\n❌ Error: number must be 1..10 characters long and contain only non negative numbers.\nEnter username and number of days, separated by a space [or /cancel]:"
+                send_message "$chat_id" "${action}\n❌ Error: days must be non negative number, lenght 1-10 characters.\nEnter username and number of days, separated by a space [or /cancel]:"
                 return
             fi
 

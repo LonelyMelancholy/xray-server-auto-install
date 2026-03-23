@@ -26,13 +26,8 @@ if [[ $# -ne 1 || $USERNAME == "--help" ]]; then
     exit 0
 fi
 
-if ! [[ $USERNAME =~ ^[A-Za-z0-9_-]{1,64}$ ]]; then
-    echo "❌ Error: only letters, numbers and '-' or '_' in username, length 1-64 characters, exit"
-    exit 1
-fi
-
-if [[ "$USERNAME" =~ ^[-_]|[-_]$ ]]; then
-    echo "❌ Error: username must not start or end with '-' or '_', exit"
+if ! [[ "$USERNAME" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{1,62}[A-Za-z0-9]$ ]]; then
+    echo "❌ Error: username must be 3..64 characters long and contain only letters, numbers and '-' or '_', begin and end with a letter or number, exit"
     exit 1
 fi
 

@@ -147,8 +147,8 @@ if [[ -z "$XRAY_NAME" ]]; then
     exit 1
 fi
 
-if ! [[ "$XRAY_NAME" =~ ^[A-Za-z0-9_-]{1,64}$ ]]; then
-    echo "❌ Error: 'Name' for xray can contain only letters, numbers, '-' and '_', length 1-64 characters, exit"
+if ! [[ "$XRAY_NAME" =~ ^[A-Za-z0-9_-]{3,64}$ ]]; then
+    echo "❌ Error: 'Name' for xray can contain only letters, numbers, '-' and '_', length 3-64 characters, exit"
     exit 1
 fi
 
