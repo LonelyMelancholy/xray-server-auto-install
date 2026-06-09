@@ -240,7 +240,7 @@ check_var "FLOW" "$FLOW"
 
 # generate public key from privat key
 XRAY_X25519_OUT="$(xray x25519 -i "$PRIVATE_KEY")"
-PUBLIC_KEY="$(printf '%s\n' "$XRAY_X25519_OUT" | awk -F': ' '/Password:/ {print $2}')"
+PUBLIC_KEY="$(printf '%s\n' "$XRAY_X25519_OUT" | awk -F': ' '/Password \(PublicKey\):/ {print $2}')"
 
 # checking pubkey not empty
 if [[ -z "$PUBLIC_KEY" ]]; then
