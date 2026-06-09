@@ -76,7 +76,7 @@ MAIN_KB_JSON='{
 
 api_post() {
     local method="$1"; shift
-    curl -sS --max-time 70 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/${method}" "$@"
+    curl -sS --connect-timeout 10 --max-time 80 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/${method}" "$@"
 }
 
 delete_message() {
@@ -454,7 +454,8 @@ main_loop() {
     while true; do
         # Long polling
         local resp
-        resp="$(curl -sS --max-time 70 \
+        resp="$(curl -sS --connect-timeout 10 \
+            --max-time 80 \
             --data-urlencode "timeout=${TIMEOUT}" \
             --data-urlencode "offset=${OFFSET}" \
             "https://api.telegram.org/bot${BOT_TOKEN}/getUpdates")" || {
